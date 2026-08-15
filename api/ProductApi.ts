@@ -1,4 +1,4 @@
-import { IProduct, photo } from '../redux/Types/ProductType';
+import { IProduct, IProductFilters, IProductsResponse, CartProductDetails, photo } from '../redux/Types/ProductType';
 import { AxiosInstance } from 'axios';
 
 interface whereGetRequest {
@@ -8,13 +8,23 @@ interface whereGetRequest {
   order?: Object;
 }
 
-const LIMIT = 20
+const LIMIT = 20;
 
 export const productApi = (instance: AxiosInstance) => ({
   async create(dto) {
     const { data } = await instance.post<IProduct>('/product', dto);
     return data;
   },
+  // Новий метод з фільтрами через query params
+  async findFiltered(filters: IProductFilters = {}): Promise<IProductsResponse> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val != null && val !== '') params.append(key, String(val));
+    });
+    const { data } = await instance.get<IProductsResponse>(`/product/filter?${params.toString()}`);
+    return data;
+  },
+  // Старий метод — для зворотної сумісності
   async findAll(whereObj: whereGetRequest = { take: LIMIT }) {
     const { data } = await instance.post<IProduct[]>('/product/getFiltered', whereObj);
     return data;
@@ -38,6 +48,10 @@ export const productApi = (instance: AxiosInstance) => ({
   },
   async getDiscountList(gender) {
     const { data } = await instance.get<IProduct[]>(`/product/discounts/${gender}`);
+    return data;
+  },
+  async findByIds(ids: number[]) {
+    const { data } = await instance.post<CartProductDetails[]>('/product/byIds', { ids });
     return data;
   },
 });

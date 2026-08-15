@@ -47,12 +47,16 @@ export const MenuProfile: NextPage<IMenuProfileProps> = ({ open, onClose, onClic
         </a>
       </Link>
       <Divider />
-      <MenuItem>
-        <ListItemIcon>
-          <Settings fontSize='small' />
-        </ListItemIcon>
-        Налаштування профіля
-      </MenuItem>
+      <Link href='/profile'>
+        <a style={{ textDecoration: 'none', color: 'inherit' }}>
+          <MenuItem>
+            <ListItemIcon>
+              <Settings fontSize='small' />
+            </ListItemIcon>
+            Налаштування профіля
+          </MenuItem>
+        </a>
+      </Link>
       <MenuItem onClick={logOut}>
         <ListItemIcon>
           <Logout fontSize='small' />

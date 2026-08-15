@@ -1,32 +1,50 @@
 import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Link from 'next/link';
-import { Button } from '@mui/material';
 import * as React from 'react';
 import { FC } from 'react';
+import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 
-interface IPicturesProps {
+interface IEmptyCartProps {
   title?: string;
 }
 
-export const EmptyCart: FC<IPicturesProps> = ({ title = 'Корзина поки що пуста 😿' }) => {
+export const EmptyCart: FC<IEmptyCartProps> = ({ title = 'Кошик порожній' }) => {
   return (
-    <>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '50vh',
+        gap: 3,
+        px: 2,
+      }}
+    >
+      <ShoppingBagOutlinedIcon
+        sx={{ fontSize: 64, color: '#afb3b3' }}
+      />
       <Typography
-        variant="h5"
-        align="center"
-        sx={{ marginTop: 1, color: 'gray' }}
+        variant="h4"
+        sx={{ fontSize: '1.25rem', color: 'text.secondary' }}
       >
         {title}
       </Typography>
-      <div style={{ display: 'flex', justifyContent: 'center', margin: 25 }}>
-        <Link href={'/'}>
-          <a>
-            <Button color="secondary" variant="contained">
-              повернутись на головну
-            </Button>
-          </a>
-        </Link>
-      </div>
-    </>
+      <Typography
+        variant="body2"
+        sx={{ color: 'text.secondary', textAlign: 'center', maxWidth: 300 }}
+      >
+        Додайте товари, які вам сподобались, та оформіть замовлення
+      </Typography>
+      <Link href="/">
+        <a style={{ textDecoration: 'none' }}>
+          <Button variant="contained" sx={{ px: 5, py: 1.5 }}>
+            На головну
+          </Button>
+        </a>
+      </Link>
+    </Box>
   );
 };

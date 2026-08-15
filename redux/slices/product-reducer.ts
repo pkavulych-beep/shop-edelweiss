@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { IProduct, ICategory, Gender, currentProduct, photo } from '../Types/ProductType';
+import { IProduct, IProductFilters, ICategory, Gender, currentProduct, photo } from '../Types/ProductType';
 import { HYDRATE } from 'next-redux-wrapper';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
@@ -8,6 +8,7 @@ export const productSlice = createSlice({
   name: 'product',
   initialState: {
     data: null as IProduct[],
+    total: 0,
     error: null as string,
     currentProduct: null as currentProduct,
     category: { gender: 'woman' } as ICategory,
@@ -16,48 +17,60 @@ export const productSlice = createSlice({
     addDataProducts: (state, action: PayloadAction<IProduct[]>) => {
       state.data = action.payload;
     },
+    setTotal: (state, action: PayloadAction<number>) => {
+      state.total = action.payload;
+    },
     addNewProduct: (state, action: PayloadAction<IProduct>) => {
-      state.data.push(action.payload);
+      if (state.data) {
+        state.data.push(action.payload);
+      }
     },
     setErrorMessage: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
     },
     setCurrentProduct: (state, action: PayloadAction<currentProduct>) => {
-      state.currentProduct = action.payload;
+      state.currentProduct = action.payload ?? null;
     },
     setGender: (state, action: PayloadAction<Gender>) => {
-      console.log('GENDER', action.payload);
       state.category.gender = action.payload;
     },
     getPhotosProduct: (state, action: PayloadAction<photo[]>) => {
-      state.currentProduct.photos = action.payload;
+      if (state.currentProduct) {
+        state.currentProduct.photos = action.payload;
+      }
+    },
+    removeProduct: (state, action: PayloadAction<number>) => {
+      if (state.data) {
+        state.data = state.data.filter((item) => item.id !== action.payload);
+      }
+      state.currentProduct = null;
     },
   },
   extraReducers: {
     [HYDRATE]: (state, action) => {
       state.data = action.payload.product.data;
-      state.currentProduct = action.payload.product.currentProduct;
+      state.total = action.payload.product.total ?? 0;
+      state.currentProduct = action.payload.product.currentProduct ?? null;
       state.category.gender = action.payload.product.category.gender;
     },
   },
 });
 
-// Action creators are generated for each case reducer function
 export const {
   addNewProduct,
   addDataProducts,
+  setTotal,
   setErrorMessage,
   setCurrentProduct,
   setGender,
   getPhotosProduct,
+  removeProduct,
 } = productSlice.actions;
 
 export default productSlice.reducer;
 
-type actionType = { payload: IProduct[]; type: string } | { payload: string; type: string };
-
-//Thunks
-export const saveNewProduct = newProductData => async dispatch => {
+// Thunks
+export const saveNewProduct = (newProductData) => async (dispatch) => {
   try {
     const newProduct = await Api().product.create(newProductData);
     dispatch(addNewProduct(newProduct));
@@ -65,6 +78,18 @@ export const saveNewProduct = newProductData => async dispatch => {
     dispatch(setErrorMessage(e.message));
   }
 };
+
+export const fetchFilteredProducts =
+  (filters: IProductFilters): AppThunk =>
+  async (dispatch) => {
+    try {
+      const result = await Api().product.findFiltered(filters);
+      dispatch(addDataProducts(result.data));
+      dispatch(setTotal(result.total));
+    } catch (e) {
+      dispatch(setErrorMessage(e?.message || 'Помилка завантаження'));
+    }
+  };
 
 export const fetchProduct =
   (idProduct: any): AppThunk =>
@@ -75,13 +100,15 @@ export const fetchProduct =
       try {
         product = await Api().product.findById(idProduct);
       } catch (e) {
-        dispatch(setErrorMessage(e.response.data.message));
-        return {
-          notFound: true,
-        };
+        dispatch(setErrorMessage(e?.response?.data?.message || 'Товар не знайдено'));
+        return { notFound: true };
       }
     } else {
-      product = dataProduct.find(item => item.id === +idProduct);
+      product = dataProduct.find((item) => item.id === +idProduct);
+    }
+    if (!product) {
+      dispatch(setCurrentProduct(null));
+      return;
     }
     dispatch(setCurrentProduct(product));
     try {

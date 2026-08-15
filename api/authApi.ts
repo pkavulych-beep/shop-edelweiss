@@ -1,14 +1,30 @@
-import { IUserData, productToBasket } from '../redux/Types/ProductType';
+import { IUserData } from '../redux/Types/ProductType';
 import { AxiosInstance } from 'axios';
 
+// Структура BasketItemEntity з бекенду (eager load product)
+export interface IBasketItemResponse {
+  id: number;
+  userId: number;
+  productId: number;
+  size: string;
+  quantity: number;
+  product: {
+    id: number;
+    name: string;
+    cover: string;
+    sizes: string[];
+    price: number;
+    salePrice: number;
+  };
+}
+
 export interface IUserDataAndCart extends IUserData {
-  cart: productToBasket[];
+  cartItems: IBasketItemResponse[];
 }
 
 export const authApi = (instance: AxiosInstance) => ({
   async login(loginDto: { phoneNumber: string; password: string }) {
     const data = await instance.post('/auth/login', loginDto);
-    console.log('/auth/login', data)
     return data;
   },
 
@@ -19,7 +35,6 @@ export const authApi = (instance: AxiosInstance) => ({
 
   async authorization() {
     const { data } = await instance.get<IUserDataAndCart>('/auth/profile');
-    console.log('/auth/profile', data)
     return data;
   },
 });

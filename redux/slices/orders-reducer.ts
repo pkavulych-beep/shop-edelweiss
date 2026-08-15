@@ -1,12 +1,10 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { HYDRATE } from 'next-redux-wrapper';
-import { IProduct } from '../Types/ProductType';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
-import { productToBasketDto } from '../../api/CartApi';
 import { Order } from '../Types/orderType';
 
-export const cartSlice = createSlice({
+export const ordersSlice = createSlice({
   name: 'orders',
   initialState: {
     data: null as Order[],
@@ -15,9 +13,6 @@ export const cartSlice = createSlice({
     addOrdersData: (state, action: PayloadAction<Order[] | null>) => {
       state.data = action.payload;
     },
-    // addPositions: (state, action: PayloadAction<IProduct>) => {
-    //   state.data.push(action.payload);
-    // },
   },
   extraReducers: {
     [HYDRATE]: (state, action) => {
@@ -26,24 +21,12 @@ export const cartSlice = createSlice({
   },
 });
 
-// Action creators are generated for each case reducer function
-export const { addOrdersData } = cartSlice.actions;
+export const { addOrdersData } = ordersSlice.actions;
 
-export default cartSlice.reducer;
+export default ordersSlice.reducer;
 
-//Thunks
-export const setOrdersData = id => async dispatch => {
+// Thunks
+export const setOrdersData = (id) => async (dispatch) => {
   const product = await Api().orders.getOrdersUser(id);
   dispatch(addOrdersData(product));
 };
-
-// export const pickUpFromTheCart =
-//   (dto: productToBasketDto): AppThunk =>
-//   async (dispatch) => {
-//     try {
-//       await Api().cart.pickUpFromTheBasket(dto);
-//       dispatch(deletePositions(dto.idProduct));
-//     } catch (e) {
-//       console.log(e);
-//     }
-//   };

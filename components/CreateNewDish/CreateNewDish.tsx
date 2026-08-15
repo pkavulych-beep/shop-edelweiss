@@ -26,7 +26,7 @@ const CreateNewDish = () => {
       formData.append('photos', photoFiles[x]);
     }
     for (let key in values) {
-      if (values[key] !== null) {
+      if (values[key] !== null && values[key] !== '' && values[key] !== undefined) {
         formData.append(key, values[key]);
       }
     }
@@ -49,12 +49,16 @@ const CreateNewDish = () => {
               count: 0,
               description: '',
               weight: null,
-              size: '',
-              color: '',
+              sizes: '',
+              colors: '',
               material: null,
               price: null,
               salePrice: null,
               gender: null,
+              category: '',
+              subcategory: '',
+              brand: '',
+              season: 'all-season',
             }}
             validationSchema={Validatione}
             onSubmit={(values, { setSubmitting, resetForm }) => {

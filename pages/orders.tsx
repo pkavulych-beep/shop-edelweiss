@@ -10,13 +10,15 @@ import Divider from '@mui/material/Divider';
 export const Orders: NextPage = () => {
   const dispatch = useAppDispatch();
   const { id, data } = useAppSelector(({ user, orders }) => ({
-    id: user.userData.id,
+    id: user.userData?.id,
     data: orders.data
   }));
 
   useEffect(() => {
-    dispatch(setOrdersData(id));
-  }, []);
+    if (id) {
+      dispatch(setOrdersData(id));
+    }
+  }, [id]);
 
   return (
     <MainLayout title={'замовлення'}>

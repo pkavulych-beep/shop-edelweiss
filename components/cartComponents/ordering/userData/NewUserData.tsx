@@ -1,23 +1,19 @@
-import { NextPage } from "next";
-import { Box, TextField } from "@mui/material";
-import * as React from "react";
-import Typography from "@mui/material/Typography";
-import CustomizedInputBase from "../../../CustomizedInputBase/CustomizedInputBase";
+import { FC } from 'react';
+import Box from '@mui/material/Box';
+import * as React from 'react';
+import CustomizedInputBase from '../../../CustomizedInputBase/CustomizedInputBase';
 
-const UserDataComponent: NextPage = () => {
-  console.log("NewUserData");
-
+const UserDataComponent: FC = () => {
   return (
-    <Box minWidth={"40%"}>
-      <Typography variant="h6" sx={{ marginTop: 3 }}>
-        ДАНІ ПОКУПЦЯ
-      </Typography>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+        gap: 1,
+      }}
+    >
       <CustomizedInputBase type="string" name="fullName" placeholder="ПІБ" />
-      <CustomizedInputBase
-        type="string"
-        name="phoneNumber"
-        placeholder="номер телефону"
-      />
+      <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" />
     </Box>
   );
 };

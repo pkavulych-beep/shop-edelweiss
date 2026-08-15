@@ -1,46 +1,44 @@
 import { FC } from 'react';
 import { useAppSelector } from '../../redux/hooks';
-import classes from './ProductsList.module.scss';
+import s from './ProductsList.module.scss';
 import Link from 'next/link';
-import Card from '@mui/material/Card';
-import { CardActionArea } from '@mui/material';
-import CardMedia from '@mui/material/CardMedia';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import { PriceBox } from '../PriceBox/PriceBox';
 
 export const ProductsList: FC = () => {
-  const data = useAppSelector(store => store.product.data);
+  const data = useAppSelector((store) => store.product.data);
 
-  if(!data) return null
-  
+  if (!data) return null;
+
   return (
-    <div className={classes.container}>
-      {data.map(product => {
-        const { id, cover, size, name, salePrice, price } = product;
+    <div className={s.container}>
+      {data.map((product) => {
+        const { id, cover, name, salePrice, price, brand, category } = product;
         return (
           <Link key={id} href={'/product/' + id}>
-            <a>
-              <Card className={classes.root}>
-                <CardActionArea>
-                  <CardMedia
-                    className={classes.media}
-                    component='img'
-                    height='140'
-                    image={cover}
-                    alt={name}
-                  />
-                </CardActionArea>
-                <CardContent>
-                  <Typography gutterBottom variant='h6' component='div'>
-                    {name}
-                  </Typography>
-                  <Typography variant='body2' color='text.secondary'>
-                    size: {size}
-                  </Typography>
-                  <PriceBox price={price} salePrice={salePrice} />
-                </CardContent>
-              </Card>
+            <a className={s.card}>
+              <div className={s.imageWrapper}>
+                <img
+                  className={s.image}
+                  src={cover}
+                  alt={name}
+                  loading="lazy"
+                />
+              </div>
+              {(brand || category) && (
+                <p className={s.meta}>
+                  {brand || category}
+                </p>
+              )}
+              <p className={s.name}>{name}</p>
+              <div className={s.price}>
+                {salePrice ? (
+                  <>
+                    <span className={s.salePrice}>{salePrice} грн</span>
+                    <span className={s.oldPrice}>{price} грн</span>
+                  </>
+                ) : (
+                  <span>{price} грн</span>
+                )}
+              </div>
             </a>
           </Link>
         );

@@ -6,7 +6,7 @@ interface IRegisterUserDto {
   basketId?: number;
 }
 
-export type UpdateUserData = Pick<IRegisterUserDto, 'fullName' & 'phoneNumber'>;
+export type UpdateUserData = Pick<IRegisterUserDto, 'fullName' | 'phoneNumber'>;
 
 export const userApi = instance => ({
   async register(dto: IRegisterUserDto) {

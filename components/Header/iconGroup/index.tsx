@@ -28,7 +28,7 @@ export const IconGroup: NextPage<IIconGroupProps> = () => {
   };
 
   const { userData } = useAppSelector(store => store.user);
-  const {counter} = useAppSelector(store => store.cart);
+  const cartCount = useAppSelector(store => store.cart.data?.length ?? 0);
 
   const openLogin = (e): void => {
     if (userData === null) {
@@ -60,7 +60,7 @@ export const IconGroup: NextPage<IIconGroupProps> = () => {
       <Link href='/cart'>
         <a>
           <IconButton size='large' color='inherit'>
-            <Badge badgeContent={counter} color='error'>
+            <Badge badgeContent={cartCount} color='error'>
               <ShoppingCartOutlinedIcon />
             </Badge>
           </IconButton>
