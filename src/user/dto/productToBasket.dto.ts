@@ -1,4 +1,4 @@
-import { IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class productToBasketDto {
   @IsNotEmpty()
@@ -6,4 +6,8 @@ export class productToBasketDto {
 
   @IsNotEmpty()
   idProduct: number;
+
+  @IsNotEmpty()
+  @IsString()
+  size: string;
 }

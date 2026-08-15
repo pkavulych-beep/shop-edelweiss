@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
@@ -13,9 +14,11 @@ import {
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { FilterProductDto } from './dto/filter-product.dto';
 import { Roles } from 'src/auth/roles-auth.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FindByIdsDto } from './dto/find-by-ids.dto';
 
 @Controller('product')
 export class ProductController {
@@ -30,9 +33,21 @@ export class ProductController {
     return this.productService.create(createProductDto, photos);
   }
 
+  // Новий ендпоінт з фільтрацією через query params
+  @Get('/filter')
+  findFiltered(@Query() filters: FilterProductDto) {
+    return this.productService.findFiltered(filters);
+  }
+
+  // Старий ендпоінт — залишаємо для зворотної сумісності
   @Post('/getFiltered')
   findAllFiltered(@Body() data) {
     return this.productService.findAllFiltered(data);
+  }
+
+  @Post('/byIds')
+  findByIds(@Body() dto: FindByIdsDto) {
+    return this.productService.findByIds(dto.ids);
   }
 
   @Get('/discounts/:gender')
@@ -40,14 +55,14 @@ export class ProductController {
     return this.productService.findDiscounts(gender);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productService.findOne(+id);
-  }
-
   @Get('/photos/:id')
   findOnlyPhotos(@Param('id') id: string) {
     return this.productService.findOnlyPhotos(id);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productService.findOne(+id);
   }
 
   @Patch(':id')

@@ -10,7 +10,7 @@ import {
   JoinTable,
   OneToMany,
 } from 'typeorm';
-import { ProductEntity } from '../../product/entities/product.entity';
+import { BasketItemEntity } from './basket-item.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -39,9 +39,8 @@ export class UserEntity {
   @JoinTable()
   roles: RoleEntity[];
 
-  @ManyToMany(() => ProductEntity)
-  @JoinTable({ name: 'baskets' })
-  cart: ProductEntity[];
+  @OneToMany(() => BasketItemEntity, (item) => item.user)
+  cartItems: BasketItemEntity[];
 
   @OneToMany(() => OrderEntity, (order) => order.user)
   orders: OrderEntity[];

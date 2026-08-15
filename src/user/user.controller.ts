@@ -6,10 +6,12 @@ import {
   Param,
   UseGuards,
   Delete,
+  Post,
 } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { productToBasketDto } from './dto/productToBasket.dto';
+import { SyncCartDto } from './dto/sync-cart.dto';
 import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 
@@ -22,11 +24,6 @@ export class UserController {
   @Get()
   findAll() {
     return this.userService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findById(+id);
   }
 
   @Get('order/:id')
@@ -44,6 +41,11 @@ export class UserController {
     return this.userService.pickUpFromTheBasket(dto);
   }
 
+  @Post('/syncCart')
+  syncCart(@Body() dto: SyncCartDto) {
+    return this.userService.syncCart(dto.idUser, dto.items);
+  }
+
   @Delete('/basket/:id')
   cleanTheBasket(@Param('id') id: string) {
     return this.userService.cleanTheBasket(+id);
@@ -52,5 +54,10 @@ export class UserController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.userService.update(+id, updateUserDto);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findById(+id);
   }
 }

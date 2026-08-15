@@ -4,16 +4,20 @@ import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserEntity } from './entities/user.entity';
+import { BasketItemEntity } from './entities/basket-item.entity';
 import { CreateLoginUserDto } from './dto/login-user.dto';
 import { RolesService } from '../roles/roles.service';
 import { ProductService } from '../product/product.service';
 import { productToBasketDto } from './dto/productToBasket.dto';
+import { SyncCartItemDto } from './dto/sync-cart.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(UserEntity)
     private repository: Repository<UserEntity>,
+    @InjectRepository(BasketItemEntity)
+    private basketRepository: Repository<BasketItemEntity>,
     private roleRepository: RolesService,
     private productService: ProductService,
   ) {}
@@ -35,7 +39,7 @@ export class UsersService {
   }
 
   findAll() {
-    return this.repository.find({ relations: ['basket'] });
+    return this.repository.find({ relations: ['cartItems'] });
   }
 
   findOne(id: number): Promise<UserEntity> {
@@ -46,56 +50,82 @@ export class UsersService {
     });
   }
 
-  async findOneWitchCart(idUser: number): Promise<UserEntity> {
-    const a=  await this.repository.findOne({
-      where: {
-        id: idUser,
-      },
-      relations: ['cart'],
+  async getCartItems(userId: number): Promise<BasketItemEntity[]> {
+    return this.basketRepository.find({
+      where: { userId },
+      relations: ['product'],
     });
-    console.log(a)
-    return a
   }
 
   async findById(id: number): Promise<UserEntity> {
     return await this.repository.findOne({
       where: { id: +id },
-      relations: ['roles', 'cart'],
+      relations: ['roles', 'cartItems', 'cartItems.product'],
     });
   }
 
   async findByCond(cond: CreateLoginUserDto) {
     return await this.repository.findOne({
       where: cond,
-      relations: ['roles', 'cart'],
+      relations: ['roles', 'cartItems', 'cartItems.product'],
     });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     await this.repository.update(id, updateUserDto);
-    return await this.repository.findOne({ where: { id: 1 } });
+    return await this.repository.findOne({ where: { id } });
   }
 
-  async addProductToBasket({ idUser, idProduct }: productToBasketDto) {
-    const user = await this.findOneWitchCart(idUser);
-    const product = await this.productService.findProductMain(idProduct);
-    user.cart.push(product);
-    await this.repository.save(user);
-    return product;
+  async addProductToBasket({ idUser, idProduct, size }: productToBasketDto) {
+    // Перевірити чи вже є такий товар з таким розміром в корзині
+    const existing = await this.basketRepository.findOne({
+      where: { userId: idUser, productId: idProduct, size },
+    });
+
+    if (existing) {
+      existing.quantity += 1;
+      return await this.basketRepository.save(existing);
+    }
+
+    const basketItem = this.basketRepository.create({
+      userId: idUser,
+      productId: idProduct,
+      size,
+      quantity: 1,
+    });
+    return await this.basketRepository.save(basketItem);
   }
 
-  async pickUpFromTheBasket({ idUser, idProduct }: productToBasketDto) {
-    const user = await this.findOneWitchCart(idUser);
-    user.cart = user.cart.filter(el => el.id !== idProduct);
-    await this.repository.save(user);
-    return await this.findOneWitchCart(idUser);
+  async pickUpFromTheBasket({ idUser, idProduct, size }: productToBasketDto) {
+    await this.basketRepository.delete({ userId: idUser, productId: idProduct, size });
+    return await this.getCartItems(idUser);
   }
 
   async cleanTheBasket(idUser: number) {
-    const user = await this.findOneWitchCart(idUser);
-    user.cart = [];
-    await this.repository.save(user);
-    return await this.findOneWitchCart(idUser);
+    await this.basketRepository.delete({ userId: idUser });
+    return { cartItems: [] };
+  }
+
+  async syncCart(idUser: number, items: SyncCartItemDto[]) {
+    for (const item of items) {
+      const existing = await this.basketRepository.findOne({
+        where: { userId: idUser, productId: item.productId, size: item.size },
+      });
+
+      if (existing) {
+        existing.quantity += item.quantity;
+        await this.basketRepository.save(existing);
+      } else {
+        const basketItem = this.basketRepository.create({
+          userId: idUser,
+          productId: item.productId,
+          size: item.size,
+          quantity: item.quantity,
+        });
+        await this.basketRepository.save(basketItem);
+      }
+    }
+    return await this.getCartItems(idUser);
   }
 
   async findOrders(id: number) {
