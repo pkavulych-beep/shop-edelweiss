@@ -18,7 +18,7 @@ export class OrderEntity {
   @ManyToOne(() => UserEntity, (user) => user.orders)
   user: UserEntity;
 
-  @ManyToMany(() => ProductEntity)
+  @ManyToMany(() => ProductEntity, (product) => product.orders)
   @JoinTable({ name: 'productsInOrder' })
   productsInOrder?: ProductEntity[];
 
