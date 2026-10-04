@@ -23,3 +23,6 @@ out/
 # logs
 *.log
 !.env.example
+
+# Agent Office data and worker worktrees
+.agent-office/
