@@ -70,14 +70,20 @@ export const {
 export default productSlice.reducer;
 
 // Thunks
-export const saveNewProduct = (newProductData) => async (dispatch) => {
-  try {
-    const newProduct = await Api().product.create(newProductData);
-    dispatch(addNewProduct(newProduct));
-  } catch (e) {
-    dispatch(setErrorMessage(e.message));
-  }
-};
+export const saveNewProduct =
+  (newProductData): AppThunk<Promise<{ error: string | null }>> =>
+  async (dispatch) => {
+    try {
+      const newProduct = await Api().product.create(newProductData);
+      dispatch(addNewProduct(newProduct));
+      return { error: null };
+    } catch (e) {
+      const message = e?.response?.data?.message;
+      const error = (Array.isArray(message) ? message.join(', ') : message) || e?.message || 'Не вдалося створити товар';
+      dispatch(setErrorMessage(error));
+      return { error };
+    }
+  };
 
 export const fetchFilteredProducts =
   (filters: IProductFilters): AppThunk =>
