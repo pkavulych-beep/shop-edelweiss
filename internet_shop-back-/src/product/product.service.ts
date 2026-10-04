@@ -6,7 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Equal, In, MoreThan, Repository } from 'typeorm';
 import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
-import { FileService, FileType } from 'src/file/file.service';
+import { baseUrl, FileService, FileType } from 'src/file/file.service';
 import { PhotosService } from '../photos/photos.service';
 
 @Injectable()
@@ -261,7 +261,7 @@ export class ProductService {
 
     try {
       await this.fileService.deleteFile(
-        product.cover.replace(/http:\/\/localhost:7777\//, ''),
+        product.cover.replace(baseUrl, ''),
       );
     } catch (e) {
       console.warn('Cover file not found, skipping:', e.message);
@@ -271,7 +271,7 @@ export class ProductService {
       for (const photo of product.photos) {
         try {
           await this.fileService.deleteFile(
-            photo.url.replace(/http:\/\/localhost:7777\//, ''),
+            photo.url.replace(baseUrl, ''),
           );
         } catch (e) {
           console.warn('Photo file not found, skipping:', e.message);

@@ -12,7 +12,7 @@ import { ProductModule } from '../product/product.module';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: 'test',
+      secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '30d' },
     }),
     forwardRef(() => UserModule),

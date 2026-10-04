@@ -22,7 +22,7 @@ export const Api = (
   const token = cookies.token;
 
   const instance = axios.create({
-    baseURL: 'http://localhost:7777',
+    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7777',
     headers: {
       Authorization: 'Bearer ' + token
     }

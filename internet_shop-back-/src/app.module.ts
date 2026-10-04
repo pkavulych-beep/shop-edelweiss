@@ -25,11 +25,11 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'xe',
-      password: 'dedafu47',
-      database: 'Edelweiss',
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
       entities: [
         UserEntity,
         ProductEntity,

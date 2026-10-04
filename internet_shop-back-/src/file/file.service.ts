@@ -7,7 +7,7 @@ export enum FileType {
   IMAGE = 'image',
 }
 
-const baseUrl = 'http://localhost:7777/';
+export const baseUrl = process.env.BASE_URL || 'http://localhost:7777/';
 
 @Injectable()
 export class FileService {
