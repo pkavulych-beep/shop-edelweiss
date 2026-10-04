@@ -58,7 +58,7 @@ export class AuthService {
       };
     } catch (e) {
       console.error(e);
-      throw new ForbiddenException('Помилка при регістрації');
+      throw new ForbiddenException('Помилка під час реєстрації');
     }
   }
 }

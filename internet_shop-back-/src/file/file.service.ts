@@ -37,7 +37,7 @@ export class FileService {
       // Перевіряємо, чи існує файл
       if (!fs.existsSync(absolutePath)) {
         throw new HttpException(
-          `File not found: ${filePath}`,
+          `Файл не знайдено: ${filePath}`,
           HttpStatus.NOT_FOUND,
         );
       }
@@ -47,7 +47,7 @@ export class FileService {
       console.log(filePath + ' was deleted');
     } catch (e) {
       throw new HttpException(
-        `Failed to delete file: ${e.message}`,
+        `Не вдалося видалити файл: ${e.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

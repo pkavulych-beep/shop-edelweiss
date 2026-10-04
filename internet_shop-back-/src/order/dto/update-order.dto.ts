@@ -4,7 +4,7 @@ import { IsNotEmpty, IsOptional } from 'class-validator';
 import { Status } from '../statusEnum';
 
 export class UpdateOrderDto extends PartialType(CreateOrderDto) {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Не вказано замовлення' })
   id: number;
 
   @IsOptional()

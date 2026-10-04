@@ -2,26 +2,26 @@ import { IsArray, IsNotEmpty, IsNumber, IsString, ValidateNested } from 'class-v
 import { Type } from 'class-transformer';
 
 export class SyncCartItemDto {
-  @IsNotEmpty()
-  @IsNumber()
+  @IsNotEmpty({ message: 'Не вказано товар' })
+  @IsNumber({}, { message: 'Ідентифікатор товару має бути числом' })
   productId: number;
 
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: 'Оберіть розмір' })
+  @IsString({ message: 'Розмір має бути рядком' })
   size: string;
 
-  @IsNotEmpty()
-  @IsNumber()
+  @IsNotEmpty({ message: 'Вкажіть кількість' })
+  @IsNumber({}, { message: 'Кількість має бути числом' })
   quantity: number;
 }
 
 export class SyncCartDto {
-  @IsNotEmpty()
-  @IsNumber()
+  @IsNotEmpty({ message: 'Не вказано користувача' })
+  @IsNumber({}, { message: 'Ідентифікатор користувача має бути числом' })
   idUser: number;
 
-  @IsArray()
-  @ValidateNested({ each: true })
+  @IsArray({ message: 'Товари мають бути передані списком' })
+  @ValidateNested({ each: true, message: 'Некоректні дані товару в кошику' })
   @Type(() => SyncCartItemDto)
   items: SyncCartItemDto[];
 }

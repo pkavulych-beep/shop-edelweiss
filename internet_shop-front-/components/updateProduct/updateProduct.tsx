@@ -34,11 +34,11 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
   return (
     <div>
       <Button variant="contained" color="primary" onClick={handleClickOpen}>
-        поміняти дані цього товару
+        Редагувати товар
       </Button>
       <Dialog
         open={open}
-        title={"Here you can update the product"}
+        title={"Редагування товару"}
         onClose={handleClose}
       >
         {
@@ -56,7 +56,7 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
           >
             <DishForm
               handleClose={handleClose}
-              nameRightBtn={"Обновити"}
+              nameRightBtn={"Зберегти"}
               setPhotos={setPhotoFiles}
             />
           </Formik>
