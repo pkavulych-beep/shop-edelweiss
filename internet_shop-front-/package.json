@@ -1,0 +1,36 @@
+{
+  "name": "internet-shop",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.6.0",
+    "@emotion/styled": "^11.6.0",
+    "@mui/icons-material": "^5.1.0",
+    "@mui/lab": "^5.0.0-alpha.66",
+    "@mui/material": "^5.1.0",
+    "@reduxjs/toolkit": "^1.6.2",
+    "axios": "^0.24.0",
+    "formik": "^2.2.9",
+    "next": "12.0.4",
+    "next-redux-wrapper": "^7.0.5",
+    "nookies": "^2.5.2",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "react-redux": "^7.2.6",
+    "sass": "^1.43.5",
+    "yup": "^0.32.11"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.7",
+    "@types/react": "^17.0.35",
+    "eslint": "7.32.0",
+    "eslint-config-next": "12.0.4",
+    "prettier": "^2.5.1",
+    "typescript": "^4.4.4"
+  }
+}

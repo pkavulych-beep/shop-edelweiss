@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* ── Primary ── */
+  --color-primary: #745c00;
+  --color-primary-container: #f9d461;
+  --color-on-primary: #fff8ee;
+
+  /* ── Surface Hierarchy ── */
+  --color-surface: #f9f9f9;
+  --color-surface-container: #eceeee;
+  --color-surface-container-low: #f2f4f4;
+  --color-surface-container-high: #e6e9e9;
+  --color-surface-container-lowest: #ffffff;
+
+  /* ── Text ── */
+  --color-on-surface: #2f3334;
+  --color-on-surface-variant: #5b6061;
+
+  /* ── Outline ── */
+  --color-outline: #777b7c;
+  --color-outline-variant: #afb3b3;
+
+  /* ── Error ── */
+  --color-error: #a73b21;
+
+  /* ── Inverse ── */
+  --color-inverse-surface: #0c0f0f;
+  --color-inverse-on-surface: #9c9d9d;
+  --color-inverse-primary: #f9d461;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-on-surface);
+}
+
+p, div, span, del {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 400;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+/* ── Selection color ── */
+::selection {
+  background-color: var(--color-primary-container);
+  color: var(--color-on-surface);
+}

@@ -1,0 +1,13 @@
+.wrapper {
+  width: 300px;
+  display: flex;
+  justify-content: space-around;
+  color: white;
+  margin: 5px 0;
+}
+
+.selectedGender {
+  border-bottom: 1px solid #ffffff;
+  border-radius: 0;
+  cursor: pointer;
+}

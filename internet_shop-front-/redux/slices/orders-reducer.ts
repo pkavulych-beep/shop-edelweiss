@@ -1,0 +1,32 @@
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { HYDRATE } from 'next-redux-wrapper';
+import { AppThunk } from '../redux-store';
+import { Api } from '../../api/Api';
+import { Order } from '../Types/orderType';
+
+export const ordersSlice = createSlice({
+  name: 'orders',
+  initialState: {
+    data: null as Order[],
+  },
+  reducers: {
+    addOrdersData: (state, action: PayloadAction<Order[] | null>) => {
+      state.data = action.payload;
+    },
+  },
+  extraReducers: {
+    [HYDRATE]: (state, action) => {
+      state.data = action.payload.orders.data;
+    },
+  },
+});
+
+export const { addOrdersData } = ordersSlice.actions;
+
+export default ordersSlice.reducer;
+
+// Thunks
+export const setOrdersData = (id) => async (dispatch) => {
+  const product = await Api().orders.getOrdersUser(id);
+  dispatch(addOrdersData(product));
+};
