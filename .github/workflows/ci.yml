@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (build, tests, smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: internet_shop-back-
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: Edelweiss
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d Edelweiss"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PORT: 7777
+      BASE_URL: http://localhost:7777/
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: Edelweiss
+      JWT_SECRET: ci-only-secret
+      SEED_ADMIN_PHONE: "380990000000"
+      SEED_ADMIN_PASSWORD: admin12345
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internet_shop-back-/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --passWithNoTests
+      - name: Smoke test (API starts, schema syncs, seed and login work)
+        run: |
+          npm run start:prod > api.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7777/ > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:7777/ > /dev/null || { echo "::error::API did not start"; exit 1; }
+          npm run seed
+          token=$(curl -sf -X POST http://localhost:7777/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"phoneNumber\":\"$SEED_ADMIN_PHONE\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" | jq -r .token)
+          if [ -z "$token" ] || [ "$token" = null ]; then echo "::error::Admin login failed"; exit 1; fi
+          curl -sf http://localhost:7777/auth/profile -H "Authorization: Bearer $token" > /dev/null \
+            || { echo "::error::Profile request with the admin token failed"; exit 1; }
+          echo "Smoke test passed"
+      - name: API log
+        if: failure()
+        run: cat api.log || true
+
+  frontend:
+    name: Frontend (lint, types, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: internet_shop-front-
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internet_shop-front-/package-lock.json
+      - run: npm ci
+      - run: npm run build

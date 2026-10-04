@@ -192,7 +192,7 @@ export default function ProfilePage() {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Повне ім'я
+                  Повне ім’я
                 </Typography>
                 <TextField
                   fullWidth
