@@ -21,21 +21,6 @@ export class OrderService {
     private userService: UsersService,
   ) {}
 
-  setProducts(order, productsIdArr) {
-    productsIdArr.forEach(async (id) => {
-      const product = await this.productService.findProductMain(id);
-      order.productsInOrder.push(product);
-    });
-    return this.repository.save(order);
-  }
-
-  findOrderProducts(idOrder: number) {
-    return this.repository.findOne({
-      where: { id: idOrder },
-      relations: ['productsInOrder'],
-    });
-  }
-
   // Власник бачить лише свої замовлення, ADMIN — будь-які
   async findOneForUser(
     idOrder: number,
@@ -61,15 +46,23 @@ export class OrderService {
     await this.productService.assertPurchasable(productId);
     const user = await this.userService.findOne(userId);
 
-    const preCreateOrder = await this.repository.save({
-      user,
-      status: Status.Processed,
-      ...restDto,
+    // Товари завантажуємо до збереження, а замовлення зберігаємо разом із ними
+    // в одній транзакції, щоб не лишилося замовлення без товарів
+    const order = await this.repository.manager.transaction(async (manager) => {
+      const productsInOrder = await this.productService.findProductsMain(
+        productId,
+        manager,
+      );
+      return manager.save(OrderEntity, {
+        user,
+        status: Status.Processed,
+        ...restDto,
+        productsInOrder,
+      });
     });
 
-    const order = await this.findOrderProducts(preCreateOrder.id);
-
-    return this.setProducts(order, productId);
+    const { user: _owner, ...result } = order;
+    return result;
   }
 
   async findOneById(id: number) {
@@ -103,9 +96,17 @@ export class OrderService {
     const order = await this.findOneById(updateOrderDto.id);
     order.status = updateOrderDto.status;
     order.comment = updateOrderDto.comment;
-    order.productsInOrder = [];
 
-    return this.setProducts(order, updateOrderDto.productId);
+    return this.repository.manager.transaction(async (manager) => {
+      // Без productId товари замовлення лишаються як були
+      if (updateOrderDto.productId !== undefined) {
+        order.productsInOrder = await this.productService.findProductsMain(
+          updateOrderDto.productId,
+          manager,
+        );
+      }
+      return manager.save(order);
+    });
   }
 
   async remove(id: number) {

@@ -23,29 +23,103 @@ describe('OrderService', () => {
     expect(repository.save).not.toHaveBeenCalled();
   });
 
-  it('creates the order for the user from the token', async () => {
-    const user = { id: 3 };
-    const repository = {
-      save: jest.fn().mockResolvedValue({ id: 10 }),
-      findOne: jest.fn().mockResolvedValue({ id: 10, productsInOrder: [] }),
-    };
-    const productService = {
-      assertPurchasable: jest.fn().mockResolvedValue(undefined),
-      findProductMain: jest.fn(),
-    };
-    const userService = { findOne: jest.fn().mockResolvedValue(user) };
-    const service = new OrderService(repository as any, productService as any, userService as any);
-
-    await service.create(3, {
-      productId: [],
+  describe('create', () => {
+    const dto = {
+      productId: [1, 2],
       comment: '',
       cityName: 'Київ',
       department: '1',
       size: 'M',
+    };
+    const user = { id: 3 };
+    const products = [{ id: 1 }, { id: 2 }];
+    let manager;
+    let repository;
+    let productService;
+    let service: OrderService;
+
+    beforeEach(() => {
+      manager = {
+        save: jest.fn((_target, order) => Promise.resolve({ id: 10, ...order })),
+      };
+      repository = {
+        save: jest.fn(),
+        manager: { transaction: jest.fn((work) => work(manager)) },
+      };
+      productService = {
+        assertPurchasable: jest.fn().mockResolvedValue(undefined),
+        findProductsMain: jest.fn().mockResolvedValue(products),
+      };
+      const userService = { findOne: jest.fn().mockResolvedValue(user) };
+      service = new OrderService(repository, productService, userService as any);
     });
 
-    expect(userService.findOne).toHaveBeenCalledWith(3);
-    expect(repository.save.mock.calls[0][0]).toMatchObject({ user });
+    it('saves the order for the token user with all products in one transaction', async () => {
+      const result = await service.create(3, dto);
+
+      expect(productService.findProductsMain).toHaveBeenCalledTimes(1);
+      expect(productService.findProductsMain).toHaveBeenCalledWith([1, 2], manager);
+      expect(manager.save).toHaveBeenCalledTimes(1);
+      expect(manager.save.mock.calls[0][1]).toMatchObject({
+        user,
+        productsInOrder: products,
+      });
+      expect(repository.save).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ id: 10, productsInOrder: products });
+      expect(result).not.toHaveProperty('user');
+    });
+
+    it('does not save the order when a product is missing', async () => {
+      productService.findProductsMain.mockRejectedValue(new NotFoundException());
+
+      await expect(service.create(3, dto)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    let manager;
+    let productService;
+    let service: OrderService;
+
+    beforeEach(() => {
+      manager = { save: jest.fn((order) => Promise.resolve(order)) };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({ id: 10, comment: 'old' }),
+        manager: { transaction: jest.fn((work) => work(manager)) },
+      };
+      productService = {
+        findProductsMain: jest.fn().mockResolvedValue([{ id: 7 }]),
+      };
+      service = new OrderService(repository as any, productService, {} as any);
+    });
+
+    it('replaces the products before saving', async () => {
+      const result = await service.update({ id: 10, productId: [7] } as any);
+
+      expect(productService.findProductsMain).toHaveBeenCalledWith([7], manager);
+      expect(manager.save).toHaveBeenCalledTimes(1);
+      expect(result.productsInOrder).toEqual([{ id: 7 }]);
+    });
+
+    it('keeps the products when productId is not given', async () => {
+      const result = await service.update({ id: 10, comment: 'new' } as any);
+
+      expect(productService.findProductsMain).not.toHaveBeenCalled();
+      expect(result).not.toHaveProperty('productsInOrder');
+      expect(result.comment).toBe('new');
+    });
+
+    it('does not save a product that is not found', async () => {
+      productService.findProductsMain.mockRejectedValue(new NotFoundException());
+
+      await expect(
+        service.update({ id: 10, productId: [99] } as any),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('findOneForUser', () => {

@@ -3,7 +3,16 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Equal, In, IsNull, MoreThan, Not, Or, Repository } from 'typeorm';
+import {
+  EntityManager,
+  Equal,
+  In,
+  IsNull,
+  MoreThan,
+  Not,
+  Or,
+  Repository,
+} from 'typeorm';
 import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
 import { baseUrl, FileService, FileType } from 'src/file/file.service';
@@ -219,15 +228,22 @@ export class ProductService {
     }
   }
 
-  findProductMain(id: number): Promise<ProductEntity> {
-    const commodity = this.repository.findOne({
-      where: { id },
+  // Основні поля товарів одним запитом; якщо якогось id немає, кидає 404.
+  // manager передають, щоб читати в межах транзакції замовлення
+  async findProductsMain(
+    ids: number[],
+    manager: EntityManager = this.repository.manager,
+  ): Promise<ProductEntity[]> {
+    const uniqueIds = [...new Set((ids ?? []).map(Number))];
+    if (uniqueIds.length === 0) return [];
+    const products = await manager.find(ProductEntity, {
+      where: { id: In(uniqueIds) },
       select: ['id', 'name', 'sizes', 'price', 'cover', 'salePrice'],
     });
-    if (!commodity) {
+    if (products.length !== uniqueIds.length) {
       throw new NotFoundException(null, 'Товар не знайдено');
     }
-    return commodity;
+    return products;
   }
 
   async findByIds(ids: number[]): Promise<ProductEntity[]> {
