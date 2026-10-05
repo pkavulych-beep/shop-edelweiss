@@ -194,7 +194,7 @@ export class ProductService {
     });
     // Прихований («видалений») товар не віддаємо за прямим посиланням
     if (!commodity || commodity.status === ProductStatus.Hidden) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
     return commodity;
   }
@@ -215,7 +215,7 @@ export class ProductService {
   async assertPurchasable(ids: number[]): Promise<void> {
     const purchasable = new Set(await this.findPurchasableIds(ids));
     if (ids.some((id) => !purchasable.has(+id))) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
   }
 
@@ -225,7 +225,7 @@ export class ProductService {
       select: ['id', 'name', 'sizes', 'price', 'cover', 'salePrice'],
     });
     if (!commodity) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
     return commodity;
   }
@@ -247,7 +247,7 @@ export class ProductService {
       const { photos } = commodity;
       return photos;
     } catch (e) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
   }
 
@@ -268,7 +268,7 @@ export class ProductService {
       });
       return this.repository.findOne({ where: { id } });
     } else {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
   }
 
@@ -279,7 +279,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
 
     await this.basketRepository.delete({ productId: id });

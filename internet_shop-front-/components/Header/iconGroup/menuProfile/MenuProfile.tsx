@@ -53,7 +53,7 @@ export const MenuProfile: NextPage<IMenuProfileProps> = ({ open, onClose, onClic
             <ListItemIcon>
               <Settings fontSize='small' />
             </ListItemIcon>
-            Налаштування профіля
+            Налаштування профілю
           </MenuItem>
         </a>
       </Link>

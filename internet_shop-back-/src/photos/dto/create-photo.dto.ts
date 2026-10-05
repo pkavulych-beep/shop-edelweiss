@@ -1,6 +1,6 @@
 import { IsNotEmpty } from 'class-validator';
 
 export class CreatePhotoDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть посилання на фото' })
   url: string;
 }

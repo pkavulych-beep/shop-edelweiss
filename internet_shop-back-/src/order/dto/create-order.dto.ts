@@ -2,10 +2,10 @@ import {IsNotEmpty, IsOptional} from 'class-validator';
 import {Column} from "typeorm";
 
 export class CreateOrderDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Не вказано користувача' })
   userId: number;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Не вказано товари' })
   productId: number[];
 
   @IsOptional()

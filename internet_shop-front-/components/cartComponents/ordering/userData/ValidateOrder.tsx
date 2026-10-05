@@ -3,10 +3,11 @@ import * as yup from "yup";
 export const ValidateOrder = yup.object().shape({
   phoneNumber: yup
     .number()
-    .min(10, "введіть свій номер телефону")
-    .required("Необхідний"),
+    .typeError("Введіть номер телефону цифрами")
+    .min(10, "Введіть номер телефону")
+    .required("Обов'язкове поле"),
   fullName: yup
     .string()
-    .required("Необхідний")
-    .min(6, "вкажіть ваше Призвіще Ім'я Побатькові"),
+    .required("Обов'язкове поле")
+    .min(6, "Вкажіть прізвище, ім'я та по батькові"),
 });

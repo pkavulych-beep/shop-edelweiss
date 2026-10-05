@@ -1,9 +1,9 @@
 import { IsNotEmpty } from 'class-validator';
 
 export class CreateRoleDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть назву ролі' })
   readonly value: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть опис ролі' })
   readonly description: string;
 }

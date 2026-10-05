@@ -3,13 +3,13 @@ import { Transform } from 'class-transformer';
 import { Gender, Category, Season, ProductStatus } from '../entities/product.entity';
 
 export class CreateProductDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть назву товару' })
   name: string;
 
   @IsOptional()
   count: number;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть опис товару' })
   description: string;
 
   @IsOptional()
@@ -18,7 +18,7 @@ export class CreateProductDto {
     if (typeof value === 'string' && value.trim()) return value.split(',').map((s) => s.trim()).filter(Boolean);
     return [];
   })
-  @IsArray()
+  @IsArray({ message: 'Розміри мають бути списком' })
   sizes: string[];
 
   @IsOptional()
@@ -30,42 +30,42 @@ export class CreateProductDto {
     if (typeof value === 'string' && value.trim()) return value.split(',').map((s) => s.trim()).filter(Boolean);
     return [];
   })
-  @IsArray()
+  @IsArray({ message: 'Кольори мають бути списком' })
   colors: string[];
 
   @IsOptional()
   material: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Вкажіть ціну' })
   price: number;
 
   @IsOptional()
   salePrice: number;
 
   @IsNotEmpty({ message: 'Оберіть стать' })
-  @IsEnum(Gender, { message: 'Невірне значення статі' })
+  @IsEnum(Gender, { message: 'Неправильне значення статі' })
   gender: Gender;
 
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  @IsEnum(Category, { message: 'Невірна категорія' })
+  @IsEnum(Category, { message: 'Неправильна категорія' })
   category: Category;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Підкатегорія має бути рядком' })
   subcategory: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Бренд має бути рядком' })
   brand: string;
 
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  @IsEnum(Season, { message: 'Невірний сезон' })
+  @IsEnum(Season, { message: 'Неправильний сезон' })
   season: Season;
 
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : value))
-  @IsEnum(ProductStatus)
+  @IsEnum(ProductStatus, { message: 'Неправильний статус товару' })
   status: ProductStatus;
 }

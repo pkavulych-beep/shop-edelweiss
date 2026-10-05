@@ -15,7 +15,7 @@ export const MainLayout: FC<IMainLayoutProps> = ({ children, title = 'Edelweiss'
     <>
       <Head>
         <title>{title}</title>
-        <meta name="description" content="Edelweiss — curated fashion atelier" />
+        <meta name="description" content="Edelweiss — вишуканий одяг для тих, хто цінує якість та стиль" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <Header />
