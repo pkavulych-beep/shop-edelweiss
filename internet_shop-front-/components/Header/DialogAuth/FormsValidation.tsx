@@ -9,7 +9,8 @@ export const LoginFormValidation = yup.object().shape({
   password: yup
     .string()
     .required("Обов'язкове поле")
-    .min(6, "Мінімум символів: 6"),
+    .min(6, "Мінімум символів: 6")
+    .max(32, "Максимум символів: 32"),
 });
 
 export const RegisterFormValidation = yup

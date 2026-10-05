@@ -6,6 +6,7 @@
 //
 // Usage: npm run seed
 require('dotenv/config');
+const bcrypt = require('bcryptjs');
 const { Client } = require('pg');
 
 const ROLES = [
@@ -13,7 +14,7 @@ const ROLES = [
   { value: 'ADMIN', description: 'Адміністратор' },
 ];
 
-// Passwords are stored as plain text by the app (AuthService compares them directly).
+// The password is stored as a bcrypt hash, the same way UsersService.create stores it.
 const ADMIN = {
   fullName: process.env.SEED_ADMIN_NAME || 'Адміністратор',
   phoneNumber: process.env.SEED_ADMIN_PHONE || '380990000000',
@@ -71,7 +72,7 @@ async function main() {
       ({ rows } = await client.query(
         `INSERT INTO users ("fullName", email, "phoneNumber", password)
          VALUES ($1, $2, $3, $4) RETURNING id`,
-        [ADMIN.fullName, ADMIN.email, ADMIN.phoneNumber, ADMIN.password],
+        [ADMIN.fullName, ADMIN.email, ADMIN.phoneNumber, await bcrypt.hash(ADMIN.password, 10)],
       ));
       console.log(`Created admin ${ADMIN.phoneNumber}`);
     }

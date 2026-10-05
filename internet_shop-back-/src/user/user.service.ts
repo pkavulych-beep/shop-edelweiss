@@ -5,11 +5,11 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserEntity } from './entities/user.entity';
 import { BasketItemEntity } from './entities/basket-item.entity';
-import { CreateLoginUserDto } from './dto/login-user.dto';
 import { RolesService } from '../roles/roles.service';
 import { ProductService } from '../product/product.service';
 import { productToBasketDto } from './dto/productToBasket.dto';
 import { SyncCartItemDto } from './dto/sync-cart.dto';
+import { hashPassword } from '../auth/password';
 
 @Injectable()
 export class UsersService {
@@ -35,7 +35,10 @@ export class UsersService {
       throw new ConflictException(message);
     }
 
-    const user = this.repository.create(dto);
+    const user = this.repository.create({
+      ...dto,
+      password: await hashPassword(dto.password),
+    });
     const role = await this.roleRepository.getRoleByValue('USER');
     user.roles = [role];
     return await this.repository.save(user);
@@ -67,15 +70,28 @@ export class UsersService {
     });
   }
 
-  async findByCond(cond: CreateLoginUserDto) {
-    return await this.repository.findOne({
-      where: cond,
-      relations: ['roles', 'cartItems', 'cartItems.product'],
-    });
+  // Пароль має select: false, тож для входу додаємо його в запит явно
+  async findByPhoneWithPassword(phoneNumber: string): Promise<UserEntity> {
+    return await this.repository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .leftJoinAndSelect('user.cartItems', 'cartItems')
+      .leftJoinAndSelect('cartItems.product', 'product')
+      .where('user.phoneNumber = :phoneNumber', { phoneNumber })
+      .getOne();
+  }
+
+  async setPasswordHash(id: number, passwordHash: string) {
+    await this.repository.update(id, { password: passwordHash });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
-    await this.repository.update(id, updateUserDto);
+    const changes = { ...updateUserDto };
+    if (changes.password) {
+      changes.password = await hashPassword(changes.password);
+    }
+    await this.repository.update(id, changes);
     return await this.repository.findOne({ where: { id } });
   }
 
