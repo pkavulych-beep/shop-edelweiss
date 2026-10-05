@@ -15,7 +15,7 @@ export class PhotosService {
     return await this.PhotoRepository.save(createPhotoDto);
   }
 
-  remove(id: number) {
-    this.PhotoRepository.delete(id);
+  async remove(id: number) {
+    return await this.PhotoRepository.delete(id);
   }
 }
