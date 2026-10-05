@@ -1,0 +1,21 @@
+# Codex in this repository. The conveyor (tools/conveyor) runs Codex agents with nobody watching:
+# they work in Codex's sandbox, and its automatic reviewer, not a person, approves anything beyond it.
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+# npm, gh, git push and the shop's own servers need the network.
+network_access = true
+# Agents work in git worktrees, and a worktree's commits are written to the main checkout's .git.
+writable_roots = ["/Users/pavlo/Documents/pet/shop-edelweiss/.git"]
+
+[shell_environment_policy.set]
+# The sandbox can't write to ~/.npm, where npm keeps its cache by default.
+npm_config_cache = "/tmp/codex-npm-cache"
+NEXT_TELEMETRY_DISABLED = "1"
+
+# The browser check from AGENTS.md. --isolated lets several agents run a browser at once.
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest", "--isolated"]

@@ -3,7 +3,7 @@
 //
 // Every tick it reads GitHub (open pull requests and issues) and the office's workers,
 // and takes the next step for each piece of work:
-//   issue in the queue        → hire the coder (one at a time)                → pull request
+//   issue in the queue        → hire the coder for its difficulty             → pull request
 //   PR behind main / no CI    → update its branch from main                   → CI runs
 //   PR conflicts / CI red     → hand it back to its author, or hire a fixer   → new commits
 //   PR green, no verdict      → hire the reviewer (one at a time)             → verdict comment
@@ -11,7 +11,10 @@
 //   verdict "approve"         → merge, unless it touches protected paths or is too big
 //   every few merges          → hire QA, who tries them in a browser          → bug issues and a report
 // The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P2);
-// `manual` keeps an issue out of it.
+// `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
+// `medium`, `easy`) which coder takes it. Each coder does one task at a time, alongside the others, on
+// ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
+// pauses only the agents on that plan.
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
 // removing the label hands it back to the conveyor, with its counts reset. A macOS notification says
 // when that happens, when a usage limit pauses the work, and what QA found.
@@ -42,18 +45,21 @@ const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 // What Claude Code and Codex print when a plan's usage window runs out.
 const LIMIT_TEXT = /usage limit|limit reached|hit your (usage )?limit|out of extra usage/i;
 const FINISHED = new Set(['idle', 'done', 'exited', 'offline']);
-const ROLE = { coder: 'кодера', reviewer: "рев'юера", qa: 'QA-агента' };
 const MINUTE = 60_000;
 
 const state = loadState();
 state.qa ??= {};
+state.paused ??= state.pausedUntil ? { claude: state.pausedUntil } : {}; // until when each provider's usage limit holds
+delete state.pausedUntil;
+// Coder jobs from before there were several coders ran on Claude.
+const CLAUDE_CODER = Object.keys(config.coders).find((k) => config.coders[k].provider === 'claude') ?? Object.keys(config.coders)[0];
 let me; // this shell's GitHub login and office name, filled in on the first tick
 
 function loadState() {
   try {
     return JSON.parse(readFileSync(STATE_PATH, 'utf8'));
   } catch {
-    return { prs: {}, issues: {}, pausedUntil: 0 };
+    return { prs: {}, issues: {}, paused: {} };
   }
 }
 
@@ -122,11 +128,10 @@ function officeWorkers() {
   return IN_OFFICE ? JSON.parse(run('office-workers', ['list', '--json'])) : null;
 }
 
-/** Hires a worker for `role`; returns its name, '(dry-run)', or undefined when hiring failed. */
-function hire(role, title, text, extra = []) {
-  const r = config[role];
-  const args = ['hire', '--provider', r.provider, '--model', r.model, '--effort', r.effort, '--json', ...extra];
-  const w = act(`найняти ${ROLE[role]} (${r.model}): ${title}`, () => JSON.parse(run('office-workers', args, { input: text })));
+/** Hires a worker on `agent` (its provider, model and effort); returns its name, '(dry-run)', or undefined when hiring failed. */
+function hire(agent, who, title, text, extra = []) {
+  const args = ['hire', '--provider', agent.provider, '--model', agent.model, '--effort', agent.effort, '--json', ...extra];
+  const w = act(`найняти ${who} (${agent.model}): ${title}`, () => JSON.parse(run('office-workers', args, { input: text })));
   if (w === null) return { name: '(dry-run)' };
   return w && w.name ? { name: w.name, id: w.id } : undefined;
 }
@@ -166,6 +171,23 @@ function hitLimit(workerId) {
   }
   return LIMIT_TEXT.test(buffer.toString('utf8').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ''));
 }
+
+// ── Coders ───────────────────────────────────────────────────────────────────────────────────
+
+/** An issue's difficulty: its label, or the default when it has none. */
+const difficultyOf = (issue) => config.difficultyLabels.find((l) => labelsOf(issue).includes(l)) ?? config.defaultDifficulty;
+
+/** The coder that takes issues of `difficulty`, if any does. */
+const coderFor = (difficulty) => Object.keys(config.coders).find((name) => config.coders[name].takes.includes(difficulty));
+
+/** The ports and database an agent runs the shop on, for its prompt. */
+const portsOf = (agent) => ({ backPort: agent.ports.back, frontPort: agent.ports.front, db: agent.ports.db });
+
+/** How long to wait before waking agents that ran into `provider`'s usage limit. */
+const pauseMinutes = (provider) =>
+  typeof config.limitPauseMinutes === 'number' ? config.limitPauseMinutes : config.limitPauseMinutes[provider] ?? 60;
+
+const when = (time) => new Date(time).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
 
 // ── GitHub ───────────────────────────────────────────────────────────────────────────────────
 
@@ -213,11 +235,12 @@ function issuesSince(label, time) {
 function finishQa(qa) {
   const job = qa.lastJob;
   job.checked = true;
-  qa.since = job.until;
   let found;
+  let reported = true;
   try {
     const bugs = issuesSince('qa', job.since).length;
     const reports = issuesSince('qa-report', job.since);
+    reported = reports.length > 0;
     // The report is a record, not a task, so it doesn't stay open.
     for (const r of reports.filter((x) => x.state === 'OPEN')) {
       act(`закрити звіт QA #${r.number}`, () => gh('issue', 'close', String(r.number), '--repo', REPO));
@@ -225,6 +248,14 @@ function finishQa(qa) {
     found = `нових багів: ${bugs}, ${reports.length ? `звіт #${reports[0].number}` : 'звіту немає'}`;
   } catch (e) {
     found = `не вдалося порахувати знахідки (${firstLine(e)})`;
+  }
+  // No report mostly means QA was cut short, by a usage limit or a restart: those merges get one more run.
+  if (reported || qa.retried) {
+    qa.since = job.until;
+    delete qa.retried;
+  } else {
+    qa.retried = true;
+    found += ', ці PR перевіримо ще раз';
   }
   log(`QA перевірив ${job.prs.map((n) => `#${n}`).join(', ')}: ${found}`);
   notify('QA закінчив', `Перевірено PR: ${job.prs.length}, ${found}`);
@@ -351,20 +382,22 @@ function tick() {
   const pulls = openPulls().filter((p) => !p.isDraft && !p.isCrossRepository && p.author?.login === me.login);
   const issues = queuedIssues();
   for (const i of issues) if (state.issues[i.number]) onHold(i, state.issues[i.number], ISSUE_COUNTS);
-  let coderBusy = false;
+  const busyCoders = new Set();
   let reviewerBusy = false;
 
-  // Usage limits: the plan's window ran out, so wait it out, then wake whoever stopped on it.
-  if (state.pausedUntil && state.pausedUntil <= now) {
-    state.pausedUntil = 0;
+  // Usage limits: each plan's window runs out on its own, so wait it out, then wake whoever stopped on it.
+  for (const [provider, until] of Object.entries(state.paused)) {
+    if (until > now) continue;
+    delete state.paused[provider];
     for (const s of [...Object.values(state.prs), ...Object.values(state.issues), state.qa]) {
-      if (!s.job?.limited) continue;
+      if (!s.job?.limited || (s.job.provider ?? 'claude') !== provider) continue;
       if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
         s.job.limited = false;
         s.job.since = now;
       }
     }
   }
+  const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
 
   /** Brings a job up to date; true while its worker is still on it (or waiting out a limit). */
   const busy = (s, kind, n) => {
@@ -384,10 +417,10 @@ function tick() {
     delete job.waitingSince;
     if (where === 'finished' && hitLimit(job.workerId)) {
       job.limited = true;
-      state.pausedUntil = Math.max(state.pausedUntil, now + config.limitPauseMinutes * MINUTE);
-      const until = new Date(state.pausedUntil).toLocaleTimeString('uk-UA');
-      log(`${job.worker} уперся в ліміт використання: пауза для нових агентів до ${until}`);
-      notify('Пауза через ліміт', `${job.worker} уперся в ліміт підписки. Нових агентів не наймаю до ${until}`);
+      const provider = job.provider ?? 'claude';
+      state.paused[provider] = Math.max(state.paused[provider] ?? 0, now + pauseMinutes(provider) * MINUTE);
+      log(`${job.worker} уперся в ліміт використання: пауза для агентів ${provider} до ${when(state.paused[provider])}`);
+      notify('Пауза через ліміт', `${job.worker} уперся в ліміт ${provider}. Агентів ${provider} не наймаю до ${when(state.paused[provider])}`);
       return true;
     }
     s.lastJob = { ...job, ended: now };
@@ -397,10 +430,10 @@ function tick() {
     return false;
   };
 
-  // Jobs already running take the coder and reviewer slots first.
+  // Jobs already running hold their coder, and the reviewer, first.
   for (const [n, s] of Object.entries(state.issues)) {
     if (busy(s, 'issue', n)) {
-      coderBusy = true;
+      busyCoders.add(s.job.coder ?? CLAUDE_CODER);
       continue;
     }
     if (s.lastJob && !s.checked) {
@@ -416,16 +449,21 @@ function tick() {
   for (const [n, s] of Object.entries(state.prs)) {
     if (busy(s, 'pr', n)) {
       if (s.job.kind === 'review') reviewerBusy = true;
-      else coderBusy = true;
+      else busyCoders.add(s.job.coder ?? CLAUDE_CODER);
     } else if (!pulls.some((p) => String(p.number) === n)) {
       delete state.prs[n]; // merged or closed
     }
   }
-  // QA holds the coder's slot: both run the shop on the same ports.
+  // QA runs the shop on ports of its own, so it works alongside the coders.
   const qa = state.qa;
-  if (busy(qa, 'qa')) coderBusy = true;
-  else if (qa.lastJob && !qa.lastJob.checked) finishQa(qa);
-  const paused = state.pausedUntil > now;
+  if (!busy(qa, 'qa') && qa.lastJob && !qa.lastJob.checked) finishQa(qa);
+
+  /** Whose pull request this is: the coder on its author's plan, else the one its issue's difficulty picks. */
+  const coderOfPr = (pr, author) => {
+    const byAuthor = author && Object.keys(config.coders).find((k) => config.coders[k].provider === author.provider);
+    const issue = [...(pr.body ?? '').matchAll(CLOSES)].map((m) => issues.find((i) => i.number === Number(m[1]))).find(Boolean);
+    return byAuthor ?? (issue && coderFor(difficultyOf(issue))) ?? CLAUDE_CODER;
+  };
 
   const requestFix = (pr, s, reasons, key) => {
     const n = pr.number;
@@ -437,37 +475,40 @@ function tick() {
       needsHuman('pr', n, `${s.fixRounds} доопрацювань не довели PR до мерджу`);
       return;
     }
-    if (coderBusy || paused) return; // waits for the coder slot
+    const author = workers?.find((w) => w.kind === 'agent' && w.pr?.number === n);
+    if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
+    const coder = config.coders[s.coder];
+    if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
+    if (author && !FINISHED.has(author.status)) return; // its author is already at it
     const text = prompt('fix', {
       pr: n, title: pr.title, url: pr.url, branch: pr.headRefName,
       reasons: reasons.map((r) => `- ${r}`).join('\n'),
+      ...portsOf(coder),
     });
-    const author = workers?.find((w) => w.kind === 'agent' && w.pr?.number === n);
     let worker;
-    if (author && !FINISHED.has(author.status)) return; // its author is already at it
     if (author) {
       if (tell(author.name, text, `PR #${n}: повертаємо автору ${author.name} (${reasons.join(', ')})`) !== undefined) {
         worker = { name: author.name, id: author.id };
       }
     } else {
-      worker = hire('coder', `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
+      worker = hire(coder, `кодера ${s.coder}`, `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
     }
     if (!worker) return;
     s.fixRounds = (s.fixRounds ?? 0) + 1;
     s.fixFor = key;
-    s.job = { kind: 'fix', worker: worker.name, workerId: worker.id, since: now };
-    coderBusy = true;
+    s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, since: now };
+    busyCoders.add(s.coder);
   };
 
   const requestReview = (pr, s) => {
-    if (reviewerBusy || paused) return;
+    if (reviewerBusy || pausedFor(config.reviewer.provider)) return;
     const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
-    const worker = hire('reviewer', `рев'ю PR #${pr.number}`, text, ['--no-worktree']);
+    const worker = hire(config.reviewer, "рев'юера", `рев'ю PR #${pr.number}`, text, ['--no-worktree']);
     if (!worker) return;
     s.reviewRounds = (s.reviewRounds ?? 0) + 1;
     s.reviewedSha = pr.headRefOid;
     delete s.fixFor; // a new verdict starts a new round of fixes
-    s.job = { kind: 'review', worker: worker.name, workerId: worker.id, since: now };
+    s.job = { kind: 'review', provider: config.reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
     reviewerBusy = true;
   };
 
@@ -546,50 +587,51 @@ function tick() {
   }
 
   // QA after every qa.everyMerges merges that changed the shop, the oldest first and at most that many at a time.
-  // It waits for the coder's slot, and no new issue starts meanwhile.
   const unchecked = config.qa?.enabled && !qa.job ? mergedSinceQa() : [];
-  const qaWaits = unchecked.length >= (config.qa?.everyMerges ?? Infinity);
   const startQa = () => {
+    if (pausedFor(config.qa.provider)) return;
     const batch = unchecked.slice(0, config.qa.everyMerges);
     const list = batch.map((p) => `#${p.number}`).join(', ');
     const prs = batch.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
-    const worker = hire('qa', `перевірити змерджені ${list}`, prompt('qa', { prs, list, maxIssues: config.qa.maxIssues }));
+    const text = prompt('qa', { prs, list, maxIssues: config.qa.maxIssues, ...portsOf(config.qa) });
+    const worker = hire(config.qa, 'QA-агента', `перевірити змерджені ${list}`, text);
     if (!worker) return;
-    qa.job = { kind: 'qa', worker: worker.name, workerId: worker.id, since: now, until: batch.at(-1).mergedAt, prs: batch.map((p) => p.number) };
-    coderBusy = true;
+    qa.job = { kind: 'qa', provider: config.qa.provider, worker: worker.name, workerId: worker.id, since: now, until: batch.at(-1).mergedAt, prs: batch.map((p) => p.number) };
   };
-  if (qaWaits && !coderBusy && !paused) startQa();
+  if (unchecked.length >= (config.qa?.everyMerges ?? Infinity)) startQa();
 
-  // New work: the next issue, while there's a free coder and not too much waiting for review.
+  // New work: the next issue for each free coder, while not too much waits for review. Higher priority goes
+  // first; an issue whose difficulty no coder takes waits for one.
   const inFlight = pulls.filter((p) => !labelsOf(p).includes('needs-human')).length;
-  if (!coderBusy && !paused && !qaWaits && inFlight < config.maxOpenPullRequests) {
-    const taken = new Set(pulls.flatMap((p) => [...(p.body ?? '').matchAll(CLOSES)].map((m) => Number(m[1]))));
-    const rank = (issue) => {
-      const i = config.priorityLabels.findIndex((l) => labelsOf(issue).includes(l));
-      return i < 0 ? config.priorityLabels.length : i;
-    };
-    const next = issues
-      .filter((i) => !labelsOf(i).includes('needs-human') && !taken.has(i.number))
-      .filter((i) => {
-        const s = state.issues[i.number];
-        if (s?.job || (s?.failures ?? 0) >= config.maxIssueAttempts) return false;
-        return !i.assignees.length || s; // someone else's if assigned and not by us
-      })
-      .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt))[0];
-    if (next) {
-      const worker = hire('coder', `issue #${next.number} «${next.title}»`, prompt('coder', { issue: next.number, title: next.title }), [
-        '--issue', String(next.number),
-      ]);
-      if (worker) {
-        const s = (state.issues[next.number] ??= {});
-        s.job = { kind: 'code', worker: worker.name, workerId: worker.id, since: now };
-        delete s.checked;
-      }
-    } else if (unchecked.length && !inFlight) {
-      // Nothing to start and nothing about to merge: QA checks what's left rather than wait for more merges.
-      startQa();
-    }
+  const taken = new Set(pulls.flatMap((p) => [...(p.body ?? '').matchAll(CLOSES)].map((m) => Number(m[1]))));
+  const rank = (issue) => {
+    const i = config.priorityLabels.findIndex((l) => labelsOf(issue).includes(l));
+    return i < 0 ? config.priorityLabels.length : i;
+  };
+  const ready = issues
+    .filter((i) => !labelsOf(i).includes('needs-human') && !taken.has(i.number))
+    .filter((i) => {
+      const s = state.issues[i.number];
+      if (s?.job || (s?.failures ?? 0) >= config.maxIssueAttempts) return false;
+      return !i.assignees.length || s; // someone else's if assigned and not by us
+    })
+    .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt));
+  let started = 0;
+  for (const [name, coder] of Object.entries(config.coders)) {
+    if (busyCoders.has(name) || pausedFor(coder.provider) || inFlight + started >= config.maxOpenPullRequests) continue;
+    const next = ready.find((i) => coderFor(difficultyOf(i)) === name);
+    if (!next) continue;
+    const text = prompt('coder', { issue: next.number, title: next.title, ...portsOf(coder) });
+    const worker = hire(coder, `кодера ${name}`, `issue #${next.number} «${next.title}»`, text, ['--issue', String(next.number)]);
+    if (!worker) continue;
+    const s = (state.issues[next.number] ??= {});
+    s.job = { kind: 'code', coder: name, provider: coder.provider, worker: worker.name, workerId: worker.id, since: now };
+    delete s.checked;
+    busyCoders.add(name);
+    started++;
   }
+  // Nothing in the works and nothing about to merge: QA checks what's left rather than wait for more merges.
+  if (!qa.job && unchecked.length && !inFlight && !busyCoders.size) startQa();
 
   // Coders whose pull requests merged go home, taking their worktrees with them.
   if (workers && me.name) {
@@ -601,8 +643,15 @@ function tick() {
     if (!state.issues[n].job && !issues.some((i) => String(i.number) === n)) delete state.issues[n];
   }
   saveState();
-  const qaNote = !config.qa?.enabled ? '' : qa.job ? ', QA працює' : qaWaits ? ', QA чекає на слот кодера' : `, мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`;
-  log(`крок: PR у роботі ${inFlight}, issues у черзі ${issues.length}${qaNote}${paused ? `, пауза до ${new Date(state.pausedUntil).toLocaleTimeString('uk-UA')}` : ''}`);
+  const noCoder = issues.filter((i) => !coderFor(difficultyOf(i))).length;
+  const notes = [
+    `PR у роботі ${inFlight}`,
+    `issues у черзі ${issues.length}${noCoder ? ` (без кодера ${noCoder})` : ''}`,
+    busyCoders.size ? `працюють ${[...busyCoders].join(', ')}` : '',
+    !config.qa?.enabled ? '' : qa.job ? 'QA працює' : `мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`,
+    ...Object.entries(state.paused).filter(([, until]) => until > now).map(([p, until]) => `${p} на паузі до ${when(until)}`),
+  ];
+  log(`крок: ${notes.filter(Boolean).join(', ')}`);
 }
 
 async function main() {
