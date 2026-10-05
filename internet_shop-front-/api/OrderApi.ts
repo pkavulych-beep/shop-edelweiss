@@ -1,8 +1,8 @@
 import { AxiosInstance } from "axios";
 import { Order } from "../redux/Types/orderType";
 
+// Користувача бекенд бере з JWT-токена
 export interface CreateOrderDto {
-  userId: number;
   productId: number[];
   cityName: string;
   department: string;
@@ -29,10 +29,12 @@ export const ordersApi = (instance: AxiosInstance) => ({
 
   //for Admin
   async findAll() {
-    const { data } = await instance.get("order");
+    const { data } = await instance.get<Order[]>("order");
+    return data;
   },
 
   async findIncomplete() {
-    const { data } = await instance.get("order/Incomplete");
+    const { data } = await instance.get<Order[]>("order/Incomplete");
+    return data;
   },
 });
