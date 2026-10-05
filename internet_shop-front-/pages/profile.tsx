@@ -35,6 +35,8 @@ export default function ProfilePage() {
   const [email, setEmail] = useState(userData?.email || '');
   const [saving, setSaving] = useState(false);
   const [snackOpen, setSnackOpen] = useState(false);
+  const [snackMessage, setSnackMessage] = useState('');
+  const [snackSeverity, setSnackSeverity] = useState<'success' | 'error'>('success');
 
   useEffect(() => {
     if (userData) {
@@ -72,8 +74,18 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await dispatch(updateUserData(userData.id, { fullName, phoneNumber: phone, email }));
+    const result = await dispatch(
+      updateUserData(userData.id, {
+        fullName,
+        phoneNumber: phone,
+        ...(email ? { email } : {}),
+      }),
+    );
     setSaving(false);
+    setSnackSeverity(result.success ? 'success' : 'error');
+    setSnackMessage(
+      result.success ? 'Дані успішно збережено' : result.message,
+    );
     setSnackOpen(true);
   };
 
@@ -352,10 +364,10 @@ export default function ProfilePage() {
       >
         <Alert
           onClose={() => setSnackOpen(false)}
-          severity="success"
+          severity={snackSeverity}
           sx={{ width: '100%' }}
         >
-          Дані успішно збережено
+          {snackMessage}
         </Alert>
       </Snackbar>
     </MainLayout>

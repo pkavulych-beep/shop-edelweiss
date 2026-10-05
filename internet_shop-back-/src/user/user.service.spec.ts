@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { verifyPassword } from '../auth/password';
 
@@ -111,5 +111,59 @@ describe('UsersService passwords', () => {
     });
 
     expect(repository.update.mock.calls[0][1].password).toBeUndefined();
+  });
+
+  it('rejects an update that uses another user’s phone number', async () => {
+    repository.findOne.mockResolvedValueOnce({ id: 4 });
+
+    await expect(
+      service.update(3, {
+        fullName: 'Тест Тестович',
+        phoneNumber: '380991112233',
+        email: undefined,
+        password: undefined,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an update that uses another user’s email', async () => {
+    repository.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 4 });
+
+    await expect(
+      service.update(3, {
+        fullName: 'Тест Тестович',
+        phoneNumber: '380991112233',
+        email: 'taken@example.com',
+        password: undefined,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('returns the complete profile after an update', async () => {
+    const profile = {
+      id: 3,
+      roles: [{ value: 'USER' }],
+      cartItems: [],
+    };
+    repository.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(profile);
+
+    await expect(
+      service.update(3, {
+        fullName: 'Тест Тестович',
+        phoneNumber: '380991112233',
+        email: undefined,
+        password: undefined,
+      }),
+    ).resolves.toBe(profile);
+    expect(repository.findOne).toHaveBeenLastCalledWith({
+      where: { id: 3 },
+      relations: ['roles', 'cartItems', 'cartItems.product'],
+    });
   });
 });

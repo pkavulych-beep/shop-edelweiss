@@ -92,11 +92,33 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const changes = { ...updateUserDto };
+
+    const [phoneOwner, emailOwner] = await Promise.all([
+      this.repository.findOne({
+        where: { phoneNumber: changes.phoneNumber },
+      }),
+      changes.email
+        ? this.repository.findOne({ where: { email: changes.email } })
+        : undefined,
+    ]);
+
+    if (phoneOwner && phoneOwner.id !== id) {
+      throw new ConflictException(
+        'Користувач з таким номером телефону вже існує',
+      );
+    }
+
+    if (emailOwner && emailOwner.id !== id) {
+      throw new ConflictException(
+        'Користувач з такою електронною поштою вже існує',
+      );
+    }
+
     if (changes.password) {
       changes.password = await hashPassword(changes.password);
     }
     await this.repository.update(id, changes);
-    return await this.repository.findOne({ where: { id } });
+    return await this.findById(id);
   }
 
   async addProductToBasket(
