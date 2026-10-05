@@ -12,16 +12,16 @@ import { RoleEntity } from './roles/entities/roles.entity';
 import { FileModule } from './file/file.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { PhotosModule } from './photos/photos.module';
-import * as path from 'path';
 import { PhotoEntity } from './photos/entities/photo.entity';
 import { OrderModule } from './order/order.module';
 import { OrderEntity } from './order/entities/order.entity';
 import { BasketItemEntity } from './user/entities/basket-item.entity';
+import { getUploadsDir } from './file/uploads-dir';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: path.resolve(__dirname, 'static'),
+      rootPath: getUploadsDir(),
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
