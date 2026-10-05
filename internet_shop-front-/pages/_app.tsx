@@ -8,6 +8,7 @@ import type { AppProps } from "next/app";
 import { theme } from "../styles/theme";
 import { addUserData } from "../redux/slices/auth-reducer";
 import nookies from "nookies";
+import axios from "axios";
 import { Api } from "../api/Api";
 import {
   setCartData,
@@ -69,8 +70,13 @@ WrappedApp.getInitialProps = wrapper.getInitialPageProps((store) =>
         store.dispatch(setProductDetails(productDetailsArr));
       }
     } catch (e) {
-      if (e?.config?.headers) {
-        console.log(e.config.headers);
+      // Не логуємо e.config: у заголовках запиту є токен авторизації
+      const status = axios.isAxiosError(e) ? e.response?.status : undefined;
+      console.error(
+        `Не вдалося отримати профіль: ${status ?? "без статусу"} ${e?.message}`
+      );
+      if (status === 401) {
+        nookies.destroy(ctx, "token", { path: "/" });
       }
     }
   }
