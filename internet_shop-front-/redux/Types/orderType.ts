@@ -9,9 +9,13 @@ export enum Status {
 
 export type Order = {
   id: number;
-  user: IUserData;
+  // Є лише у відповідях для адміна
+  user?: IUserData;
   productsInOrder: IProduct[];
   status: Status;
   comment: string;
   cityName: string;
+  department: string;
+  size?: string;
+  createdAt: string;
 };

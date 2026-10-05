@@ -20,6 +20,7 @@ import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { toLogOut, updateUserData } from '../redux/slices/auth-reducer';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { MyOrders } from '../components/MyOrders/MyOrders';
 
 type Tab = 'info' | 'orders' | 'addresses' | 'wishlist';
 
@@ -271,26 +272,7 @@ export default function ProfilePage() {
             >
               Історія замовлень
             </Typography>
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: 6,
-                bgcolor: '#f2f4f4',
-                borderRadius: 3,
-              }}
-            >
-              <ShoppingBagOutlinedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-                У вас ще немає замовлень
-              </Typography>
-              <Link href={`/productsList/woman`}>
-                <a style={{ textDecoration: 'none' }}>
-                  <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
-                    Перейти до каталогу
-                  </Button>
-                </a>
-              </Link>
-            </Box>
+            <MyOrders />
           </Box>
         )}
 
