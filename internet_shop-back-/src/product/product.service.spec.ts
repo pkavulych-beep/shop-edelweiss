@@ -116,4 +116,38 @@ describe('ProductService', () => {
       await expect(service.assertPurchasable([1, 2])).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  describe('findProductsMain', () => {
+    let manager;
+
+    beforeEach(() => {
+      manager = { find: jest.fn() };
+    });
+
+    it('loads all products with one query', async () => {
+      manager.find.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+      await expect(service.findProductsMain([1, 2, 2], manager)).resolves.toEqual([
+        { id: 1 },
+        { id: 2 },
+      ]);
+      expect(manager.find).toHaveBeenCalledTimes(1);
+      const [, options] = manager.find.mock.calls[0];
+      expect(options.where.id).toBeInstanceOf(FindOperator);
+      expect(options.where.id.value).toEqual([1, 2]);
+    });
+
+    it('throws NotFound when some id does not exist', async () => {
+      manager.find.mockResolvedValue([{ id: 1 }]);
+
+      await expect(
+        service.findProductsMain([1, 99], manager),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(service.findProductsMain([], manager)).resolves.toEqual([]);
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+  });
 });
