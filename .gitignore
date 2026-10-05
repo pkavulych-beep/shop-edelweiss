@@ -26,3 +26,7 @@ out/
 
 # Agent Office data and worker worktrees
 .agent-office/
+
+# Conveyor runtime state and log
+tools/conveyor/state.json
+tools/conveyor/conveyor.log
