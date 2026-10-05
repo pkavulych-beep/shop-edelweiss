@@ -1,19 +1,31 @@
-import {IsNotEmpty, IsOptional} from 'class-validator';
-import {Column} from "typeorm";
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateOrderDto {
-  @IsNotEmpty({ message: 'Не вказано товари' })
+  @IsArray({ message: 'Товари мають бути передані списком' })
+  @ArrayNotEmpty({ message: 'Не вказано товари' })
+  @IsInt({ each: true, message: 'Кожен ідентифікатор товару має бути цілим числом' })
   productId: number[];
 
   @IsOptional()
-  comment: string;
+  @IsString({ message: 'Коментар має бути рядком' })
+  comment?: string;
 
-  @IsOptional()
+  @IsString({ message: 'Місто має бути рядком' })
+  @IsNotEmpty({ message: 'Вкажіть місто доставки' })
   cityName: string;
 
-  @IsOptional()
+  @IsString({ message: 'Відділення має бути рядком' })
+  @IsNotEmpty({ message: 'Вкажіть відділення доставки' })
   department: string;
 
-  @Column()
-  size: string;
+  @IsOptional()
+  @IsString({ message: 'Розмір має бути рядком' })
+  size?: string;
 }

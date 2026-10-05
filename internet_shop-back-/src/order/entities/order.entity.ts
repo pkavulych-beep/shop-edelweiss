@@ -34,6 +34,7 @@ export class OrderEntity {
   @Column()
   department: string;
 
-  @Column()
+  // Розмір має зберігатися в позиції замовлення (#9), поки що необов'язковий
+  @Column({ nullable: true })
   size: string;
 }
