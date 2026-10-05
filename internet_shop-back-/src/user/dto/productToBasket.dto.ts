@@ -1,13 +1,13 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class productToBasketDto {
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Не вказано користувача' })
   idUser: number;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Не вказано товар' })
   idProduct: number;
 
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: 'Оберіть розмір' })
+  @IsString({ message: 'Розмір має бути рядком' })
   size: string;
 }

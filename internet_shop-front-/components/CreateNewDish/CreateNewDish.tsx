@@ -54,9 +54,9 @@ const CreateNewDish = () => {
   return (
     <div>
       <Button variant='contained' color='primary' onClick={handleClickOpen}>
-        добавити товар
+        Додати товар
       </Button>
-      <Dialog open={open} title={'Here you can create your own commodity'} onClose={handleClose}>
+      <Dialog open={open} title={'Створення товару'} onClose={handleClose}>
         {submitError && (
           <Alert severity='error' sx={{ m: 2, mb: 0 }}>
             {submitError}
@@ -83,7 +83,7 @@ const CreateNewDish = () => {
             validationSchema={Validatione}
             onSubmit={(values, { setSubmitting, resetForm }) => onSubmit(values, setSubmitting, resetForm)}
           >
-            <DishForm handleClose={handleClose} nameRightBtn={'Add'} setPhotos={setPhotoFiles} />
+            <DishForm handleClose={handleClose} nameRightBtn={'Додати'} setPhotos={setPhotoFiles} />
           </Formik>
         }
       </Dialog>

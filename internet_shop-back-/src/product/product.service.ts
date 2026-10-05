@@ -3,7 +3,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Equal, In, MoreThan, Repository } from 'typeorm';
+import { Equal, In, IsNull, MoreThan, Not, Or, Repository } from 'typeorm';
 import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
 import { baseUrl, FileService, FileType } from 'src/file/file.service';
@@ -177,9 +177,13 @@ export class ProductService {
       return await this.repository.findBy({
         salePrice: MoreThan(0),
         gender: Equal(gender),
+        status: Or(Not(ProductStatus.Hidden), IsNull()),
       });
     } else {
-      return await this.repository.findBy({ salePrice: MoreThan(0) });
+      return await this.repository.findBy({
+        salePrice: MoreThan(0),
+        status: Or(Not(ProductStatus.Hidden), IsNull()),
+      });
     }
   }
 
@@ -188,10 +192,31 @@ export class ProductService {
       where: { id },
       relations: ['photos'],
     });
-    if (!commodity) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+    // Прихований («видалений») товар не віддаємо за прямим посиланням
+    if (!commodity || commodity.status === ProductStatus.Hidden) {
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
     return commodity;
+  }
+
+  // Id товарів, які існують і не приховані, тобто їх можна купити
+  async findPurchasableIds(ids: number[]): Promise<number[]> {
+    if (!ids || ids.length === 0) return [];
+    const products = await this.repository.find({
+      where: {
+        id: In(ids),
+        status: Or(Not(ProductStatus.Hidden), IsNull()),
+      },
+      select: ['id'],
+    });
+    return products.map((product) => product.id);
+  }
+
+  async assertPurchasable(ids: number[]): Promise<void> {
+    const purchasable = new Set(await this.findPurchasableIds(ids));
+    if (ids.some((id) => !purchasable.has(+id))) {
+      throw new NotFoundException(null, 'Товар не знайдено');
+    }
   }
 
   findProductMain(id: number): Promise<ProductEntity> {
@@ -200,7 +225,7 @@ export class ProductService {
       select: ['id', 'name', 'sizes', 'price', 'cover', 'salePrice'],
     });
     if (!commodity) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
     return commodity;
   }
@@ -222,7 +247,7 @@ export class ProductService {
       const { photos } = commodity;
       return photos;
     } catch (e) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
   }
 
@@ -243,7 +268,7 @@ export class ProductService {
       });
       return this.repository.findOne({ where: { id } });
     } else {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
   }
 
@@ -254,10 +279,23 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new NotFoundException(null, 'не знайдено такий товар');
+      throw new NotFoundException(null, 'Товар не знайдено');
     }
 
     await this.basketRepository.delete({ productId: id });
+
+    // Товар є в замовленнях — ховаємо його, щоб не зламати історію замовлень
+    // (фото теж залишаємо: обкладинка потрібна для відображення замовлення)
+    const ordersCount = await this.repository
+      .createQueryBuilder('product')
+      .innerJoin('product.orders', 'order')
+      .where('product.id = :id', { id })
+      .getCount();
+
+    if (ordersCount > 0) {
+      await this.repository.update(id, { status: ProductStatus.Hidden });
+      return 'Товар є в замовленнях, тому його приховано з каталогу';
+    }
 
     try {
       await this.fileService.deleteFile(

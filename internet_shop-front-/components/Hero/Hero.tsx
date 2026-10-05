@@ -65,7 +65,7 @@ const Hero: React.FC = () => {
           lineHeight: 1,
         }}
       >
-        Seasonal Collection
+        Сезонна колекція
       </Typography>
 
       {/* Content */}

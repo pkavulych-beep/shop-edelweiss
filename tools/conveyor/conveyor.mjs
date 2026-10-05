@@ -7,10 +7,10 @@
 //   PR behind main / no CI    → update its branch from main                   → CI runs
 //   PR conflicts / CI red     → hand it back to its author, or hire a fixer   → new commits
 //   PR green, no verdict      → hire the reviewer (one at a time)             → verdict comment
-//   verdict "changes"         → hand it back for fixes (a limited number of rounds)
+//   verdict "changes"         → hand it back for fixes, then review again (a limited number of rounds)
 //   verdict "approve"         → merge, unless it touches protected paths or is too big
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
-// removing the label hands it back to the conveyor.
+// removing the label hands it back to the conveyor, with its counts reset.
 //
 // It spends no model tokens itself. Run it in a 🐚 shell at a desk, where `office-workers` works:
 //   node tools/conveyor/conveyor.mjs [--dry-run] [--once]
@@ -200,12 +200,18 @@ function latestVerdict(n) {
 
 const sameCommit = (a, b) => a.startsWith(b) || b.startsWith(a);
 
-/** Whether everything after `from` up to `to` is merges of main (update-branch), so an approval of `from` still holds. */
-function onlyMergesSince(from, to) {
+/**
+ * Whether PR `n` got nothing of its own after `from` but merges of main made by update-branch, so a verdict
+ * on `from` still holds for `to`. A merge made by hand (say, to settle a conflict) can change the code.
+ */
+function onlyMainMergedSince(n, from, to) {
   if (sameCommit(from, to)) return true;
   try {
-    const parents = JSON.parse(gh('api', `repos/${REPO}/compare/${from}...${to}`, '--jq', '[.commits[].parents | length]'));
-    return parents.length > 0 && parents.every((count) => count > 1);
+    // The comparison also lists main's own commits that the merge brought in: only the PR's commits count.
+    const own = new Set(gh('api', `repos/${REPO}/pulls/${n}/commits`, '--paginate', '--jq', '.[].sha').split('\n').filter(Boolean));
+    const added = ghJson('api', `repos/${REPO}/compare/${from}...${to}`, '--jq', '[.commits[] | {sha, parents: (.parents | length), by: .committer.login}]')
+      .filter((c) => own.has(c.sha));
+    return added.length > 0 && added.every((c) => c.parents > 1 && c.by === 'web-flow');
   } catch {
     return false;
   }
@@ -224,11 +230,34 @@ function mergeBlockers(pr) {
 
 function needsHuman(kind, n, reason) {
   const cmd = kind === 'pr' ? 'pr' : 'issue';
-  act(`${kind === 'pr' ? 'PR' : 'issue'} #${n} → needs-human: ${reason}`, () => {
+  const done = act(`${kind === 'pr' ? 'PR' : 'issue'} #${n} → needs-human: ${reason}`, () => {
     gh(cmd, 'edit', String(n), '--repo', REPO, '--add-label', 'needs-human');
     gh(cmd, 'comment', String(n), '--repo', REPO, '--body',
       `🤖 Конвеєр зупинився: ${reason}.\n\nПотрібне рішення людини. Щоб повернути це в конвеєр, зніміть мітку \`needs-human\`.`);
   });
+  const s = (kind === 'pr' ? state.prs : state.issues)[n];
+  if (done !== undefined && s) s.held = true;
+}
+
+// What the conveyor counts per PR and per issue to know when to give up.
+const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'fixRounds', 'fixFor', 'mergeFailures', 'updatedFor'];
+const ISSUE_COUNTS = ['failures'];
+
+/**
+ * Whether the item waits for a person (`needs-human`). Taking the label off hands it back with its counts
+ * reset: otherwise whatever ran out would stop it again on the next tick.
+ */
+function onHold(item, s, counts) {
+  if (labelsOf(item).includes('needs-human')) {
+    s.held = true;
+    return true;
+  }
+  if (s.held) {
+    for (const key of ['held', ...counts]) delete s[key];
+    if (s.job) delete s.job.escalated;
+    log(`#${item.number}: мітку needs-human знято, лічильники скинуто`);
+  }
+  return false;
 }
 
 function setReviewLabel(pr, verdict) {
@@ -252,6 +281,7 @@ function tick() {
   // Only our own pull requests: agents push as this account, and a stranger's PR must never be merged by a script.
   const pulls = openPulls().filter((p) => !p.isDraft && !p.isCrossRepository && p.author?.login === me.login);
   const issues = agentIssues();
+  for (const i of issues) if (state.issues[i.number]) onHold(i, state.issues[i.number], ISSUE_COUNTS);
   let coderBusy = false;
   let reviewerBusy = false;
 
@@ -360,6 +390,7 @@ function tick() {
     if (!worker) return;
     s.reviewRounds = (s.reviewRounds ?? 0) + 1;
     s.reviewedSha = pr.headRefOid;
+    delete s.fixFor; // a new verdict starts a new round of fixes
     s.job = { kind: 'review', worker: worker.name, workerId: worker.id, since: now };
     reviewerBusy = true;
   };
@@ -368,13 +399,35 @@ function tick() {
   for (const pr of [...pulls].sort((a, b) => a.number - b.number)) {
     const n = pr.number;
     const s = (state.prs[n] ??= {});
-    if (labelsOf(pr).includes('needs-human') || s.job) continue;
+    if (onHold(pr, s, PR_COUNTS) || s.job) continue;
     if (pr.mergeable === 'UNKNOWN') continue; // GitHub is still working it out
+    const ci = ciState(pr);
+    // A verdict still holds after main was merged into the branch, as long as nothing else was pushed.
+    const v = latestVerdict(n);
+    const current = v && onlyMainMergedSince(n, v.sha, pr.headRefOid);
+
+    // Requested changes go back straight away, along with anything else that's wrong:
+    // no point updating the branch or waiting for CI on code that is about to change.
+    if (current && v.verdict === 'changes') {
+      setReviewLabel(pr, 'changes');
+      if ((s.reviewRounds ?? 0) >= config.maxReviewRounds) {
+        needsHuman('pr', n, `рев'ю не пройдено після ${s.reviewRounds} кіл`);
+        continue;
+      }
+      if (s.fixFor !== `review@${v.sha}`) {
+        const reasons = ["зауваження рев'ю (останній коментар із conveyor-review)"];
+        if (pr.mergeable === 'CONFLICTING') reasons.push('конфлікт із main');
+        if (ci === 'failed') reasons.push('CI червоний');
+        requestFix(pr, s, reasons, `review@${v.sha}`);
+        continue;
+      }
+      // Fixed without touching the code: the answer is in the description or a comment, so the reviewer
+      // looks again once the branch is up to date and CI is green.
+    }
     if (pr.mergeable === 'CONFLICTING') {
       requestFix(pr, s, ['конфлікт із main'], `conflict@${pr.headRefOid}`);
       continue;
     }
-    const ci = ciState(pr);
     if (pr.mergeStateStatus === 'BEHIND' || ci === 'none') {
       if (ci === 'none' && pr.mergeStateStatus !== 'BEHIND' && s.updatedFor === pr.headRefOid) {
         needsHuman('pr', n, 'CI не запускається на цьому PR');
@@ -392,13 +445,8 @@ function tick() {
       continue;
     }
 
-    // CI is green and the branch is up to date: the review decides. A verdict still holds after
-    // main was merged into the branch, as long as nothing else was pushed.
-    const v = latestVerdict(n);
-    const current = v && onlyMergesSince(v.sha, pr.headRefOid);
-    const approved = current && v.verdict === 'approve';
-    const changes = current && v.verdict === 'changes';
-    if (approved) {
+    // CI is green and the branch is up to date: an approval merges it, otherwise the reviewer has a look.
+    if (current && v.verdict === 'approve') {
       setReviewLabel(pr, 'approve');
       if (!config.merge.enabled) continue;
       const blockers = mergeBlockers(pr);
@@ -414,16 +462,7 @@ function tick() {
       }
       continue;
     }
-    if (changes) {
-      setReviewLabel(pr, 'changes');
-      if ((s.reviewRounds ?? 0) >= config.maxReviewRounds) {
-        needsHuman('pr', n, `рев'ю не пройдено після ${s.reviewRounds} кіл`);
-        continue;
-      }
-      requestFix(pr, s, ["зауваження рев'ю (останній коментар із conveyor-review)"], `review@${v.sha}`);
-      continue;
-    }
-    if (s.reviewedSha && sameCommit(s.reviewedSha, pr.headRefOid)) {
+    if (!current && s.reviewedSha && sameCommit(s.reviewedSha, pr.headRefOid)) {
       needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
       continue;
     }

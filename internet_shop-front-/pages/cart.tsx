@@ -63,7 +63,7 @@ const Cart: NextPage = () => {
             variant="h2"
             sx={{ fontSize: { xs: '1.5rem', md: '2rem' }, mb: 6 }}
           >
-            Checkout
+            Оформлення замовлення
           </Typography>
 
           <Box

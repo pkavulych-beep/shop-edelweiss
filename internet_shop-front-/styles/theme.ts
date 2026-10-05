@@ -1,4 +1,5 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, ThemeOptions } from '@mui/material/styles';
+import { ukUA } from '@mui/material/locale';
 
 declare module '@mui/material/styles' {
   interface Theme {
@@ -27,7 +28,7 @@ declare module '@mui/material/styles' {
   }
 }
 
-export const theme = createTheme({
+const themeOptions: ThemeOptions = {
   custom: {
     glass: 'rgba(249, 249, 249, 0.85)',
     glassBlur: 'blur(12px)',
@@ -343,4 +344,6 @@ export const theme = createTheme({
       },
     },
   },
-});
+};
+
+export const theme = createTheme(themeOptions, ukUA);
