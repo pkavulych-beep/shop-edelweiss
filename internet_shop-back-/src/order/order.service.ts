@@ -34,6 +34,7 @@ export class OrderService {
 
   async create(createOrderDto: CreateOrderDto) {
     const { userId, productId, ...restDto } = createOrderDto;
+    await this.productService.assertPurchasable(productId);
     const user = await this.userService.findOne(userId);
 
     const preCreateOrder = await this.repository.save({
