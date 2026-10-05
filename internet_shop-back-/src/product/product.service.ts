@@ -192,10 +192,31 @@ export class ProductService {
       where: { id },
       relations: ['photos'],
     });
-    if (!commodity) {
+    // Прихований («видалений») товар не віддаємо за прямим посиланням
+    if (!commodity || commodity.status === ProductStatus.Hidden) {
       throw new NotFoundException(null, 'не знайдено такий товар');
     }
     return commodity;
+  }
+
+  // Id товарів, які існують і не приховані, тобто їх можна купити
+  async findPurchasableIds(ids: number[]): Promise<number[]> {
+    if (!ids || ids.length === 0) return [];
+    const products = await this.repository.find({
+      where: {
+        id: In(ids),
+        status: Or(Not(ProductStatus.Hidden), IsNull()),
+      },
+      select: ['id'],
+    });
+    return products.map((product) => product.id);
+  }
+
+  async assertPurchasable(ids: number[]): Promise<void> {
+    const purchasable = new Set(await this.findPurchasableIds(ids));
+    if (ids.some((id) => !purchasable.has(+id))) {
+      throw new NotFoundException(null, 'не знайдено такий товар');
+    }
   }
 
   findProductMain(id: number): Promise<ProductEntity> {
