@@ -1,14 +1,13 @@
-import { ProductEntity } from 'src/product/entities/product.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
 import {
   Column,
   Entity,
-  JoinTable,
-  ManyToMany,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Status } from '../statusEnum';
+import { OrderItemEntity } from './order-item.entity';
 
 @Entity('order')
 export class OrderEntity {
@@ -18,9 +17,12 @@ export class OrderEntity {
   @ManyToOne(() => UserEntity, (user) => user.orders)
   user: UserEntity;
 
-  @ManyToMany(() => ProductEntity, (product) => product.orders)
-  @JoinTable({ name: 'productsInOrder' })
-  productsInOrder?: ProductEntity[];
+  @OneToMany(() => OrderItemEntity, (item) => item.order, { cascade: ['insert'] })
+  items?: OrderItemEntity[];
+
+  // Сума замовлення, порахована на бекенді з цін позицій
+  @Column({ default: 0 })
+  total: number;
 
   @Column()
   status: Status;
@@ -33,8 +35,4 @@ export class OrderEntity {
 
   @Column()
   department: string;
-
-  // Розмір має зберігатися в позиції замовлення (#9), поки що необов'язковий
-  @Column({ nullable: true })
-  size: string;
 }

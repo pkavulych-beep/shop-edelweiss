@@ -2,13 +2,12 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  ManyToMany,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { PhotoEntity } from '../../photos/entities/photo.entity';
-import { OrderEntity } from '../../order/entities/order.entity';
+import { OrderItemEntity } from '../../order/entities/order-item.entity';
 
 export enum Gender {
   Man = 'man',
@@ -56,12 +55,9 @@ export class ProductEntity {
   @OneToMany(() => PhotoEntity, (photo) => photo.product)
   photos: PhotoEntity[];
 
-  // RESTRICT: товар, що є в замовленнях, не можна видалити фізично —
-  // інакше він зникне з історії замовлень (див. ProductService.remove)
-  @ManyToMany(() => OrderEntity, (order) => order.productsInOrder, {
-    onDelete: 'RESTRICT',
-  })
-  orders?: OrderEntity[];
+  // Позиції замовлень із цим товаром (FK з RESTRICT, див. OrderItemEntity)
+  @OneToMany(() => OrderItemEntity, (item) => item.product)
+  orderItems?: OrderItemEntity[];
 
   @Column({ nullable: true })
   count: number;

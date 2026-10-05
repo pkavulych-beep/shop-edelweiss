@@ -1,17 +1,20 @@
+import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
+import { OrderItemDto } from './order-item.dto';
 
 export class CreateOrderDto {
-  @IsArray({ message: 'Товари мають бути передані списком' })
+  @IsArray({ message: 'Позиції замовлення мають бути передані списком' })
   @ArrayNotEmpty({ message: 'Не вказано товари' })
-  @IsInt({ each: true, message: 'Кожен ідентифікатор товару має бути цілим числом' })
-  productId: number[];
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items: OrderItemDto[];
 
   @IsOptional()
   @IsString({ message: 'Коментар має бути рядком' })
@@ -24,8 +27,4 @@ export class CreateOrderDto {
   @IsString({ message: 'Відділення має бути рядком' })
   @IsNotEmpty({ message: 'Вкажіть відділення доставки' })
   department: string;
-
-  @IsOptional()
-  @IsString({ message: 'Розмір має бути рядком' })
-  size?: string;
 }

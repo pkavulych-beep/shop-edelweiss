@@ -30,18 +30,28 @@ export const Orders: NextPage = () => {
             Ваші замовлення
           </Typography>
           <div style={{ margin: '20px' }}>
-            {data.map(({ id, cityName, comment, productsInOrder, status }) => {
+            {data.map(({ id, items, total, status }) => {
               return (
                 <div key={id}>
+                  <Typography variant="h6">
+                    Замовлення №{id} — {status}
+                  </Typography>
                   <div>
-                    {productsInOrder.map(product => {
-                      return <p key={product.id}>{product.name}</p>;
+                    {items.map(item => {
+                      return (
+                        <p key={item.id}>
+                          {item.product?.name}, розмір {item.size} — {item.quantity} × {item.price} грн
+                        </p>
+                      );
                     })}
                   </div>
+                  <Typography sx={{ fontWeight: 700, mb: 2 }}>
+                    Разом: {total} грн
+                  </Typography>
+                  <Divider color="black" sx={{ mb: 2 }} />
                 </div>
               );
             })}
-            <Divider color="black" />
           </div>
         </>
       )}

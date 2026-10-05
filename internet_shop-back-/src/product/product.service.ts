@@ -201,15 +201,20 @@ export class ProductService {
 
   // Id товарів, які існують і не приховані, тобто їх можна купити
   async findPurchasableIds(ids: number[]): Promise<number[]> {
+    const products = await this.findPurchasable(ids);
+    return products.map((product) => product.id);
+  }
+
+  // Товари, які існують і не приховані, з даними для розрахунку замовлення
+  async findPurchasable(ids: number[]): Promise<ProductEntity[]> {
     if (!ids || ids.length === 0) return [];
-    const products = await this.repository.find({
+    return this.repository.find({
       where: {
         id: In(ids),
         status: Or(Not(ProductStatus.Hidden), IsNull()),
       },
-      select: ['id'],
+      select: ['id', 'sizes', 'price', 'salePrice'],
     });
-    return products.map((product) => product.id);
   }
 
   async assertPurchasable(ids: number[]): Promise<void> {
@@ -288,7 +293,7 @@ export class ProductService {
     // (фото теж залишаємо: обкладинка потрібна для відображення замовлення)
     const ordersCount = await this.repository
       .createQueryBuilder('product')
-      .innerJoin('product.orders', 'order')
+      .innerJoin('product.orderItems', 'item')
       .where('product.id = :id', { id })
       .getCount();
 

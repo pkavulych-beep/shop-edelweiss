@@ -7,11 +7,23 @@ export enum Status {
   Canceled = 'відмінено',
 }
 
+// price — ціна за одиницю на момент покупки
+export type OrderItem = {
+  id: number;
+  productId: number;
+  size: string;
+  quantity: number;
+  price: number;
+  product: IProduct;
+};
+
 export type Order = {
   id: number;
-  user: IUserData;
-  productsInOrder: IProduct[];
+  user?: IUserData;
+  items: OrderItem[];
+  total: number;
   status: Status;
   comment: string;
   cityName: string;
+  department: string;
 };

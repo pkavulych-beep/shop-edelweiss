@@ -16,6 +16,7 @@ import * as path from 'path';
 import { PhotoEntity } from './photos/entities/photo.entity';
 import { OrderModule } from './order/order.module';
 import { OrderEntity } from './order/entities/order.entity';
+import { OrderItemEntity } from './order/entities/order-item.entity';
 import { BasketItemEntity } from './user/entities/basket-item.entity';
 
 @Module({
@@ -36,6 +37,7 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
         RoleEntity,
         PhotoEntity,
         OrderEntity,
+        OrderItemEntity,
         BasketItemEntity,
       ],
       synchronize: true,
