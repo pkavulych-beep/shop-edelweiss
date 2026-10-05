@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -29,7 +30,10 @@ export class ProductController {
   @UseGuards(RolesGuard)
   @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }]))
   create(@UploadedFiles() files, @Body() createProductDto: CreateProductDto) {
-    const { photos } = files;
+    const photos = files?.photos;
+    if (!photos?.length) {
+      throw new BadRequestException('Додайте хоча б одне фото товару');
+    }
     return this.productService.create(createProductDto, photos);
   }
 
