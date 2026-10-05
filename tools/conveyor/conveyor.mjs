@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 // Conveyor: the dispatcher that moves work through Agent Office without a person watching.
 //
-// Every tick it reads GitHub (open pull requests, issues labelled `agent`) and the office's workers,
+// Every tick it reads GitHub (open pull requests and issues) and the office's workers,
 // and takes the next step for each piece of work:
-//   issue labelled `agent`    → hire the coder (one at a time)                → pull request
+//   issue in the queue        → hire the coder (one at a time)                → pull request
 //   PR behind main / no CI    → update its branch from main                   → CI runs
 //   PR conflicts / CI red     → hand it back to its author, or hire a fixer   → new commits
 //   PR green, no verdict      → hire the reviewer (one at a time)             → verdict comment
 //   verdict "changes"         → hand it back for fixes, then review again (a limited number of rounds)
 //   verdict "approve"         → merge, unless it touches protected paths or is too big
+//   every few merges          → hire QA, who tries them in a browser          → bug issues and a report
+// The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P2);
+// `manual` keeps an issue out of it.
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
-// removing the label hands it back to the conveyor, with its counts reset.
+// removing the label hands it back to the conveyor, with its counts reset. A macOS notification says
+// when that happens, when a usage limit pauses the work, and what QA found.
 //
 // It spends no model tokens itself. Run it in a 🐚 shell at a desk, where `office-workers` works:
 //   node tools/conveyor/conveyor.mjs [--dry-run] [--once]
@@ -38,10 +42,11 @@ const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 // What Claude Code and Codex print when a plan's usage window runs out.
 const LIMIT_TEXT = /usage limit|limit reached|hit your (usage )?limit|out of extra usage/i;
 const FINISHED = new Set(['idle', 'done', 'exited', 'offline']);
-const ROLE = { coder: 'кодера', reviewer: "рев'юера" };
+const ROLE = { coder: 'кодера', reviewer: "рев'юера", qa: 'QA-агента' };
 const MINUTE = 60_000;
 
 const state = loadState();
+state.qa ??= {};
 let me; // this shell's GitHub login and office name, filled in on the first tick
 
 function loadState() {
@@ -92,6 +97,17 @@ function act(what, change) {
   } catch (e) {
     log(`НЕ ВДАЛОСЯ: ${what} — ${firstLine(e)}`);
     return undefined;
+  }
+}
+
+/** A macOS notification, so whoever runs the conveyor hears about what needs them without watching the log. */
+function notify(subtitle, message) {
+  if (DRY || !config.notify?.enabled || process.platform !== 'darwin') return;
+  try {
+    run('osascript', ['-e', 'on run argv', '-e', 'display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)',
+      '-e', 'end run', 'Конвеєр', subtitle, message]);
+  } catch (e) {
+    log(`Сповіщення не надіслано: ${firstLine(e)}`);
   }
 }
 
@@ -162,11 +178,56 @@ function openPulls() {
   );
 }
 
-function agentIssues() {
+/** Open issues the conveyor may take: labelled `agent`, or our own with a priority it takes on its own; never `manual`. */
+function queuedIssues() {
   return ghJson(
-    'issue', 'list', '--repo', REPO, '--state', 'open', '--label', config.issueLabel, '--limit', '100',
-    '--json', 'number,title,labels,assignees,createdAt',
-  );
+    'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '200',
+    '--json', 'number,title,labels,assignees,createdAt,author',
+  ).filter((i) => {
+    const labels = labelsOf(i);
+    if (labels.includes(config.manualLabel)) return false;
+    // A priority alone counts only on our own issues: anyone can open one on a public repo, and its text becomes an agent's task.
+    return labels.includes(config.issueLabel) || (i.author?.login === me.login && labels.some((l) => config.autoPriorities.includes(l)));
+  });
+}
+
+/** Merged pull requests that changed the shop since the last QA run, oldest first. */
+function mergedSinceQa() {
+  const since = state.qa.since ?? '';
+  const args = ['pr', 'list', '--repo', REPO, '--state', 'merged', '--base', 'main', '--limit', '50', '--json', 'number,title,url,mergedAt,files'];
+  if (since) args.push('--search', `merged:>=${since.slice(0, 10)}`);
+  return ghJson(...args)
+    .filter((p) => p.mergedAt > since && (p.files ?? []).some((f) => config.qa.paths.some((x) => f.path.startsWith(x))))
+    .sort((a, b) => a.mergedAt.localeCompare(b.mergedAt));
+}
+
+/** Issues labelled `label` that were opened since `time`, newest first. */
+function issuesSince(label, time) {
+  return ghJson(
+    'issue', 'list', '--repo', REPO, '--state', 'all', '--label', label, '--search', `created:>=${new Date(time).toISOString().slice(0, 10)}`,
+    '--limit', '100', '--json', 'number,state,createdAt',
+  ).filter((i) => Date.parse(i.createdAt) >= time);
+}
+
+/** QA is done: the merges it covered won't be checked again, and the person hears what it found. */
+function finishQa(qa) {
+  const job = qa.lastJob;
+  job.checked = true;
+  qa.since = job.until;
+  let found;
+  try {
+    const bugs = issuesSince('qa', job.since).length;
+    const reports = issuesSince('qa-report', job.since);
+    // The report is a record, not a task, so it doesn't stay open.
+    for (const r of reports.filter((x) => x.state === 'OPEN')) {
+      act(`закрити звіт QA #${r.number}`, () => gh('issue', 'close', String(r.number), '--repo', REPO));
+    }
+    found = `нових багів: ${bugs}, ${reports.length ? `звіт #${reports[0].number}` : 'звіту немає'}`;
+  } catch (e) {
+    found = `не вдалося порахувати знахідки (${firstLine(e)})`;
+  }
+  log(`QA перевірив ${job.prs.map((n) => `#${n}`).join(', ')}: ${found}`);
+  notify('QA закінчив', `Перевірено PR: ${job.prs.length}, ${found}`);
 }
 
 /** passed, failed, pending, or none (CI never ran on this commit). */
@@ -229,12 +290,20 @@ function mergeBlockers(pr) {
 }
 
 function needsHuman(kind, n, reason) {
+  if (kind === 'qa') {
+    // QA has no pull request or issue to put the label on: the notification is all there is.
+    log(`QA → потрібна людина: ${reason}`);
+    notify('Потрібна людина', `QA: ${reason}`);
+    return;
+  }
   const cmd = kind === 'pr' ? 'pr' : 'issue';
-  const done = act(`${kind === 'pr' ? 'PR' : 'issue'} #${n} → needs-human: ${reason}`, () => {
+  const what = `${kind === 'pr' ? 'PR' : 'issue'} #${n}`;
+  const done = act(`${what} → needs-human: ${reason}`, () => {
     gh(cmd, 'edit', String(n), '--repo', REPO, '--add-label', 'needs-human');
     gh(cmd, 'comment', String(n), '--repo', REPO, '--body',
       `🤖 Конвеєр зупинився: ${reason}.\n\nПотрібне рішення людини. Щоб повернути це в конвеєр, зніміть мітку \`needs-human\`.`);
   });
+  if (done !== undefined) notify('Потрібна людина', `${what}: ${reason}`);
   const s = (kind === 'pr' ? state.prs : state.issues)[n];
   if (done !== undefined && s) s.held = true;
 }
@@ -280,7 +349,7 @@ function tick() {
 
   // Only our own pull requests: agents push as this account, and a stranger's PR must never be merged by a script.
   const pulls = openPulls().filter((p) => !p.isDraft && !p.isCrossRepository && p.author?.login === me.login);
-  const issues = agentIssues();
+  const issues = queuedIssues();
   for (const i of issues) if (state.issues[i.number]) onHold(i, state.issues[i.number], ISSUE_COUNTS);
   let coderBusy = false;
   let reviewerBusy = false;
@@ -288,7 +357,7 @@ function tick() {
   // Usage limits: the plan's window ran out, so wait it out, then wake whoever stopped on it.
   if (state.pausedUntil && state.pausedUntil <= now) {
     state.pausedUntil = 0;
-    for (const s of [...Object.values(state.prs), ...Object.values(state.issues)]) {
+    for (const s of [...Object.values(state.prs), ...Object.values(state.issues), state.qa]) {
       if (!s.job?.limited) continue;
       if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
         s.job.limited = false;
@@ -316,12 +385,15 @@ function tick() {
     if (where === 'finished' && hitLimit(job.workerId)) {
       job.limited = true;
       state.pausedUntil = Math.max(state.pausedUntil, now + config.limitPauseMinutes * MINUTE);
-      log(`${job.worker} уперся в ліміт використання: пауза для нових агентів до ${new Date(state.pausedUntil).toLocaleTimeString('uk-UA')}`);
+      const until = new Date(state.pausedUntil).toLocaleTimeString('uk-UA');
+      log(`${job.worker} уперся в ліміт використання: пауза для нових агентів до ${until}`);
+      notify('Пауза через ліміт', `${job.worker} уперся в ліміт підписки. Нових агентів не наймаю до ${until}`);
       return true;
     }
     s.lastJob = { ...job, ended: now };
     delete s.job;
-    if (job.kind === 'review' && workers) sendHome([job.worker], "рев'ю написане");
+    const done = { review: "рев'ю написане", qa: 'QA закінчив' }[job.kind];
+    if (done && workers) sendHome([job.worker], done);
     return false;
   };
 
@@ -349,6 +421,10 @@ function tick() {
       delete state.prs[n]; // merged or closed
     }
   }
+  // QA holds the coder's slot: both run the shop on the same ports.
+  const qa = state.qa;
+  if (busy(qa, 'qa')) coderBusy = true;
+  else if (qa.lastJob && !qa.lastJob.checked) finishQa(qa);
   const paused = state.pausedUntil > now;
 
   const requestFix = (pr, s, reasons, key) => {
@@ -469,9 +545,24 @@ function tick() {
     requestReview(pr, s);
   }
 
+  // QA after every qa.everyMerges merges that changed the shop, the oldest first and at most that many at a time.
+  // It waits for the coder's slot, and no new issue starts meanwhile.
+  const unchecked = config.qa?.enabled && !qa.job ? mergedSinceQa() : [];
+  const qaWaits = unchecked.length >= (config.qa?.everyMerges ?? Infinity);
+  const startQa = () => {
+    const batch = unchecked.slice(0, config.qa.everyMerges);
+    const list = batch.map((p) => `#${p.number}`).join(', ');
+    const prs = batch.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
+    const worker = hire('qa', `перевірити змерджені ${list}`, prompt('qa', { prs, list, maxIssues: config.qa.maxIssues }));
+    if (!worker) return;
+    qa.job = { kind: 'qa', worker: worker.name, workerId: worker.id, since: now, until: batch.at(-1).mergedAt, prs: batch.map((p) => p.number) };
+    coderBusy = true;
+  };
+  if (qaWaits && !coderBusy && !paused) startQa();
+
   // New work: the next issue, while there's a free coder and not too much waiting for review.
   const inFlight = pulls.filter((p) => !labelsOf(p).includes('needs-human')).length;
-  if (!coderBusy && !paused && inFlight < config.maxOpenPullRequests) {
+  if (!coderBusy && !paused && !qaWaits && inFlight < config.maxOpenPullRequests) {
     const taken = new Set(pulls.flatMap((p) => [...(p.body ?? '').matchAll(CLOSES)].map((m) => Number(m[1]))));
     const rank = (issue) => {
       const i = config.priorityLabels.findIndex((l) => labelsOf(issue).includes(l));
@@ -494,6 +585,9 @@ function tick() {
         s.job = { kind: 'code', worker: worker.name, workerId: worker.id, since: now };
         delete s.checked;
       }
+    } else if (unchecked.length && !inFlight) {
+      // Nothing to start and nothing about to merge: QA checks what's left rather than wait for more merges.
+      startQa();
     }
   }
 
@@ -502,12 +596,13 @@ function tick() {
     sendHome(workers.filter((w) => w.hiredBy === me.name && w.merged && FINISHED.has(w.status)).map((w) => w.name), 'PR змерджено');
   }
 
-  // Issues that are closed or lost the label don't need tracking any more.
+  // Issues that are closed or left the queue don't need tracking any more.
   for (const n of Object.keys(state.issues)) {
     if (!state.issues[n].job && !issues.some((i) => String(i.number) === n)) delete state.issues[n];
   }
   saveState();
-  log(`крок: PR у роботі ${inFlight}, issues у черзі ${issues.length}${paused ? `, пауза до ${new Date(state.pausedUntil).toLocaleTimeString('uk-UA')}` : ''}`);
+  const qaNote = !config.qa?.enabled ? '' : qa.job ? ', QA працює' : qaWaits ? ', QA чекає на слот кодера' : `, мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`;
+  log(`крок: PR у роботі ${inFlight}, issues у черзі ${issues.length}${qaNote}${paused ? `, пауза до ${new Date(state.pausedUntil).toLocaleTimeString('uk-UA')}` : ''}`);
 }
 
 async function main() {

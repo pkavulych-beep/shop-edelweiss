@@ -2,6 +2,8 @@
   "repo": "pkavulych-beep/shop-edelweiss",
   "intervalSeconds": 120,
   "issueLabel": "agent",
+  "manualLabel": "manual",
+  "autoPriorities": ["P0-critical", "P1-high", "P2-medium"],
   "priorityLabels": ["P0-critical", "P1-high", "P2-medium", "P3-low"],
   "maxOpenPullRequests": 2,
   "maxReviewRounds": 2,
@@ -11,6 +13,16 @@
   "limitPauseMinutes": 60,
   "coder": { "provider": "claude", "model": "opus", "effort": "high" },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
+  "qa": {
+    "enabled": true,
+    "everyMerges": 10,
+    "provider": "claude",
+    "model": "sonnet",
+    "effort": "medium",
+    "maxIssues": 5,
+    "paths": ["internet_shop-back-/", "internet_shop-front-/"]
+  },
+  "notify": { "enabled": true },
   "merge": {
     "enabled": true,
     "method": "squash",
