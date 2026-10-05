@@ -27,9 +27,10 @@ export class UserEntity {
   @Column({ unique: true })
   phoneNumber: string;
 
-  // Не віддаємо пароль у відповідях API (див. ClassSerializerInterceptor у main.ts)
+  // Хеш bcrypt; не вибирається за замовчуванням, а якщо його все ж вибрали,
+  // ClassSerializerInterceptor (див. main.ts) не віддасть його у відповіді API
   @Exclude({ toPlainOnly: true })
-  @Column()
+  @Column({ select: false })
   password: string;
 
   @CreateDateColumn({ type: 'timestamp' })
