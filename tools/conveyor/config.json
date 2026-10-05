@@ -5,13 +5,30 @@
   "manualLabel": "manual",
   "autoPriorities": ["P0-critical", "P1-high", "P2-medium"],
   "priorityLabels": ["P0-critical", "P1-high", "P2-medium", "P3-low"],
-  "maxOpenPullRequests": 2,
+  "difficultyLabels": ["hard", "medium", "easy"],
+  "defaultDifficulty": "medium",
+  "maxOpenPullRequests": 4,
   "maxReviewRounds": 2,
   "maxFixRounds": 4,
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
-  "limitPauseMinutes": 60,
-  "coder": { "provider": "claude", "model": "opus", "effort": "high" },
+  "limitPauseMinutes": { "claude": 60, "codex": 360 },
+  "coders": {
+    "opus": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "high",
+      "takes": ["hard"],
+      "ports": { "back": 7777, "front": 3000, "db": "Edelweiss" }
+    },
+    "codex": {
+      "provider": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "takes": ["medium"],
+      "ports": { "back": 7778, "front": 3001, "db": "Edelweiss_codex" }
+    }
+  },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
   "qa": {
     "enabled": true,
@@ -20,7 +37,8 @@
     "model": "sonnet",
     "effort": "medium",
     "maxIssues": 5,
-    "paths": ["internet_shop-back-/", "internet_shop-front-/"]
+    "paths": ["internet_shop-back-/", "internet_shop-front-/"],
+    "ports": { "back": 7779, "front": 3002, "db": "Edelweiss_qa" }
   },
   "notify": { "enabled": true },
   "merge": {
@@ -30,6 +48,7 @@
     "protectedPaths": [
       ".github/",
       ".claude/",
+      ".codex/",
       "AGENTS.md",
       "CLAUDE.md",
       "tools/conveyor/",
