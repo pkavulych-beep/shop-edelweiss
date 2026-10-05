@@ -545,22 +545,20 @@ function tick() {
     requestReview(pr, s);
   }
 
-  // QA after every few merges that changed the shop. It waits for the coder's slot, and no new issue starts meanwhile.
-  let toQa = [];
-  let qaWaits = false;
-  if (config.qa?.enabled && !qa.job) {
-    toQa = mergedSinceQa().slice(-config.qa.everyMerges * 2);
-    qaWaits = toQa.length >= config.qa.everyMerges;
-    if (qaWaits && !coderBusy && !paused) {
-      const list = toQa.map((p) => `#${p.number}`).join(', ');
-      const prs = toQa.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
-      const worker = hire('qa', `перевірити змерджені ${list}`, prompt('qa', { prs, list, maxIssues: config.qa.maxIssues }));
-      if (worker) {
-        qa.job = { kind: 'qa', worker: worker.name, workerId: worker.id, since: now, until: toQa.at(-1).mergedAt, prs: toQa.map((p) => p.number) };
-        coderBusy = true;
-      }
-    }
-  }
+  // QA after every qa.everyMerges merges that changed the shop, the oldest first and at most that many at a time.
+  // It waits for the coder's slot, and no new issue starts meanwhile.
+  const unchecked = config.qa?.enabled && !qa.job ? mergedSinceQa() : [];
+  const qaWaits = unchecked.length >= (config.qa?.everyMerges ?? Infinity);
+  const startQa = () => {
+    const batch = unchecked.slice(0, config.qa.everyMerges);
+    const list = batch.map((p) => `#${p.number}`).join(', ');
+    const prs = batch.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
+    const worker = hire('qa', `перевірити змерджені ${list}`, prompt('qa', { prs, list, maxIssues: config.qa.maxIssues }));
+    if (!worker) return;
+    qa.job = { kind: 'qa', worker: worker.name, workerId: worker.id, since: now, until: batch.at(-1).mergedAt, prs: batch.map((p) => p.number) };
+    coderBusy = true;
+  };
+  if (qaWaits && !coderBusy && !paused) startQa();
 
   // New work: the next issue, while there's a free coder and not too much waiting for review.
   const inFlight = pulls.filter((p) => !labelsOf(p).includes('needs-human')).length;
@@ -587,6 +585,9 @@ function tick() {
         s.job = { kind: 'code', worker: worker.name, workerId: worker.id, since: now };
         delete s.checked;
       }
+    } else if (unchecked.length && !inFlight) {
+      // Nothing to start and nothing about to merge: QA checks what's left rather than wait for more merges.
+      startQa();
     }
   }
 
@@ -600,7 +601,7 @@ function tick() {
     if (!state.issues[n].job && !issues.some((i) => String(i.number) === n)) delete state.issues[n];
   }
   saveState();
-  const qaNote = !config.qa?.enabled ? '' : qa.job ? ', QA працює' : qaWaits ? ', QA чекає на слот кодера' : `, мерджів до QA ${toQa.length}/${config.qa.everyMerges}`;
+  const qaNote = !config.qa?.enabled ? '' : qa.job ? ', QA працює' : qaWaits ? ', QA чекає на слот кодера' : `, мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`;
   log(`крок: PR у роботі ${inFlight}, issues у черзі ${issues.length}${qaNote}${paused ? `, пауза до ${new Date(state.pausedUntil).toLocaleTimeString('uk-UA')}` : ''}`);
 }
 

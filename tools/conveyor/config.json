@@ -15,7 +15,7 @@
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
   "qa": {
     "enabled": true,
-    "everyMerges": 5,
+    "everyMerges": 10,
     "provider": "claude",
     "model": "sonnet",
     "effort": "medium",
