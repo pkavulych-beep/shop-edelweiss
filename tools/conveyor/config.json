@@ -1,0 +1,28 @@
+{
+  "repo": "pkavulych-beep/shop-edelweiss",
+  "intervalSeconds": 120,
+  "issueLabel": "agent",
+  "priorityLabels": ["P0-critical", "P1-high", "P2-medium", "P3-low"],
+  "maxOpenPullRequests": 2,
+  "maxReviewRounds": 2,
+  "maxFixRounds": 4,
+  "maxIssueAttempts": 2,
+  "needsInputMinutes": 20,
+  "limitPauseMinutes": 60,
+  "coder": { "provider": "claude", "model": "opus", "effort": "high" },
+  "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
+  "merge": {
+    "enabled": true,
+    "method": "squash",
+    "maxChangedLines": 400,
+    "protectedPaths": [
+      ".github/",
+      ".claude/",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "tools/conveyor/",
+      "docker-compose.yml",
+      "internet_shop-back-/.npmrc"
+    ]
+  }
+}
