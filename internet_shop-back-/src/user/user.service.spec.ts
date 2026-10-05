@@ -24,13 +24,13 @@ describe('UsersService cart', () => {
     productService.assertPurchasable.mockRejectedValue(new NotFoundException());
 
     await expect(
-      service.addProductToBasket({ idUser: 1, idProduct: 5, size: 'M' }),
+      service.addProductToBasket(1, { idProduct: 5, size: 'M' }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(basketRepository.save).not.toHaveBeenCalled();
   });
 
   it('adds a visible product to the basket', async () => {
-    await service.addProductToBasket({ idUser: 1, idProduct: 5, size: 'M' });
+    await service.addProductToBasket(1, { idProduct: 5, size: 'M' });
 
     expect(productService.assertPurchasable).toHaveBeenCalledWith([5]);
     expect(basketRepository.save).toHaveBeenCalledWith({

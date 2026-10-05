@@ -1,20 +1,18 @@
 import { AxiosInstance } from 'axios';
 import { CartItem } from '../redux/Types/ProductType';
 
+// Власника кошика бек бере з JWT-токена
 export type addToCartDto = {
-  idUser: number;
   idProduct: number;
   size: string;
 };
 
 export type removeFromCartDto = {
-  idUser: number;
   idProduct: number;
   size: string;
 };
 
 export type syncCartDto = {
-  idUser: number;
   items: { productId: number; size: string; quantity: number }[];
 };
 

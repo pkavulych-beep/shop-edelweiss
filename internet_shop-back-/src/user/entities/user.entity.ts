@@ -10,6 +10,7 @@ import {
   JoinTable,
   OneToMany,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { BasketItemEntity } from './basket-item.entity';
 
 @Entity('users')
@@ -26,6 +27,8 @@ export class UserEntity {
   @Column({ unique: true })
   phoneNumber: string;
 
+  // Не віддаємо пароль у відповідях API (див. ClassSerializerInterceptor у main.ts)
+  @Exclude({ toPlainOnly: true })
   @Column()
   password: string;
 
