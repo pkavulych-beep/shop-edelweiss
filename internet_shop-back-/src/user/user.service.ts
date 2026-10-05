@@ -77,6 +77,8 @@ export class UsersService {
   }
 
   async addProductToBasket({ idUser, idProduct, size }: productToBasketDto) {
+    await this.productService.assertPurchasable([idProduct]);
+
     // Перевірити чи вже є такий товар з таким розміром в корзині
     const existing = await this.basketRepository.findOne({
       where: { userId: idUser, productId: idProduct, size },
@@ -107,7 +109,16 @@ export class UsersService {
   }
 
   async syncCart(idUser: number, items: SyncCartItemDto[]) {
+    // Приховані («видалені») товари з гостьового кошика пропускаємо
+    const purchasable = new Set(
+      await this.productService.findPurchasableIds(
+        items.map((item) => item.productId),
+      ),
+    );
+
     for (const item of items) {
+      if (!purchasable.has(item.productId)) continue;
+
       const existing = await this.basketRepository.findOne({
         where: { userId: idUser, productId: item.productId, size: item.size },
       });
