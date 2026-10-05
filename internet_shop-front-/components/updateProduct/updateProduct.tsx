@@ -12,16 +12,26 @@ interface IUpdateProductProps {
   idProduct: number | null;
 }
 
+// У БД sizes/colors — масиви, а у формі це рядок "S, M, L"
+const arrayToString = (value: string[] | string | null | undefined) =>
+  Array.isArray(value) ? value.join(", ") : value ?? "";
+
+const getErrorMessage = (e) => {
+  const message = e?.response?.data?.message;
+  if (Array.isArray(message)) return message.join("; ");
+  return message || "Не вдалося зберегти зміни. Спробуйте ще раз.";
+};
+
 export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
   const dispatch = useAppDispatch();
 
   const { currentProduct } = useAppSelector((store) => store.product);
-  const { id, ...oldDataProduct } = currentProduct;
 
   const [open, setOpen] = useState(false);
-  const [photoFiles, setPhotoFiles] = useState(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleClickOpen = () => {
+    setErrorMessage(null);
     setOpen(true);
   };
 
@@ -29,7 +39,22 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
     setOpen(false);
   };
 
-  const { cover, photos, ...initialValues } = oldDataProduct;
+  const initialValues = {
+    name: currentProduct.name,
+    count: currentProduct.count,
+    description: currentProduct.description,
+    weight: currentProduct.weight,
+    sizes: arrayToString(currentProduct.sizes),
+    colors: arrayToString(currentProduct.colors),
+    material: currentProduct.material,
+    price: currentProduct.price,
+    salePrice: currentProduct.salePrice,
+    gender: currentProduct.gender,
+    category: currentProduct.category ?? "",
+    subcategory: currentProduct.subcategory ?? "",
+    brand: currentProduct.brand ?? "",
+    season: currentProduct.season,
+  };
 
   return (
     <div>
@@ -44,20 +69,26 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
         {
           <Formik
             initialValues={initialValues}
+            enableReinitialize
             validationSchema={Validatione}
-            onSubmit={async (values, { setSubmitting, resetForm }) => {
-              const res = await Api().product.update(idProduct, values);
-              const updatedProduct = { ...res, photos };
-              dispatch(setCurrentProduct(updatedProduct));
-              setSubmitting(false);
-              handleClose();
-              resetForm();
+            onSubmit={async (values, { setSubmitting }) => {
+              setErrorMessage(null);
+              try {
+                // cast перетворює порожні числові поля ('') на null перед відправкою
+                const res = await Api().product.update(idProduct, Validatione.cast(values));
+                dispatch(setCurrentProduct({ ...res, photos: currentProduct.photos }));
+                handleClose();
+              } catch (e) {
+                setErrorMessage(getErrorMessage(e));
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             <DishForm
               handleClose={handleClose}
               nameRightBtn={"Обновити"}
-              setPhotos={setPhotoFiles}
+              errorMessage={errorMessage}
             />
           </Formik>
         }
