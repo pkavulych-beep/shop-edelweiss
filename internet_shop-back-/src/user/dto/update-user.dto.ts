@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsOptional, Length } from 'class-validator';
 
 export class UpdateUserDto {
@@ -5,6 +6,7 @@ export class UpdateUserDto {
   fullName: string;
 
   @IsOptional()
+  @Transform(({ value }) => value || undefined)
   @IsEmail({}, { message: 'Некоректна адреса електронної пошти' })
   email: string;
 
