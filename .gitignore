@@ -15,6 +15,9 @@ build/
 out/
 *.tsbuildinfo
 
+# uploaded files (product photos)
+internet_shop-back-/uploads/
+
 # env / secrets
 .env
 .env.*

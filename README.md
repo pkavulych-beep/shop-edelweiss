@@ -47,6 +47,7 @@ API (`internet_shop-back-/.env`, приклад у `.env.example`):
 |---|---|
 | `PORT` | Порт API (7777) |
 | `BASE_URL` | Публічна адреса API зі слешем у кінці; з неї будуються посилання на завантажені фото |
+| `UPLOADS_DIR` | Каталог для завантажених фото товарів (необов'язково). За замовчуванням `internet_shop-back-/uploads`, він у `.gitignore`. Має бути поза `dist`, бо `dist` видаляється при кожній збірці. На сервері вкажи постійне сховище й додай його в бекапи |
 | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | Підключення до PostgreSQL |
 | `JWT_SECRET` | Секрет для токенів входу. На продакшені це довгий випадковий рядок |
 | `SEED_ADMIN_PHONE`, `SEED_ADMIN_PASSWORD` | Адмін, якого створює `npm run seed` |
