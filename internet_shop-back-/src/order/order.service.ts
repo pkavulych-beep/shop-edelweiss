@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -32,8 +36,28 @@ export class OrderService {
     });
   }
 
-  async create(createOrderDto: CreateOrderDto) {
-    const { userId, productId, ...restDto } = createOrderDto;
+  // Власник бачить лише свої замовлення, ADMIN — будь-які
+  async findOneForUser(
+    idOrder: number,
+    user: { id: number; roles?: { value: string }[] },
+  ) {
+    const order = await this.repository.findOne({
+      where: { id: idOrder },
+      relations: ['productsInOrder', 'user'],
+    });
+    if (!order) {
+      throw new NotFoundException(null, 'Не знайдено такого замовлення');
+    }
+    const isAdmin = user.roles?.some((role) => role.value === 'ADMIN');
+    if (order.user?.id !== user.id && !isAdmin) {
+      throw new ForbiddenException('Немає доступу до цього замовлення');
+    }
+    const { user: _owner, ...result } = order;
+    return result;
+  }
+
+  async create(userId: number, createOrderDto: CreateOrderDto) {
+    const { productId, ...restDto } = createOrderDto;
     await this.productService.assertPurchasable(productId);
     const user = await this.userService.findOne(userId);
 

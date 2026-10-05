@@ -61,7 +61,6 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
             productId: productIdArr,
             cityName,
             department,
-            userId: id,
           });
           await dispatch(cleanTheBasket(id));
           router.push('/orders');
