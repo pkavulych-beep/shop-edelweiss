@@ -2,6 +2,7 @@ import { ProductEntity } from 'src/product/entities/product.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
 import {
   Column,
+  CreateDateColumn,
   Entity,
   JoinTable,
   ManyToMany,
@@ -37,4 +38,8 @@ export class OrderEntity {
   // Розмір має зберігатися в позиції замовлення (#9), поки що необов'язковий
   @Column({ nullable: true })
   size: string;
+
+  // timestamptz: база в UTC, без поясу дата зсувалася б на різницю часу
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
 }

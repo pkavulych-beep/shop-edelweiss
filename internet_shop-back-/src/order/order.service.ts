@@ -85,12 +85,14 @@ export class OrderService {
     });
   }
 
-  // findUserOrders(idUser: number) {
-  //   return this.repository.find({
-  //     relations: ['user', 'productsInOrder'],
-  //     where: [{ user.id: idUser }],
-  //   });
-  // }
+  // Замовлення користувача разом із товарами одним запитом, нові першими
+  findUserOrders(userId: number) {
+    return this.repository.find({
+      relations: ['productsInOrder'],
+      where: { user: { id: userId } },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+  }
 
   async update(updateOrderDto: UpdateOrderDto) {
     const order = await this.findOneById(updateOrderDto.id);

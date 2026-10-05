@@ -9,7 +9,7 @@ describe('OrderController guards', () => {
   const reflector = new Reflector();
   const handler = (name: string) => OrderController.prototype[name];
 
-  it.each(['create', 'findOne'])('%s requires a JWT', (name) => {
+  it.each(['create', 'findOne', 'findMy'])('%s requires a JWT', (name) => {
     expect(Reflect.getMetadata(GUARDS_METADATA, handler(name))).toContain(
       JwtAuthGuard,
     );
