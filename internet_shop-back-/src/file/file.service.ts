@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as uuid from 'uuid';
+import { getUploadsDir } from './uploads-dir';
 
 export enum FileType {
   IMAGE = 'image',
@@ -15,7 +16,7 @@ export class FileService {
     try {
       const fileExtension = file.originalname.split('.').pop();
       const fileName = uuid.v4() + '.' + fileExtension;
-      const filePath = path.resolve(__dirname, '..', 'static', type);
+      const filePath = path.resolve(getUploadsDir(), type);
       if (!fs.existsSync(filePath)) {
         fs.mkdirSync(filePath, { recursive: true });
       }
@@ -32,7 +33,7 @@ export class FileService {
       const filePath = fileUrl.replace(baseUrl, '');
 
       // Отримуємо абсолютний шлях до файлу
-      const absolutePath = path.resolve(__dirname, '..', 'static', filePath);
+      const absolutePath = path.resolve(getUploadsDir(), filePath);
 
       // Перевіряємо, чи існує файл
       if (!fs.existsSync(absolutePath)) {
