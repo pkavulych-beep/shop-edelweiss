@@ -28,8 +28,11 @@ export class UsersService {
     });
 
     if (existing) {
-      const field = existing.phoneNumber === dto.phoneNumber ? 'номер' : 'пошта';
-      throw new ConflictException(`Така ${field} вже існує`);
+      const message =
+        existing.phoneNumber === dto.phoneNumber
+          ? 'Користувач з таким номером телефону вже існує'
+          : 'Користувач з такою електронною поштою вже існує';
+      throw new ConflictException(message);
     }
 
     const user = this.repository.create(dto);

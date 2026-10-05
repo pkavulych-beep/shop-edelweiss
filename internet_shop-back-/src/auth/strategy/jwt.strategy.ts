@@ -18,7 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.usersService.findById(data.id);
 
     if (!user) {
-      throw new UnauthorizedException('у вас нема доступу до цієї сторінки');
+      throw new UnauthorizedException('У вас немає доступу до цієї сторінки');
     }
     const { password, ...res } = user;
     return res;

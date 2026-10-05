@@ -4,67 +4,67 @@ import { Gender } from '../entities/product.entity';
 
 export class FilterProductDto {
   @IsOptional()
-  @IsEnum(Gender)
+  @IsEnum(Gender, { message: 'Неправильне значення статі' })
   gender?: Gender;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Категорія має бути рядком' })
   category?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Підкатегорія має бути рядком' })
   subcategory?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Бренд має бути рядком' })
   brand?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Колір має бути рядком' })
   color?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Розмір має бути рядком' })
   size?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Матеріал має бути рядком' })
   material?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Сезон має бути рядком' })
   season?: string;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({}, { message: 'Мінімальна ціна має бути числом' })
   priceMin?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({}, { message: 'Максимальна ціна має бути числом' })
   priceMax?: number;
 
   @IsOptional()
   @Type(() => Boolean)
-  @IsBoolean()
+  @IsBoolean({ message: 'Фільтр знижок має бути true або false' })
   onSale?: boolean;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Пошуковий запит має бути рядком' })
   search?: string;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Сортування має бути рядком' })
   sort?: string;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({}, { message: 'Номер сторінки має бути числом' })
   page?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({}, { message: 'Кількість товарів на сторінці має бути числом' })
   limit?: number;
 }

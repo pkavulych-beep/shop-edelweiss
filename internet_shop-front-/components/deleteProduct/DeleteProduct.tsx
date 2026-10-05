@@ -30,7 +30,7 @@ export const DeleteProduct: NextPage<IDeleteProductProps> = ({ id }) => {
   return (
     <>
       <Button variant='outlined' color='error' onClick={() => setIsConfirmOpen(true)}>
-        Delete this product
+        Видалити товар
       </Button>
 
       <Popup
