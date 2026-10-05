@@ -9,7 +9,7 @@ export class UpdateUserDto {
   email: string;
 
   @IsOptional()
-  @Length(4, undefined, { message: 'Пароль має містити щонайменше 4 символи' })
+  @Length(6, 32, { message: 'Пароль повинен містити від 6 до 32 символів' })
   password: string;
 
   @IsNotEmpty({ message: 'Вкажіть номер телефону' })
