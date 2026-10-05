@@ -43,6 +43,7 @@ describe('OrderService', () => {
       });
 
       expect(userService.findOne).toHaveBeenCalledWith(3);
+      expect(repository.save).toHaveBeenCalledTimes(1);
       expect(repository.save.mock.calls[0][0]).toMatchObject({
         user,
         ...delivery,

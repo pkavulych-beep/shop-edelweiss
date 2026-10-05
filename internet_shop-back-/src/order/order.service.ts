@@ -84,6 +84,8 @@ export class OrderService {
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
+    // Каскадний save пише замовлення й позиції в одній транзакції,
+    // тож замовлення без позицій не залишиться
     const order = await this.repository.save({
       user,
       status: Status.Processed,
