@@ -1,11 +1,19 @@
 import React from 'react';
 import { Field, Form } from 'formik';
-import { Button, Grid, MenuItem, TextField } from '@mui/material';
+import { Alert, Button, Grid, MenuItem, TextField } from '@mui/material';
 import CustomizedInputBase from '../CustomizedInputBase/CustomizedInputBase';
 import { Gender, Category, Season } from '../../redux/Types/ProductType';
 import { categoryLabels, seasonLabels } from '../FilterSidebar/filterLabels';
 
-const DishForm = ({ handleClose, nameRightBtn, setPhotos }) => {
+interface IDishFormProps {
+  handleClose: () => void;
+  nameRightBtn: string;
+  // Без setPhotos вибір фото не показується (наприклад, у формі редагування)
+  setPhotos?: (files: FileList | null) => void;
+  errorMessage?: string | null;
+}
+
+const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishFormProps) => {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotos(e.target.files);
   };
@@ -13,8 +21,12 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos }) => {
   return (
     <Form autoComplete="off" style={{ width: 600, padding: 14 }}>
       <CustomizedInputBase type="text" name="name" placeholder="Назва" />
-      <p>Оберіть фото</p>
-      <input type="file" multiple accept="image/*" onChange={onChange} />
+      {setPhotos && (
+        <>
+          <p>Оберіть фото</p>
+          <input type="file" multiple accept="image/*" onChange={onChange} />
+        </>
+      )}
       <CustomizedInputBase type="text" name="description" placeholder="Опис" multiline={true} />
       <CustomizedInputBase type="text" name="brand" placeholder="Бренд" />
 
@@ -66,6 +78,12 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos }) => {
       <CustomizedInputBase type="number" name="count" placeholder="Кількість" />
       <CustomizedInputBase type="number" name="price" placeholder="Ціна" />
       <CustomizedInputBase type="number" name="salePrice" placeholder="Ціна зі знижкою" />
+
+      {errorMessage && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {errorMessage}
+        </Alert>
+      )}
 
       <Grid container direction="row" justifyContent="space-around" alignItems="center" sx={{ mt: 2 }}>
         <Button onClick={handleClose} color="primary">
