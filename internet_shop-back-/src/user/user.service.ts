@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -95,7 +99,10 @@ export class UsersService {
     return await this.repository.findOne({ where: { id } });
   }
 
-  async addProductToBasket({ idUser, idProduct, size }: productToBasketDto) {
+  async addProductToBasket(
+    idUser: number,
+    { idProduct, size }: productToBasketDto,
+  ) {
     await this.productService.assertPurchasable([idProduct]);
 
     // Перевірити чи вже є такий товар з таким розміром в корзині
@@ -117,7 +124,10 @@ export class UsersService {
     return await this.basketRepository.save(basketItem);
   }
 
-  async pickUpFromTheBasket({ idUser, idProduct, size }: productToBasketDto) {
+  async pickUpFromTheBasket(
+    idUser: number,
+    { idProduct, size }: productToBasketDto,
+  ) {
     await this.basketRepository.delete({ userId: idUser, productId: idProduct, size });
     return await this.getCartItems(idUser);
   }
@@ -165,7 +175,9 @@ export class UsersService {
       },
       relations: ['orders'],
     });
-    const { orders } = user;
-    return orders;
+    if (!user) {
+      throw new NotFoundException('Користувача не знайдено');
+    }
+    return user.orders;
   }
 }

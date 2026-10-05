@@ -10,6 +10,7 @@ import {
   JoinTable,
   OneToMany,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { BasketItemEntity } from './basket-item.entity';
 
 @Entity('users')
@@ -26,7 +27,9 @@ export class UserEntity {
   @Column({ unique: true })
   phoneNumber: string;
 
-  // Хеш bcrypt; не потрапляє у відповіді API, бо не вибирається за замовчуванням
+  // Хеш bcrypt; не вибирається за замовчуванням, а якщо його все ж вибрали,
+  // ClassSerializerInterceptor (див. main.ts) не віддасть його у відповіді API
+  @Exclude({ toPlainOnly: true })
   @Column({ select: false })
   password: string;
 

@@ -53,7 +53,7 @@ const thunkCreateUser = (request) => (dto) => async (dispatch) => {
 
     // Синхронізуємо localStorage корзину з бекендом після логіну/реєстрації
     if (userData?.id) {
-      await dispatch(syncCartOnLogin(userData.id));
+      await dispatch(syncCartOnLogin());
     }
 
     return 'response';

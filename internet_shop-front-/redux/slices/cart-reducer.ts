@@ -129,7 +129,6 @@ export const addPositionsToCart =
     if (idUser) {
       try {
         await Api().cart.addProductToCart({
-          idUser,
           idProduct: dto.idProduct,
           size: dto.size,
         });
@@ -162,7 +161,6 @@ export const pickUpFromTheCart =
     try {
       if (dto.idUser) {
         await Api().cart.pickUpFromTheBasket({
-          idUser: dto.idUser,
           idProduct: dto.idProduct,
           size: dto.size,
         });
@@ -196,7 +194,7 @@ export const cleanTheBasket =
 
 // Синхронізувати localStorage корзину з бекендом при логіні
 export const syncCartOnLogin =
-  (idUser: number): AppThunk =>
+  (): AppThunk =>
   async (dispatch) => {
     const localCart = getLocalCart();
 
@@ -207,7 +205,7 @@ export const syncCartOnLogin =
         quantity: item.quantity,
       }));
       // syncCart з порожнім масивом просто поверне поточні елементи корзини
-      const cartItems = await Api().cart.syncCart({ idUser, items });
+      const cartItems = await Api().cart.syncCart({ items });
       clearLocalCart();
 
       // Оновити Redux з результатом синхронізації

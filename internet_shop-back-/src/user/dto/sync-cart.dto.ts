@@ -16,10 +16,6 @@ export class SyncCartItemDto {
 }
 
 export class SyncCartDto {
-  @IsNotEmpty({ message: 'Не вказано користувача' })
-  @IsNumber({}, { message: 'Ідентифікатор користувача має бути числом' })
-  idUser: number;
-
   @IsArray({ message: 'Товари мають бути передані списком' })
   @ValidateNested({ each: true, message: 'Некоректні дані товару в кошику' })
   @Type(() => SyncCartItemDto)
