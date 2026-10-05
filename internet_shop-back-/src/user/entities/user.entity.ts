@@ -26,7 +26,8 @@ export class UserEntity {
   @Column({ unique: true })
   phoneNumber: string;
 
-  @Column()
+  // Хеш bcrypt; не потрапляє у відповіді API, бо не вибирається за замовчуванням
+  @Column({ select: false })
   password: string;
 
   @CreateDateColumn({ type: 'timestamp' })
