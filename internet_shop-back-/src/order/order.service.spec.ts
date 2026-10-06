@@ -159,4 +159,20 @@ describe('OrderService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
+  describe('findUserOrders', () => {
+    it('loads the user orders with products in one query, newest first', async () => {
+      const orders = [{ id: 11, productsInOrder: [{ id: 1 }] }];
+      const repository = { find: jest.fn().mockResolvedValue(orders) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.findUserOrders(3)).resolves.toBe(orders);
+      expect(repository.find).toHaveBeenCalledTimes(1);
+      expect(repository.find).toHaveBeenCalledWith({
+        relations: ['productsInOrder'],
+        where: { user: { id: 3 } },
+        order: { createdAt: 'DESC', id: 'DESC' },
+      });
+    });
+  });
 });

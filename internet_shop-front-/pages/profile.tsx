@@ -20,6 +20,7 @@ import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { toLogOut, updateUserData } from '../redux/slices/auth-reducer';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { MyOrders } from '../components/MyOrders/MyOrders';
 
 type Tab = 'info' | 'orders' | 'addresses' | 'wishlist';
 
@@ -34,6 +35,8 @@ export default function ProfilePage() {
   const [email, setEmail] = useState(userData?.email || '');
   const [saving, setSaving] = useState(false);
   const [snackOpen, setSnackOpen] = useState(false);
+  const [snackMessage, setSnackMessage] = useState('');
+  const [snackSeverity, setSnackSeverity] = useState<'success' | 'error'>('success');
 
   useEffect(() => {
     if (userData) {
@@ -71,8 +74,18 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await dispatch(updateUserData(userData.id, { fullName, phoneNumber: phone, email }));
+    const result = await dispatch(
+      updateUserData(userData.id, {
+        fullName,
+        phoneNumber: phone,
+        ...(email ? { email } : {}),
+      }),
+    );
     setSaving(false);
+    setSnackSeverity(result.success ? 'success' : 'error');
+    setSnackMessage(
+      result.success ? 'Дані успішно збережено' : result.message,
+    );
     setSnackOpen(true);
   };
 
@@ -271,26 +284,7 @@ export default function ProfilePage() {
             >
               Історія замовлень
             </Typography>
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: 6,
-                bgcolor: '#f2f4f4',
-                borderRadius: 3,
-              }}
-            >
-              <ShoppingBagOutlinedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-                У вас ще немає замовлень
-              </Typography>
-              <Link href={`/productsList/woman`}>
-                <a style={{ textDecoration: 'none' }}>
-                  <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
-                    Перейти до каталогу
-                  </Button>
-                </a>
-              </Link>
-            </Box>
+            <MyOrders />
           </Box>
         )}
 
@@ -370,10 +364,10 @@ export default function ProfilePage() {
       >
         <Alert
           onClose={() => setSnackOpen(false)}
-          severity="success"
+          severity={snackSeverity}
           sx={{ width: '100%' }}
         >
-          Дані успішно збережено
+          {snackMessage}
         </Alert>
       </Snackbar>
     </MainLayout>

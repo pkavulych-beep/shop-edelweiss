@@ -43,6 +43,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
   const [cityName, setCity] = useState('');
   const [department, setDepartment] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Formik
@@ -55,6 +56,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
       onSubmit={async (values) => {
         try {
           setLoading(true);
+          setError(null);
           await checkUserData(values.fullName, values.phoneNumber);
           await Api().orders.create({
             comment: values.comment,
@@ -65,7 +67,16 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
           await dispatch(cleanTheBasket(id));
           router.push('/orders');
         } catch (e) {
-          alert(e);
+          const message = e.response?.data?.message;
+          if (e.response?.status === 401) {
+            setError('Сесія завершилась. Увійдіть ще раз, щоб оформити замовлення.');
+          } else {
+            setError(
+              (Array.isArray(message) ? message.join('. ') : message) ||
+                'Не вдалося оформити замовлення. Спробуйте ще раз.'
+            );
+          }
+          setLoading(false);
         }
       }}
     >
@@ -141,6 +152,21 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
         >
           Оформити замовлення
         </LoadingButton>
+
+        {error && (
+          <Typography
+            role="alert"
+            sx={{
+              color: 'error.main',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              textAlign: 'center',
+              mt: 2,
+            }}
+          >
+            {error}
+          </Typography>
+        )}
 
         <Box
           sx={{
