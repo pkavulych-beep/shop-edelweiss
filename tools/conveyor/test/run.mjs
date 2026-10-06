@@ -69,6 +69,27 @@ const scenarios = [
   { name: 'approve, PR змінює opencode.json → needs-human',
     fx: { workers: [me], pulls: [pr({ files: [{ path: 'opencode.json', additions: 2, deletions: 1 }] })], issues: [], comments: verdict('approve'), state: st() },
     want: ['^gh pr edit 50 .*needs-human'], not: ['^gh pr merge'] },
+  // ── Going home ──
+  { name: 'Codex, чий PR офіс не знає, вийшов і без роботи → додому',
+    fx: { workers: [me, { name: 'Cosmo', id: 'w-c', kind: 'agent', provider: 'codex', status: 'exited', hiredBy: me.name, worktree: '.agent-office/worktrees/cosmo-f1fb' }], issues: [], state: st() },
+    want: ['^office-workers home Cosmo '] },
+  { name: 'автор відкритого PR (знайдено за гілкою), вільний → лишається для доопрацювань',
+    fx: { workers: [me, { name: 'Cosmo', id: 'w-c', kind: 'agent', provider: 'codex', status: 'idle', hiredBy: me.name, worktree: { branch: 'office/cosmo-x' } }], pulls: [pr({ headRefName: 'office/cosmo-x' })], issues: [], state: st() },
+    not: ['^office-workers home Cosmo'] },
+  { name: 'агент зі змердженим PR → додому',
+    fx: { workers: [me, { name: 'Opie', id: 'w-o', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: me.name, merged: true, pr: { number: 49, state: 'MERGED' } }], issues: [], state: st() },
+    want: ['^office-workers home Opie '] },
+  { name: "рев'юер закінчив → додому рівно один раз",
+    fx: { workers: [me, { name: 'Rev', id: 'w-r', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: me.name }], pulls: [pr()], issues: [], comments: verdict('approve'),
+      state: st({ prs: { 50: { reviewRounds: 1, reviewedSha: HEAD, job: { kind: 'review', provider: 'claude', worker: 'Rev', workerId: 'w-r', since: 0 } } } }) },
+    once: ['^office-workers home Rev '] },
+  { name: 'агент, який зараз на задачі конвеєра → не чіпати',
+    fx: { workers: [me, { name: 'Zed', id: 'w-z', kind: 'agent', provider: 'opencode', status: 'idle', hiredBy: me.name }], issues: [issue(17, ['easy'])],
+      state: st({ issues: { 17: { job: { kind: 'code', coder: 'zen', provider: 'opencode', worker: 'Zed', workerId: 'w-z', since: Date.now() } } } }) },
+    not: ['^office-workers home Zed'] },
+  { name: 'чужий агент (найняв не конвеєр) → не чіпати',
+    fx: { workers: [me, { name: 'Mine', id: 'w-m', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: 'Pavlo' }], issues: [], state: st() },
+    not: ['^office-workers home Mine'] },
   // ── Limits ──
   { name: 'Codex завис на меню після ліміту → додому, codex на паузі до 3.11, #27 одразу бере Zen',
     fx: { workers: [me, { name: 'Byte', id: 'w-b', kind: 'agent', provider: 'codex', status: 'working' }], issues: [issue(27, ['medium'])], scrollback: { 'w-b': CODEX_LIMIT },
@@ -98,7 +119,11 @@ for (const sc of scenarios) {
   if (crash) problems.push(`CRASH ${crash}`);
   for (const w of sc.want ?? []) if (!lines.some((l) => new RegExp(w).test(l))) problems.push(`немає виклику /${w}/`);
   for (const n of sc.not ?? []) if (lines.some((l) => new RegExp(n).test(l))) problems.push(`зайвий виклик /${n}/`);
-  if (sc.want === undefined && sc.not === undefined) problems.push('сценарій без очікувань');
+  for (const o of sc.once ?? []) {
+    const count = lines.filter((l) => new RegExp(o).test(l)).length;
+    if (count !== 1) problems.push(`/${o}/ викликано ${count} разів замість одного`);
+  }
+  if (sc.want === undefined && sc.not === undefined && sc.once === undefined) problems.push('сценарій без очікувань');
   const after = existsSync(stPath) ? JSON.parse(readFileSync(stPath, 'utf8')) : {};
   if (sc.want?.length === 0) problems.push('порожній want');
   if (sc.state && !sc.state(after)) problems.push(`стан не той: ${JSON.stringify({ paused: after.paused, issues: after.issues })}`);

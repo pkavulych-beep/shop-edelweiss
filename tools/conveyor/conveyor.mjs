@@ -144,8 +144,12 @@ function tell(worker, text, what) {
   return act(what, () => run('office-workers', ['tell', worker], { input: text }));
 }
 
+const sentHome = new Set(); // who went home this tick, so nobody is sent twice
+
 function sendHome(names, why) {
-  if (names.length) act(`відправити додому (${why}): ${names.join(', ')}`, () => run('office-workers', ['home', ...names, '--cleanup', 'auto']));
+  const fresh = names.filter((n) => !sentHome.has(n));
+  fresh.forEach((n) => sentHome.add(n));
+  if (fresh.length) act(`відправити додому (${why}): ${fresh.join(', ')}`, () => run('office-workers', ['home', ...fresh, '--cleanup', 'auto']));
 }
 
 /** Where the worker doing `job` is: running, needs_input, finished, gone, or unknown (outside the office). */
@@ -416,6 +420,7 @@ function setReviewLabel(pr, verdict) {
 
 function tick() {
   const now = Date.now();
+  sentHome.clear();
   const office = officeWorkers();
   const workers = office?.workers ?? null;
   me ??= { login: gh('api', 'user', '--jq', '.login').trim() };
@@ -708,9 +713,16 @@ function tick() {
   // Nothing in the works and nothing about to merge: QA checks what's left rather than wait for more merges.
   if (!qa.job && unchecked.length && !inFlight && !busyCoders.size) startQa();
 
-  // Coders whose pull requests merged go home, taking their worktrees with them.
+  // Our agents with nothing left to do go home, taking their worktrees with them: those whose pull request
+  // merged, and those with no job whose open pull request nobody knows of. The office doesn't always tell which
+  // pull request a Codex or OpenCode agent opened, so an open one is also looked for by the agent's branch.
   if (workers && me.name) {
-    sendHome(workers.filter((w) => w.hiredBy === me.name && w.merged && FINISHED.has(w.status)).map((w) => w.name), 'PR змерджено');
+    const onJob = new Set([...Object.values(state.prs), ...Object.values(state.issues), state.qa].map((s) => s.job?.worker));
+    const openBranches = new Set(pulls.map((p) => p.headRefName));
+    const branchOf = (w) => w.worktree?.branch ?? (typeof w.worktree === 'string' ? `office/${path.basename(w.worktree)}` : undefined);
+    const free = workers.filter((w) => w.kind === 'agent' && w.hiredBy === me.name && FINISHED.has(w.status) && !onJob.has(w.name));
+    sendHome(free.filter((w) => w.merged).map((w) => w.name), 'PR змерджено');
+    sendHome(free.filter((w) => !w.merged && w.pr?.state !== 'OPEN' && !openBranches.has(branchOf(w))).map((w) => w.name), 'роботи більше немає');
   }
 
   // Issues that are closed or left the queue don't need tracking any more.
