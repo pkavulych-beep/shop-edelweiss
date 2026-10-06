@@ -27,7 +27,8 @@ export const DialogRegister: FC<IDialogRegister> = ({ open, setRegister, setLogi
   };
 
   const submit = async (values, { resetForm }) => {
-    let res = await dispatch(registerUser(values));
+    const dto = { ...values, email: values.email.trim() || undefined };
+    let res = await dispatch(registerUser(dto));
     if (res === 'response') {
       handleClose();
       resetForm();
