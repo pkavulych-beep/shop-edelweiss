@@ -5,6 +5,8 @@ import {
   Body,
   Patch,
   Param,
+  ParseIntPipe,
+  Query,
   Delete,
   UseGuards,
   Request,
@@ -12,6 +14,8 @@ import {
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { FindOrdersDto } from './dto/find-orders.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -36,21 +40,21 @@ export class OrderController {
   @Get()
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  findAll() {
-    return this.orderService.findAll();
-  }
-
-  @Get('Incomplete')
-  @Roles('ADMIN')
-  @UseGuards(RolesGuard)
-  findIncomplete() {
-    return this.orderService.findIncomplete();
+  findAll(@Query() query: FindOrdersDto) {
+    return this.orderService.findAll(query);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Request() req, @Param('id') id: string) {
-    return this.orderService.findOneForUser(+id, req.user);
+  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.orderService.findOneForUser(id, req.user);
+  }
+
+  @Patch(':id/status')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuard)
+  updateStatus(@Param('id', ParseIntPipe) id: number, @Body() { status }: UpdateOrderStatusDto) {
+    return this.orderService.updateStatus(id, status);
   }
 
   @Patch()
@@ -63,7 +67,7 @@ export class OrderController {
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id') id: string) {
-    return this.orderService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.orderService.remove(id);
   }
 }
