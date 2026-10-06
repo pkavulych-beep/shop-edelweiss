@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { OrderItemDto } from './dto/order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -21,15 +23,51 @@ export class OrderService {
     private userService: UsersService,
   ) {}
 
+  // Однаковий товар у тому ж розмірі зводимо в одну позицію. Ціну беремо
+  // з бази (зі знижкою, якщо вона є), а не довіряємо клієнту
+  async buildItems(items: OrderItemDto[]) {
+    const merged = new Map<string, OrderItemDto>();
+    for (const item of items) {
+      const key = `${item.productId}:${item.size}`;
+      const quantity = (merged.get(key)?.quantity ?? 0) + item.quantity;
+      merged.set(key, { ...item, quantity });
+    }
+
+    const ids = [...new Set(items.map((item) => item.productId))];
+    const products = new Map(
+      (await this.productService.findPurchasable(ids)).map((product) => [
+        product.id,
+        product,
+      ]),
+    );
+
+    return [...merged.values()].map(({ productId, size, quantity }) => {
+      const product = products.get(productId);
+      if (!product) {
+        throw new NotFoundException(null, 'Товар не знайдено');
+      }
+      if (product.sizes?.length && !product.sizes.includes(size)) {
+        throw new BadRequestException(`Розміру ${size} немає в наявності`);
+      }
+      const price = product.salePrice > 0 ? product.salePrice : product.price;
+      return { productId, size, quantity, price };
+    });
+  }
+
+  findOneWithItems(idOrder: number, withUser = false) {
+    return this.repository.findOne({
+      where: { id: idOrder },
+      relations: { items: { product: true }, user: withUser },
+      order: { items: { id: 'ASC' } },
+    });
+  }
+
   // Власник бачить лише свої замовлення, ADMIN — будь-які
   async findOneForUser(
     idOrder: number,
     user: { id: number; roles?: { value: string }[] },
   ) {
-    const order = await this.repository.findOne({
-      where: { id: idOrder },
-      relations: ['productsInOrder', 'user'],
-    });
+    const order = await this.findOneWithItems(idOrder, true);
     if (!order) {
       throw new NotFoundException(null, 'Не знайдено такого замовлення');
     }
@@ -42,27 +80,24 @@ export class OrderService {
   }
 
   async create(userId: number, createOrderDto: CreateOrderDto) {
-    const { productId, ...restDto } = createOrderDto;
-    await this.productService.assertPurchasable(productId);
+    const { items, ...restDto } = createOrderDto;
+    const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
-    // Товари завантажуємо до збереження, а замовлення зберігаємо разом із ними
-    // в одній транзакції, щоб не лишилося замовлення без товарів
-    const order = await this.repository.manager.transaction(async (manager) => {
-      const productsInOrder = await this.productService.findProductsMain(
-        productId,
-        manager,
-      );
-      return manager.save(OrderEntity, {
-        user,
-        status: Status.Processed,
-        ...restDto,
-        productsInOrder,
-      });
+    // Каскадний save пише замовлення й позиції в одній транзакції,
+    // тож замовлення без позицій не залишиться
+    const order = await this.repository.save({
+      user,
+      status: Status.Processed,
+      ...restDto,
+      items: orderItems,
+      total: orderItems.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      ),
     });
 
-    const { user: _owner, ...result } = order;
-    return result;
+    return this.findOneWithItems(order.id);
   }
 
   async findOneById(id: number) {
@@ -75,40 +110,36 @@ export class OrderService {
   }
 
   findAll() {
-    return this.repository.find({ relations: ['user', 'productsInOrder'] });
+    return this.repository.find({
+      relations: { user: true, items: { product: true } },
+    });
   }
 
   findIncomplete() {
     return this.repository.find({
-      relations: ['user', 'productsInOrder'],
+      relations: { user: true, items: { product: true } },
       where: [{ status: Status.Processed }, { status: Status.Sent }],
     });
   }
 
-  // Замовлення користувача разом із товарами одним запитом, нові першими
+  // Замовлення користувача разом із позиціями одним запитом, нові першими
   findUserOrders(userId: number) {
     return this.repository.find({
-      relations: ['productsInOrder'],
+      relations: { items: { product: true } },
       where: { user: { id: userId } },
-      order: { createdAt: 'DESC', id: 'DESC' },
+      order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
     });
   }
 
   async update(updateOrderDto: UpdateOrderDto) {
-    const order = await this.findOneById(updateOrderDto.id);
-    order.status = updateOrderDto.status;
-    order.comment = updateOrderDto.comment;
+    const { id, ...changes } = updateOrderDto;
+    const order = await this.findOneById(id);
+    // Поля, яких немає в запиті, не чіпаємо
+    for (const [key, value] of Object.entries(changes)) {
+      if (value !== undefined) order[key] = value;
+    }
 
-    return this.repository.manager.transaction(async (manager) => {
-      // Без productId товари замовлення лишаються як були
-      if (updateOrderDto.productId !== undefined) {
-        order.productsInOrder = await this.productService.findProductsMain(
-          updateOrderDto.productId,
-          manager,
-        );
-      }
-      return manager.save(order);
-    });
+    return this.repository.save(order);
   }
 
   async remove(id: number) {

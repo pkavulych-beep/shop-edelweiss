@@ -13,15 +13,16 @@ import { NewUserData } from './userData/NewUserData';
 import { ValidateOrder } from './userData/ValidateOrder';
 import LoadingButton from '@mui/lab/LoadingButton';
 import { Api } from '../../../api/Api';
+import { CreateOrderItemDto } from '../../../api/OrderApi';
 import { useRouter } from 'next/dist/client/router';
 import { cleanTheBasket } from '../../../redux/slices/cart-reducer';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 
 interface OrderingComponentProps {
-  productIdArr: number[];
+  items: CreateOrderItemDto[];
 }
 
-const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) => {
+const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
@@ -88,7 +89,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ productIdArr }) =
           }
           await Api().orders.create({
             comment: values.comment,
-            productId: productIdArr,
+            items,
             cityName,
             department,
           });

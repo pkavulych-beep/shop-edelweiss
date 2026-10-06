@@ -6,34 +6,45 @@ describe('CreateOrderDto', () => {
   const validate = (body: object) =>
     pipe.transform(body, { type: 'body', metatype: CreateOrderDto });
 
+  const item = { productId: 1, size: 'M', quantity: 2 };
   const valid = {
-    productId: [1, 5],
+    items: [item, { productId: 5, size: 'L', quantity: 1 }],
     comment: 'Подзвоніть',
     cityName: 'Київ',
     department: 'Відділення №1',
   };
 
   it('keeps all order fields', async () => {
-    await expect(validate({ ...valid, size: 'M' })).resolves.toEqual({
-      ...valid,
-      size: 'M',
-    });
+    await expect(validate(valid)).resolves.toEqual(valid);
   });
 
-  it('accepts an order without size and comment', async () => {
+  it('accepts an order without comment', async () => {
     const { comment: _comment, ...body } = valid;
     await expect(validate(body)).resolves.toEqual(body);
   });
 
+  it('drops a client-side price', async () => {
+    const result = await validate({
+      ...valid,
+      items: [{ ...item, price: 1 }],
+      total: 1,
+    });
+    expect(result).toEqual({ ...valid, items: [item] });
+  });
+
   it.each([
-    ['without products', { productId: [] }],
-    ['with non-integer product ids', { productId: [1, 'abc'] }],
-    ['with products not as a list', { productId: 1 }],
+    ['without items', { items: [] }],
+    ['with items not as a list', { items: item }],
+    ['with non-integer product id', { items: [{ ...item, productId: 'abc' }] }],
+    ['without size', { items: [{ ...item, size: undefined }] }],
+    ['with empty size', { items: [{ ...item, size: '' }] }],
+    ['with zero quantity', { items: [{ ...item, quantity: 0 }] }],
+    ['with fractional quantity', { items: [{ ...item, quantity: 1.5 }] }],
+    ['with too big quantity', { items: [{ ...item, quantity: 101 }] }],
     ['without city', { cityName: undefined }],
     ['with empty city', { cityName: '' }],
     ['without department', { department: undefined }],
     ['with empty department', { department: '' }],
-    ['with non-string size', { size: 42 }],
   ])('rejects an order %s', async (_name, patch) => {
     await expect(validate({ ...valid, ...patch })).rejects.toBeInstanceOf(
       BadRequestException,

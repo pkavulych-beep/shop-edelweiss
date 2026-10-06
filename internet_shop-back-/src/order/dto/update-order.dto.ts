@@ -1,9 +1,12 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/mapped-types';
 import { CreateOrderDto } from './create-order.dto';
 import { IsNotEmpty, IsOptional } from 'class-validator';
 import { Status } from '../statusEnum';
 
-export class UpdateOrderDto extends PartialType(CreateOrderDto) {
+// Позиції замовлення фіксуються під час покупки, тож тут їх не змінюють
+export class UpdateOrderDto extends PartialType(
+  OmitType(CreateOrderDto, ['items'] as const),
+) {
   @IsNotEmpty({ message: 'Не вказано замовлення' })
   id: number;
 
@@ -12,7 +15,4 @@ export class UpdateOrderDto extends PartialType(CreateOrderDto) {
 
   @IsOptional()
   comment: string;
-
-  @IsOptional()
-  productId: number[];
 }

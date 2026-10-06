@@ -15,6 +15,7 @@ import { PhotosModule } from './photos/photos.module';
 import { PhotoEntity } from './photos/entities/photo.entity';
 import { OrderModule } from './order/order.module';
 import { OrderEntity } from './order/entities/order.entity';
+import { OrderItemEntity } from './order/entities/order-item.entity';
 import { BasketItemEntity } from './user/entities/basket-item.entity';
 import { getUploadsDir } from './file/uploads-dir';
 import { QuickOrderModule } from './quick-order/quick-order.module';
@@ -38,6 +39,7 @@ import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
         RoleEntity,
         PhotoEntity,
         OrderEntity,
+        OrderItemEntity,
         BasketItemEntity,
         QuickOrderEntity,
       ],
