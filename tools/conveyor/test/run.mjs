@@ -90,6 +90,11 @@ const scenarios = [
   { name: 'чужий агент (найняв не конвеєр) → не чіпати',
     fx: { workers: [me, { name: 'Mine', id: 'w-m', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: 'Pavlo' }], issues: [], state: st() },
     not: ['^office-workers home Mine'] },
+  { name: 'QA, якого будили після ліміту, лишив звіт до пробудження → звіт знайдено, закрито, PR не повторюються',
+    fx: { workers: [me, { name: 'Quinn', id: 'w-q', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: me.name }], issues: [],
+      qaReports: [{ number: 59, state: 'OPEN', createdAt: '2026-10-05T18:51:42Z' }],
+      state: st({ qa: { since: '2026-10-05T09:00:00Z', job: { kind: 'qa', provider: 'claude', worker: 'Quinn', workerId: 'w-q', since: Date.parse('2026-10-05T18:43:46Z'), wokenAt: Date.now() - 5 * 60_000, until: '2026-10-05T18:30:00Z', prs: [41, 42] } } }) },
+    want: ['^gh issue close 59 '], state: (s) => s.qa.since === '2026-10-05T18:30:00Z' && !s.qa.retried },
   // ── Limits ──
   { name: 'Codex завис на меню після ліміту → додому, codex на паузі до 3.11, #27 одразу бере Zen',
     fx: { workers: [me, { name: 'Byte', id: 'w-b', kind: 'agent', provider: 'codex', status: 'working' }], issues: [issue(27, ['medium'])], scrollback: { 'w-b': CODEX_LIMIT },
