@@ -131,9 +131,10 @@ function officeWorkers() {
   return IN_OFFICE ? JSON.parse(run('office-workers', ['list', '--json'])) : null;
 }
 
-/** Hires a worker on `agent` (its provider, model and effort); returns its name, '(dry-run)', or undefined when hiring failed. */
+/** Hires a worker on `agent` (its provider, model and effort, if it has one); returns its name, '(dry-run)', or undefined when hiring failed. */
 function hire(agent, who, title, text, extra = []) {
-  const args = ['hire', '--provider', agent.provider, '--model', agent.model, '--effort', agent.effort, '--json', ...extra];
+  const effort = agent.effort ? ['--effort', agent.effort] : [];
+  const args = ['hire', '--provider', agent.provider, '--model', agent.model, ...effort, '--json', ...extra];
   const w = act(`найняти ${who} (${agent.model}): ${title}`, () => JSON.parse(run('office-workers', args, { input: text })));
   if (w === null) return { name: '(dry-run)' };
   return w && w.name ? { name: w.name, id: w.id } : undefined;
@@ -216,7 +217,7 @@ function usageLimit(workerId, from) {
 /** An issue's difficulty: its label, or the default when it has none. */
 const difficultyOf = (issue) => config.difficultyLabels.find((l) => labelsOf(issue).includes(l)) ?? config.defaultDifficulty;
 
-/** The coder that takes issues of `difficulty`, if any does. */
+/** The first coder that takes issues of `difficulty`, if any does. */
 const coderFor = (difficulty) => Object.keys(config.coders).find((name) => config.coders[name].takes.includes(difficulty));
 
 /** The ports and database an agent runs the shop on, for its prompt. */
@@ -688,10 +689,13 @@ function tick() {
     })
     .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt));
   let started = 0;
+  const claimed = new Set();
   for (const [name, coder] of Object.entries(config.coders)) {
     if (busyCoders.has(name) || pausedFor(coder.provider) || inFlight + started >= config.maxOpenPullRequests) continue;
-    const next = ready.find((i) => coderFor(difficultyOf(i)) === name);
+    // Several coders can take the same difficulty: each free one takes the most important issue it can.
+    const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number));
     if (!next) continue;
+    claimed.add(next.number);
     const text = prompt('coder', { issue: next.number, title: next.title, ...portsOf(coder) });
     const worker = hire(coder, `кодера ${name}`, `issue #${next.number} «${next.title}»`, text, ['--issue', String(next.number)]);
     if (!worker) continue;
