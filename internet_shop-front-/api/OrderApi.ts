@@ -15,6 +15,7 @@ export interface CreateOrderDto {
   comment: string;
 }
 
+// Список усіх замовлень для адміна (GET /order)
 export interface FindOrdersParams {
   page?: number;
   limit?: number;
@@ -39,7 +40,6 @@ export const ordersApi = (instance: AxiosInstance) => ({
     return data;
   },
 
-  //for Admin
   async findAll(params: FindOrdersParams = {}) {
     const { data } = await instance.get<OrdersPage>("order", { params });
     return data;

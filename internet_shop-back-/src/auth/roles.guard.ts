@@ -1,48 +1,35 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { JwtService } from '@nestjs/jwt';
-import { ROLES_KEY } from './roles-auth.decorator';
+import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { AuthGuard } from '@nestjs/passport';
+import { ROLES_KEY } from './roles-auth.decorator';
 
+// Спершу автентифікує запит через JwtStrategy (вона щоразу читає користувача
+// з бази й кладе його в req.user), а потім перевіряє ролі саме цього користувача.
+// Ролі з вмісту токена не використовуються: інакше зміна ролей діяла б лише
+// після закінчення терміну дії токена.
 @Injectable()
-export class RolesGuard implements CanActivate {
-  constructor(private jwtService: JwtService, private reflector: Reflector) {}
+export class RolesGuard extends AuthGuard('jwt') {
+  constructor(private reflector: Reflector) {
+    super();
+  }
 
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    try {
-      const requiredRoles = this.reflector.getAllAndOverride<string[]>(
-        ROLES_KEY,
-        [context.getHandler(), context.getClass()],
-      );
-      if (!requiredRoles) {
-        return true;
-      }
-      const req = context.switchToHttp().getRequest();
-      const authHeader = req.headers.authorization;
-      const bearer = authHeader.split(' ')[0];
-      const token = authHeader.split(' ')[1];
-
-      if (bearer !== 'Bearer' || !token) {
-        throw new UnauthorizedException({
-          message: 'користувач не авторизований',
-        });
-      }
-
-      const user = this.jwtService.verify(token);
-      req.user = user;
-      return user.roles.some((role) => requiredRoles.includes(role.value));
-    } catch (e) {
-      console.log(e);
-      throw new HttpException('Немає доступу', HttpStatus.FORBIDDEN);
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!requiredRoles) {
+      return true;
     }
+
+    // Без токена, з недійсним токеном чи для видаленого користувача — 401
+    await super.canActivate(context);
+
+    const { user } = context.switchToHttp().getRequest();
+    const hasRole = user?.roles?.some(role => requiredRoles.includes(role.value));
+    if (!hasRole) {
+      throw new ForbiddenException('Немає доступу');
+    }
+    return true;
   }
 }
