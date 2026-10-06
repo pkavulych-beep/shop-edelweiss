@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { Status } from './statusEnum';
 
@@ -26,7 +22,7 @@ describe('OrderService', () => {
       };
       productService = {
         findPurchasable: jest.fn((ids: number[]) =>
-          Promise.resolve(products.filter((p) => ids.includes(p.id))),
+          Promise.resolve(products.filter(p => ids.includes(p.id))),
         ),
       };
       userService = { findOne: jest.fn().mockResolvedValue(user) };
@@ -130,10 +126,10 @@ describe('OrderService', () => {
       ).resolves.toEqual({ id: 10, items: [] });
     });
 
-    it('returns any order to ADMIN', async () => {
+    it('returns any order to ADMIN together with the buyer', async () => {
       await expect(
         service.findOneForUser(10, { id: 1, roles: [{ value: 'ADMIN' }] }),
-      ).resolves.toEqual({ id: 10, items: [] });
+      ).resolves.toEqual(order);
     });
 
     it('forbids another user', async () => {
@@ -143,9 +139,9 @@ describe('OrderService', () => {
     });
 
     it('throws NotFound for a missing order', async () => {
-      await expect(
-        service.findOneForUser(99, { id: 3, roles: [] }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOneForUser(99, { id: 3, roles: [] })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -158,7 +154,7 @@ describe('OrderService', () => {
           comment: 'Подзвоніть',
           total: 1800,
         }),
-        save: jest.fn((order) => Promise.resolve(order)),
+        save: jest.fn(order => Promise.resolve(order)),
       };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
@@ -170,6 +166,106 @@ describe('OrderService', () => {
         comment: 'Подзвоніть',
         total: 1800,
       });
+    });
+  });
+
+  describe('findAll', () => {
+    let query;
+    let service: OrderService;
+
+    beforeEach(() => {
+      query = {};
+      for (const method of [
+        'leftJoin',
+        'addSelect',
+        'loadRelationCountAndMap',
+        'orderBy',
+        'addOrderBy',
+        'skip',
+        'take',
+        'where',
+      ]) {
+        query[method] = jest.fn().mockReturnValue(query);
+      }
+      query.getManyAndCount = jest.fn().mockResolvedValue([[{ id: 7 }], 41]);
+      const repository = { createQueryBuilder: jest.fn().mockReturnValue(query) };
+      service = new OrderService(repository as any, {} as any, {} as any);
+    });
+
+    it('returns a page of orders with the buyer and items count, newest first', async () => {
+      await expect(service.findAll({ page: 3, limit: 20 })).resolves.toEqual({
+        data: [{ id: 7 }],
+        total: 41,
+        page: 3,
+        limit: 20,
+      });
+      expect(query.addSelect).toHaveBeenCalledWith([
+        'user.id',
+        'user.fullName',
+        'user.phoneNumber',
+      ]);
+      expect(query.loadRelationCountAndMap).toHaveBeenCalledWith('o.itemsCount', 'o.items');
+      expect(query.orderBy).toHaveBeenCalledWith('o.createdAt', 'DESC');
+      expect(query.addOrderBy).toHaveBeenCalledWith('o.id', 'DESC');
+      expect(query.skip).toHaveBeenCalledWith(40);
+      expect(query.take).toHaveBeenCalledWith(20);
+      expect(query.where).not.toHaveBeenCalled();
+    });
+
+    it('filters by status', async () => {
+      await service.findAll({ page: 1, limit: 20, status: Status.Sent });
+      expect(query.where).toHaveBeenCalledWith('o.status = :status', {
+        status: Status.Sent,
+      });
+    });
+  });
+
+  describe('updateStatus', () => {
+    it('saves the new status and keeps the other fields', async () => {
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          comment: 'c',
+        }),
+        save: jest.fn(order => Promise.resolve(order)),
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.updateStatus(10, Status.Sent)).resolves.toEqual({
+        id: 10,
+        status: Status.Sent,
+        comment: 'c',
+      });
+      expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 10 } });
+    });
+
+    it('throws NotFound for a missing order', async () => {
+      const repository = {
+        findOne: jest.fn().mockResolvedValue(null),
+        save: jest.fn(),
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.updateStatus(99, Status.Sent)).rejects.toBeInstanceOf(NotFoundException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('deletes an existing order', async () => {
+      const repository = { delete: jest.fn().mockResolvedValue({ affected: 1 }) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.remove(10)).resolves.toBe('Замовлення було успішно видалено');
+      expect(repository.delete).toHaveBeenCalledWith(10);
+    });
+
+    it('throws NotFound for a missing order', async () => {
+      const repository = { delete: jest.fn().mockResolvedValue({ affected: 0 }) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.remove(99)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
