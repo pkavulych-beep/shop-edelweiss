@@ -29,3 +29,9 @@ export type Order = {
   department: string;
   createdAt: string;
 };
+
+// Замовлення в адмінському списку: без позицій, лише їх кількість
+export type OrderListItem = Omit<Order, "items" | "user"> & {
+  user: Pick<IUserData, "id" | "fullName" | "phoneNumber"> | null;
+  itemsCount: number;
+};
