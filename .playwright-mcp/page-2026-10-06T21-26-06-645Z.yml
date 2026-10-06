@@ -1,0 +1,17 @@
+- dialog [ref=e208]:
+  - generic [ref=e209]:
+    - generic [ref=e210]:
+      - generic [ref=e211]:
+        - navigation [ref=e212]:
+          - button [disabled] [ref=e213]
+          - button [disabled] [ref=e216]
+          - generic [ref=e219]: 1 of 1 unhandled error
+        - button "Close" [ref=e220] [cursor=pointer]
+      - heading "Unhandled Runtime Error" [level=1] [ref=e225]
+      - paragraph [ref=e226]: "TypeError: Cannot read properties of undefined (reading 'then')"
+    - generic [ref=e227]:
+      - heading "Source" [level=5] [ref=e228]
+      - generic [ref=e229]:
+        - link "pages/admin/orders/[id].tsx (75:7) @ eval" [ref=e231] [cursor=pointer]
+        - generic [ref=e237]: "73 | Api() 74 | .orders.findById(id) > 75 | .then(data => { | ^ 76 | if (cancelled) return; 77 | setOrder(data); 78 | setStatus(data.status);"
+      - button "Show collapsed frames" [ref=e238] [cursor=pointer]

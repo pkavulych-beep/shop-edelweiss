@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
@@ -24,6 +26,7 @@ const LIMIT = 20;
 
 // Усі замовлення магазину для адміна: нові першими, фільтр за статусом
 export default function AdminOrdersPage() {
+  const router = useRouter();
   const isAdmin = useAppSelector(
     state => state.user.userData?.roles.some(role => role.value === Role.admin) ?? false
   );
@@ -52,6 +55,9 @@ export default function AdminOrdersPage() {
     setPage(1);
   };
 
+  // Клік по рядку відкриває деталі замовлення
+  const openOrder = (id: number) => router.push(`/admin/orders/${id}`);
+
   const renderOrders = () => {
     if (!orders) {
       return error ? null : <CircularProgress sx={{ display: 'block', mx: 'auto', my: 4 }} />;
@@ -76,8 +82,22 @@ export default function AdminOrdersPage() {
             </TableHead>
             <TableBody>
               {orders.data.map(({ id, createdAt, user, total, status }) => (
-                <TableRow key={id}>
-                  <TableCell>{id}</TableCell>
+                <TableRow
+                  key={id}
+                  hover
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => openOrder(id)}
+                >
+                  <TableCell>
+                    <Link href={`/admin/orders/${id}`}>
+                      <a
+                        style={{ color: 'inherit' }}
+                        onClick={event => event.stopPropagation()}
+                      >
+                        {id}
+                      </a>
+                    </Link>
+                  </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     {new Date(createdAt).toLocaleString('uk-UA', {
                       dateStyle: 'short',

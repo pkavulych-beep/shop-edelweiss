@@ -1,0 +1,129 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e6]:
+          - link [ref=e115] [cursor=pointer]:
+            - /url: /productsList/woman
+            - heading "Жінкам" [level=6] [ref=e116]
+          - link [ref=e117] [cursor=pointer]:
+            - /url: /productsList/man
+            - heading "Чоловікам" [level=6] [ref=e118]
+          - link [ref=e119] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - heading "Нове" [level=6] [ref=e120]
+          - link [ref=e121] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - heading "Знижки" [level=6] [ref=e122]
+        - link [ref=e123] [cursor=pointer]:
+          - /url: /
+          - paragraph [ref=e16]: Edelweiss
+        - generic [ref=e17]:
+          - button [active] [ref=e18] [cursor=pointer]
+          - link [ref=e124] [cursor=pointer]:
+            - /url: /cart
+            - button "0" [ref=e125]
+    - main [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Замовлення" [level=4] [ref=e126]
+        - generic [ref=e127]:
+          - button "Усі" [ref=e128] [cursor=pointer]
+          - button "обробляється" [ref=e130] [cursor=pointer]
+          - button "відправлено" [ref=e132] [cursor=pointer]
+          - button "отримано" [ref=e134] [cursor=pointer]
+          - button "відмінено" [ref=e136] [cursor=pointer]
+        - paragraph [ref=e138]: "Знайдено: 4"
+        - table [ref=e140]:
+          - rowgroup [ref=e141]:
+            - row [ref=e142]:
+              - columnheader "№" [ref=e143]
+              - columnheader "Дата" [ref=e144]
+              - columnheader "Покупець" [ref=e145]
+              - columnheader "Телефон" [ref=e146]
+              - columnheader "Сума" [ref=e147]
+              - columnheader "Статус" [ref=e148]
+          - rowgroup [ref=e149]:
+            - row [ref=e150] [cursor=pointer]:
+              - cell [ref=e151]:
+                - link "4" [ref=e152]:
+                  - /url: /admin/orders/4
+              - cell "06.10.26, 23:32" [ref=e153]
+              - cell "Адміністратор" [ref=e154]
+              - cell [ref=e155]:
+                - link "+38 (099) 000-00-00" [ref=e156]:
+                  - /url: tel:+380990000000
+              - cell "1200 грн" [ref=e157]
+              - cell "обробляється" [ref=e158]
+            - row [ref=e161] [cursor=pointer]:
+              - cell [ref=e162]:
+                - link "3" [ref=e163]:
+                  - /url: /admin/orders/3
+              - cell "06.10.26, 22:28" [ref=e164]
+              - cell "Адміністратор" [ref=e165]
+              - cell [ref=e166]:
+                - link "+38 (099) 000-00-00" [ref=e167]:
+                  - /url: tel:+380990000000
+              - cell "0 грн" [ref=e168]
+              - cell "обробляється" [ref=e169]
+            - row [ref=e172] [cursor=pointer]:
+              - cell [ref=e173]:
+                - link "2" [ref=e174]:
+                  - /url: /admin/orders/2
+              - cell "06.10.26, 22:26" [ref=e175]
+              - cell "Адміністратор" [ref=e176]
+              - cell [ref=e177]:
+                - link "+38 (099) 000-00-00" [ref=e178]:
+                  - /url: tel:+380990000000
+              - cell "0 грн" [ref=e179]
+              - cell "обробляється" [ref=e180]
+            - row [ref=e183] [cursor=pointer]:
+              - cell [ref=e184]:
+                - link "1" [ref=e185]:
+                  - /url: /admin/orders/1
+              - cell "06.10.26, 22:22" [ref=e186]
+              - cell "Адміністратор" [ref=e187]
+              - cell [ref=e188]:
+                - link "+38 (099) 000-00-00" [ref=e189]:
+                  - /url: tel:+380990000000
+              - cell "0 грн" [ref=e190]
+              - cell "обробляється" [ref=e191]
+    - contentinfo [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - paragraph [ref=e37]: Edelweiss
+          - paragraph [ref=e38]: Вишуканий одяг для тих, хто цінує якість та стиль
+        - generic [ref=e39]:
+          - heading "Каталог" [level=6] [ref=e194]
+          - link [ref=e195] [cursor=pointer]:
+            - /url: /productsList/woman
+            - paragraph [ref=e42]: Жінкам
+          - link [ref=e196] [cursor=pointer]:
+            - /url: /productsList/man
+            - paragraph [ref=e44]: Чоловікам
+          - link [ref=e197] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - paragraph [ref=e46]: Нове
+          - link [ref=e198] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - paragraph [ref=e48]: Знижки
+        - generic [ref=e49]:
+          - heading "Інформація" [level=6] [ref=e199]
+          - link [ref=e200] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=e52]: Доставка та оплата
+          - link [ref=e201] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=e54]: Обмін та повернення
+        - generic [ref=e55]:
+          - heading "Контакти" [level=6] [ref=e202]
+          - link [ref=e203] [cursor=pointer]:
+            - /url: /admin/orders#
+            - paragraph [ref=e58]: Instagram
+          - link [ref=e204] [cursor=pointer]:
+            - /url: /admin/orders#
+            - paragraph [ref=e60]: Telegram
+          - link [ref=e205] [cursor=pointer]:
+            - /url: mailto:info@edelweiss.ua
+            - paragraph [ref=e62]: info@edelweiss.ua
+      - paragraph [ref=e64]: © 2026 Edelweiss. Всі права захищено.
+  - alert [ref=e65]

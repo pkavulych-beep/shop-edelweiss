@@ -1,0 +1,93 @@
+- generic [ref=e1]:
+  - generic [aria-hidden] [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e6]:
+          - link [ref=e66] [cursor=pointer]:
+            - /url: /productsList/woman
+            - heading [level=6] [ref=e67]: Жінкам
+          - link [ref=e68] [cursor=pointer]:
+            - /url: /productsList/man
+            - heading [level=6] [ref=e69]: Чоловікам
+          - link [ref=e70] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - heading [level=6] [ref=e71]: Нове
+          - link [ref=e72] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - heading [level=6] [ref=e73]: Знижки
+        - link [ref=e74] [cursor=pointer]:
+          - /url: /
+          - paragraph [ref=e16]: Edelweiss
+        - generic [ref=e17]:
+          - button [ref=e18] [cursor=pointer]
+          - link [ref=e21] [cursor=pointer]:
+            - /url: /cart
+            - button [ref=e22]
+    - main [ref=e26]:
+      - generic [ref=e27]:
+        - heading [level=4] [ref=e75]: Замовлення
+        - alert [ref=e29]:
+          - generic [ref=e33]: Сторінка доступна лише адміністратору
+    - contentinfo [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - paragraph [ref=e37]: Edelweiss
+          - paragraph [ref=e38]: Вишуканий одяг для тих, хто цінує якість та стиль
+        - generic [ref=e39]:
+          - heading [level=6] [ref=e76]: Каталог
+          - link [ref=e77] [cursor=pointer]:
+            - /url: /productsList/woman
+            - paragraph [ref=e42]: Жінкам
+          - link [ref=e78] [cursor=pointer]:
+            - /url: /productsList/man
+            - paragraph [ref=e44]: Чоловікам
+          - link [ref=e79] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - paragraph [ref=e46]: Нове
+          - link [ref=e80] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - paragraph [ref=e48]: Знижки
+        - generic [ref=e49]:
+          - heading [level=6] [ref=e81]: Інформація
+          - link [ref=e82] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=e52]: Доставка та оплата
+          - link [ref=e83] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=e54]: Обмін та повернення
+        - generic [ref=e55]:
+          - heading [level=6] [ref=e84]: Контакти
+          - link [ref=e85] [cursor=pointer]:
+            - /url: /admin/orders#
+            - paragraph [ref=e58]: Instagram
+          - link [ref=e86] [cursor=pointer]:
+            - /url: /admin/orders#
+            - paragraph [ref=e60]: Telegram
+          - link [ref=e87] [cursor=pointer]:
+            - /url: mailto:info@edelweiss.ua
+            - paragraph [ref=e62]: info@edelweiss.ua
+      - paragraph [ref=e64]: © 2026 Edelweiss. Всі права захищено.
+  - alert [ref=e65]
+  - dialog [ref=e90]:
+    - generic [ref=e91]:
+      - generic [ref=e92]:
+        - heading "Вхід" [level=4] [ref=e93]
+        - button [ref=e94] [cursor=pointer]
+      - generic [ref=e97]:
+        - heading "Акаунт Edelweiss" [level=6] [ref=e98]
+        - generic [ref=e99]:
+          - generic: Номер телефону
+          - generic [ref=e100]:
+            - textbox "Номер телефону" [ref=e101]
+            - group [aria-hidden]
+        - generic [ref=e102]:
+          - generic: Пароль
+          - generic [ref=e103]:
+            - textbox "Пароль" [ref=e104]
+            - group [aria-hidden]
+        - separator [ref=e105]:
+          - paragraph [ref=e107]: або
+        - button [ref=e108] [cursor=pointer]
+      - generic [ref=e112]:
+        - button "Реєстрація" [ref=e113] [cursor=pointer]
+        - button "Увійти" [ref=e114] [cursor=pointer]

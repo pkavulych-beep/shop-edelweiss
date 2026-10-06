@@ -1,0 +1,117 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - banner [ref=f4e3]:
+      - generic [ref=f4e4]:
+        - generic [ref=f4e6]:
+          - link [ref=f4e7] [cursor=pointer]:
+            - /url: /productsList/woman
+            - heading "Жінкам" [level=6] [ref=f4e8]
+          - link [ref=f4e9] [cursor=pointer]:
+            - /url: /productsList/man
+            - heading "Чоловікам" [level=6] [ref=f4e10]
+          - link [ref=f4e11] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - heading "Нове" [level=6] [ref=f4e12]
+          - link [ref=f4e13] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - heading "Знижки" [level=6] [ref=f4e14]
+        - link [ref=f4e15] [cursor=pointer]:
+          - /url: /
+          - paragraph [ref=f4e16]: Edelweiss
+        - generic [ref=f4e17]:
+          - button [ref=f4e18] [cursor=pointer]
+          - link [ref=f4e21] [cursor=pointer]:
+            - /url: /cart
+            - button [ref=f4e22]
+    - main [ref=f4e26]:
+      - generic [ref=f4e27]:
+        - heading "Мої замовлення" [level=4] [ref=f4e28]
+        - generic [ref=f4e29]:
+          - generic [ref=f4e65]:
+            - generic [ref=f4e66]:
+              - generic [ref=f4e67]:
+                - paragraph [ref=f4e68]: Замовлення №4
+                - paragraph [ref=f4e69]: 6 жовтня 2026 р.
+              - generic [ref=f4e70]: відправлено
+            - paragraph [ref=f4e72]: "Доставка: Нова пошта, Київ, Відділення №1: вул. Пирогівський шлях, 135"
+            - generic [ref=f4e74]:
+              - img "Тестова сукня Zen" [ref=f4e76]
+              - generic [ref=f4e77]:
+                - link [ref=f4e78] [cursor=pointer]:
+                  - /url: /product/1
+                  - paragraph [ref=f4e79]: Тестова сукня Zen
+                - paragraph [ref=f4e80]: "Розмір: S · 1 шт."
+              - paragraph [ref=f4e81]: 1200 грн
+            - generic [ref=f4e82]:
+              - heading "Сума" [level=6] [ref=f4e83]
+              - paragraph [ref=f4e84]: 1200 грн
+          - generic [ref=f4e85]:
+            - generic [ref=f4e86]:
+              - generic [ref=f4e87]:
+                - paragraph [ref=f4e88]: Замовлення №3
+                - paragraph [ref=f4e89]: 6 жовтня 2026 р.
+              - generic [ref=f4e90]: обробляється
+            - paragraph [ref=f4e92]: "Доставка: Нова пошта, Київ, Відділення №1: вул. Пирогівський шлях, 135"
+            - generic [ref=f4e93]:
+              - heading "Сума" [level=6] [ref=f4e94]
+              - paragraph [ref=f4e95]: 0 грн
+          - generic [ref=f4e96]:
+            - generic [ref=f4e97]:
+              - generic [ref=f4e98]:
+                - paragraph [ref=f4e99]: Замовлення №2
+                - paragraph [ref=f4e100]: 6 жовтня 2026 р.
+              - generic [ref=f4e101]: обробляється
+            - paragraph [ref=f4e103]: "Доставка: Нова пошта, Київ, Відділення №1: вул. Пирогівський шлях, 135"
+            - generic [ref=f4e104]:
+              - heading "Сума" [level=6] [ref=f4e105]
+              - paragraph [ref=f4e106]: 0 грн
+          - generic [ref=f4e107]:
+            - generic [ref=f4e108]:
+              - generic [ref=f4e109]:
+                - paragraph [ref=f4e110]: Замовлення №1
+                - paragraph [ref=f4e111]: 6 жовтня 2026 р.
+              - generic [ref=f4e112]: обробляється
+            - paragraph [ref=f4e114]: "Доставка: Нова пошта, Київ, Відділення №1: вул. Пирогівський шлях, 135"
+            - generic [ref=f4e115]:
+              - heading "Сума" [level=6] [ref=f4e116]
+              - paragraph [ref=f4e117]: 0 грн
+    - contentinfo [ref=f4e33]:
+      - generic [ref=f4e34]:
+        - generic [ref=f4e35]:
+          - paragraph [ref=f4e36]: Edelweiss
+          - paragraph [ref=f4e37]: Вишуканий одяг для тих, хто цінує якість та стиль
+        - generic [ref=f4e38]:
+          - heading "Каталог" [level=6] [ref=f4e39]
+          - link [ref=f4e40] [cursor=pointer]:
+            - /url: /productsList/woman
+            - paragraph [ref=f4e41]: Жінкам
+          - link [ref=f4e42] [cursor=pointer]:
+            - /url: /productsList/man
+            - paragraph [ref=f4e43]: Чоловікам
+          - link [ref=f4e44] [cursor=pointer]:
+            - /url: /productsList/newProducts
+            - paragraph [ref=f4e45]: Нове
+          - link [ref=f4e46] [cursor=pointer]:
+            - /url: /productsList/discounts
+            - paragraph [ref=f4e47]: Знижки
+        - generic [ref=f4e48]:
+          - heading "Інформація" [level=6] [ref=f4e49]
+          - link [ref=f4e50] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=f4e51]: Доставка та оплата
+          - link [ref=f4e52] [cursor=pointer]:
+            - /url: /info
+            - paragraph [ref=f4e53]: Обмін та повернення
+        - generic [ref=f4e54]:
+          - heading "Контакти" [level=6] [ref=f4e55]
+          - link [ref=f4e56] [cursor=pointer]:
+            - /url: /orders#
+            - paragraph [ref=f4e57]: Instagram
+          - link [ref=f4e58] [cursor=pointer]:
+            - /url: /orders#
+            - paragraph [ref=f4e59]: Telegram
+          - link [ref=f4e60] [cursor=pointer]:
+            - /url: mailto:info@edelweiss.ua
+            - paragraph [ref=f4e61]: info@edelweiss.ua
+      - paragraph [ref=f4e63]: © 2026 Edelweiss. Всі права захищено.
+  - alert [ref=f4e64]
