@@ -17,6 +17,8 @@ import { OrderModule } from './order/order.module';
 import { OrderEntity } from './order/entities/order.entity';
 import { BasketItemEntity } from './user/entities/basket-item.entity';
 import { getUploadsDir } from './file/uploads-dir';
+import { QuickOrderModule } from './quick-order/quick-order.module';
+import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { getUploadsDir } from './file/uploads-dir';
         PhotoEntity,
         OrderEntity,
         BasketItemEntity,
+        QuickOrderEntity,
       ],
       synchronize: true,
     }),
@@ -47,6 +50,7 @@ import { getUploadsDir } from './file/uploads-dir';
     FileModule,
     PhotosModule,
     OrderModule,
+    QuickOrderModule,
   ],
   controllers: [AppController],
   providers: [AppService],

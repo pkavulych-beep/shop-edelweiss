@@ -7,7 +7,9 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import Divider from '@mui/material/Divider';
 import Settings from '@mui/icons-material/Settings';
 import Logout from '@mui/icons-material/Logout';
-import { useAppDispatch } from '../../../../redux/hooks';
+import PhoneInTalkOutlined from '@mui/icons-material/PhoneInTalkOutlined';
+import { useAppDispatch, useAppSelector } from '../../../../redux/hooks';
+import { Role } from '../../../../redux/Types/ProductType';
 import { toLogOut } from '../../../../redux/slices/auth-reducer';
 import Link from 'next/link';
 import { classes } from './styleMenuProfile';
@@ -21,6 +23,9 @@ interface IMenuProfileProps {
 
 export const MenuProfile: NextPage<IMenuProfileProps> = ({ open, onClose, onClick, anchorEl }) => {
   const dispatch = useAppDispatch();
+  const isAdmin = useAppSelector(
+    state => state.user.userData?.roles.some(role => role.value === Role.admin) ?? false
+  );
 
   const logOut = () => {
     dispatch(toLogOut());
@@ -57,6 +62,18 @@ export const MenuProfile: NextPage<IMenuProfileProps> = ({ open, onClose, onClic
           </MenuItem>
         </a>
       </Link>
+      {isAdmin && (
+        <Link href='/quickOrders'>
+          <a style={{ textDecoration: 'none', color: 'inherit' }}>
+            <MenuItem>
+              <ListItemIcon>
+                <PhoneInTalkOutlined fontSize='small' />
+              </ListItemIcon>
+              Заявки в 1 клік
+            </MenuItem>
+          </a>
+        </Link>
+      )}
       <MenuItem onClick={logOut}>
         <ListItemIcon>
           <Logout fontSize='small' />
