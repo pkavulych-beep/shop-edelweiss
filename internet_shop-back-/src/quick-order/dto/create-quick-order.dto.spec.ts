@@ -8,7 +8,7 @@ describe('CreateQuickOrderDto', () => {
 
   const valid = { phoneNumber: '380991234567', productId: 7, size: 'M' };
 
-  it.each(['380991234567', '+380991234567', '+38 (099) 123-45-67', '099 123 45 67', '0991234567'])(
+  it.each(['380991234567', '+380991234567', '+38 (099) 123-45-67', '099 123 45 67', '0991234567', '991234567'])(
     'normalizes phone %s to 380XXXXXXXXX',
     async phoneNumber => {
       await expect(validate({ ...valid, phoneNumber })).resolves.toEqual(valid);

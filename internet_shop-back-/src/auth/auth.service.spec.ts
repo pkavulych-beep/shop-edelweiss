@@ -34,6 +34,27 @@ describe('AuthService.validateUser', () => {
     expect(usersService.setPasswordHash).not.toHaveBeenCalled();
   });
 
+  it('normalizes the phone number before the lookup', async () => {
+    usersService.findByPhoneWithPassword.mockResolvedValue({
+      id: 1,
+      phoneNumber: '380991112233',
+      password: await hashPassword('secret123'),
+    });
+
+    const user = await service.validateUser('+38 (099) 111-22-33', 'secret123');
+
+    expect(usersService.findByPhoneWithPassword).toHaveBeenCalledWith(
+      '380991112233',
+    );
+    expect(user).toEqual({ id: 1, phoneNumber: '380991112233' });
+  });
+
+  it('does not look up a phone that cannot be Ukrainian', async () => {
+    await expect(service.validateUser('12', 'secret123')).resolves.toBeNull();
+
+    expect(usersService.findByPhoneWithPassword).not.toHaveBeenCalled();
+  });
+
   it('rejects a wrong password', async () => {
     usersService.findByPhoneWithPassword.mockResolvedValue({
       id: 1,
