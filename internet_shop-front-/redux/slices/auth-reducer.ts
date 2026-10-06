@@ -77,12 +77,16 @@ export const toLogOut = (): AppThunk => async (dispatch) => {
 };
 
 export const updateUserData =
-  (id, dto): AppThunk =>
+  (id, dto): AppThunk<Promise<{ success: boolean; message?: string }>> =>
   async (dispatch) => {
     try {
       const data = await Api().user.update(id, dto);
       dispatch(addUserData(data));
+      return { success: true };
     } catch (e) {
-      console.error(e);
+      return {
+        success: false,
+        message: e.response?.data?.message || 'Не вдалося зберегти дані',
+      };
     }
   };

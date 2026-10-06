@@ -4,6 +4,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
+import CircularProgress from '@mui/material/CircularProgress';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -20,13 +21,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import css from '../../styles/Product.module.scss';
 import Popup from '../../components/Popup';
+import { Api } from '../../api/Api';
+import { normalizePhone } from '../../api/QuickOrderApi';
 
 export default function Product() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { currentProduct, data } = useAppSelector(({ product, user, cart }) => ({
+  const { currentProduct, userPhone } = useAppSelector(({ product, user, cart }) => ({
     ...product,
     idUser: user.userData?.id,
+    userPhone: user.userData?.phoneNumber,
     ...cart,
   }));
 
@@ -35,6 +39,9 @@ export default function Product() {
   const [isCartConfirmOpen, setIsCartConfirmOpen] = useState(false);
   const [isQuickOrderOpen, setIsQuickOrderOpen] = useState(false);
   const [quickOrderPhone, setQuickOrderPhone] = useState('');
+  const [quickOrderError, setQuickOrderError] = useState<string | null>(null);
+  const [isQuickOrderSending, setIsQuickOrderSending] = useState(false);
+  const [isQuickOrderDone, setIsQuickOrderDone] = useState(false);
 
   if (!currentProduct || !currentProduct.photos) {
     return (
@@ -62,6 +69,46 @@ export default function Product() {
 
     dispatch(addPositionsToCart({ idProduct: currentProduct.id, size: selectedSize }));
     setIsCartConfirmOpen(true);
+  };
+
+  const openQuickOrder = () => {
+    if (!selectedSize) {
+      setIsOpenSizeReminder(true);
+      return;
+    }
+    if (!quickOrderPhone && userPhone) {
+      setQuickOrderPhone(userPhone);
+    }
+    setQuickOrderError(null);
+    setIsQuickOrderOpen(true);
+  };
+
+  const sendQuickOrder = async () => {
+    const phoneNumber = normalizePhone(quickOrderPhone);
+    if (!phoneNumber) {
+      setQuickOrderError('Вкажіть номер у форматі +38 (0XX) XXX-XX-XX');
+      return;
+    }
+
+    setIsQuickOrderSending(true);
+    setQuickOrderError(null);
+    try {
+      await Api().quickOrder.create({
+        phoneNumber,
+        productId: currentProduct.id,
+        size: selectedSize ?? undefined,
+      });
+      setIsQuickOrderOpen(false);
+      setIsQuickOrderDone(true);
+    } catch (e) {
+      const message = e.response?.data?.message;
+      setQuickOrderError(
+        (Array.isArray(message) ? message[0] : message) ||
+          'Не вдалося надіслати заявку. Спробуйте ще раз'
+      );
+    } finally {
+      setIsQuickOrderSending(false);
+    }
   };
 
   return (
@@ -104,13 +151,7 @@ export default function Product() {
             Додати в кошик
           </Button>
           <Button
-            onClick={() => {
-              if (!selectedSize) {
-                setIsOpenSizeReminder(true);
-                return;
-              }
-              setIsQuickOrderOpen(true);
-            }}
+            onClick={openQuickOrder}
             variant="text"
             fullWidth
             sx={{
@@ -347,8 +388,15 @@ export default function Product() {
           <TextField
             fullWidth
             placeholder="+38 (0__) ___-__-__"
+            type="tel"
+            inputProps={{ 'aria-label': 'Номер телефону' }}
             value={quickOrderPhone}
-            onChange={(e) => setQuickOrderPhone(e.target.value)}
+            onChange={(e) => {
+              setQuickOrderPhone(e.target.value);
+              setQuickOrderError(null);
+            }}
+            error={Boolean(quickOrderError)}
+            helperText={quickOrderError}
             size="small"
           />
           <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 1, lineHeight: 1.5 }}>
@@ -359,13 +407,28 @@ export default function Product() {
         <Button
           variant="contained"
           fullWidth
-          endIcon={<ArrowForwardIcon />}
-          onClick={() => setIsQuickOrderOpen(false)}
+          endIcon={
+            isQuickOrderSending ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <ArrowForwardIcon />
+            )
+          }
+          disabled={isQuickOrderSending}
+          onClick={sendQuickOrder}
           sx={{ py: 1.5, borderRadius: 3, mt: 2 }}
         >
           Замовити
         </Button>
       </Popup>
+
+      {/* Quick order confirmation popup */}
+      <Popup
+        open={isQuickOrderDone}
+        onClose={() => setIsQuickOrderDone(false)}
+        title="Заявку прийнято"
+        description="Наш менеджер зателефонує вам найближчим часом, щоб уточнити деталі та оформити замовлення"
+      />
     </MainLayout>
   );
 }

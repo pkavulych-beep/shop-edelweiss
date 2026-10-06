@@ -15,7 +15,7 @@ export const News: NextPage = () => {
   useEffect(() => {
     //??
     if (id) {
-      dispatch(setOrdersData(id));
+      dispatch(setOrdersData());
     }
   }, []);
 

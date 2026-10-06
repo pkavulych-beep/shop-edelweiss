@@ -21,16 +21,9 @@ export const ordersApi = (instance: AxiosInstance) => ({
     return data;
   },
 
-  getOrdersUser: async function (userId: number) {
-    const { data } = await instance.get(`users/order/${userId}`);
-
-    const dataRequests = data.map((item) => instance.get(`order/${item.id}`));
-    const orders = await Promise.all<any>(dataRequests);
-    const dataOrders = orders.map((el) => {
-      return el.data;
-    });
-    console.log(dataOrders);
-    return dataOrders;
+  async findMy() {
+    const { data } = await instance.get<Order[]>("order/my");
+    return data;
   },
 
   //for Admin

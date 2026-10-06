@@ -26,7 +26,7 @@ export const { addOrdersData } = ordersSlice.actions;
 export default ordersSlice.reducer;
 
 // Thunks
-export const setOrdersData = (id) => async (dispatch) => {
-  const product = await Api().orders.getOrdersUser(id);
-  dispatch(addOrdersData(product));
+export const setOrdersData = (): AppThunk<Promise<void>> => async (dispatch) => {
+  const orders = await Api().orders.findMy();
+  dispatch(addOrdersData(orders));
 };

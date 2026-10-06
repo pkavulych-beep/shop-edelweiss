@@ -12,17 +12,19 @@ import { RoleEntity } from './roles/entities/roles.entity';
 import { FileModule } from './file/file.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { PhotosModule } from './photos/photos.module';
-import * as path from 'path';
 import { PhotoEntity } from './photos/entities/photo.entity';
 import { OrderModule } from './order/order.module';
 import { OrderEntity } from './order/entities/order.entity';
 import { OrderItemEntity } from './order/entities/order-item.entity';
 import { BasketItemEntity } from './user/entities/basket-item.entity';
+import { getUploadsDir } from './file/uploads-dir';
+import { QuickOrderModule } from './quick-order/quick-order.module';
+import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot({
-      rootPath: path.resolve(__dirname, 'static'),
+      rootPath: getUploadsDir(),
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -39,6 +41,7 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
         OrderEntity,
         OrderItemEntity,
         BasketItemEntity,
+        QuickOrderEntity,
       ],
       synchronize: true,
     }),
@@ -49,6 +52,7 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
     FileModule,
     PhotosModule,
     OrderModule,
+    QuickOrderModule,
   ],
   controllers: [AppController],
   providers: [AppService],

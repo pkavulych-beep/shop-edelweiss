@@ -12,7 +12,8 @@
   "maxFixRounds": 4,
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
-  "limitPauseMinutes": { "claude": 60, "codex": 360 },
+  "limitPauseMinutes": { "claude": 60, "codex": 360, "opencode": 60 },
+  "releaseAfterHours": 12,
   "coders": {
     "opus": {
       "provider": "claude",
@@ -27,6 +28,12 @@
       "effort": "high",
       "takes": ["medium"],
       "ports": { "back": 7778, "front": 3001, "db": "Edelweiss_codex" }
+    },
+    "zen": {
+      "provider": "opencode",
+      "model": "opencode/big-pickle",
+      "takes": ["easy", "medium"],
+      "ports": { "back": 7780, "front": 3003, "db": "Edelweiss_zen" }
     }
   },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
@@ -44,11 +51,12 @@
   "merge": {
     "enabled": true,
     "method": "squash",
-    "maxChangedLines": 400,
+    "maxChangedLines": 600,
     "protectedPaths": [
       ".github/",
       ".claude/",
       ".codex/",
+      "opencode.json",
       "AGENTS.md",
       "CLAUDE.md",
       "tools/conveyor/",

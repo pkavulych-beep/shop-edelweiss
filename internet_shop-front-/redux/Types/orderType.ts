@@ -19,6 +19,7 @@ export type OrderItem = {
 
 export type Order = {
   id: number;
+  // Є лише у відповідях для адміна
   user?: IUserData;
   items: OrderItem[];
   total: number;
@@ -26,4 +27,5 @@ export type Order = {
   comment: string;
   cityName: string;
   department: string;
+  createdAt: string;
 };

@@ -42,8 +42,11 @@ const IN_OFFICE = Boolean(process.env.AGENT_OFFICE_WORKER_ID && process.env.AGEN
 
 const REVIEW_MARK = /<!--\s*conveyor-review\s+sha=([0-9a-f]{7,40})\s+verdict=(approve|changes)\s*-->/i;
 const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
-// What Claude Code and Codex print when a plan's usage window runs out.
-const LIMIT_TEXT = /usage limit|limit reached|hit your (usage )?limit|out of extra usage/i;
+// What Claude Code and Codex print when a plan's usage window runs out (not their warnings that it's close).
+const LIMIT_TEXT = /hit your (?:usage )?limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+// Generated files: their lines don't count towards a pull request's size.
+const LOCK_FILE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/;
 const FINISHED = new Set(['idle', 'done', 'exited', 'offline']);
 const MINUTE = 60_000;
 
@@ -128,9 +131,10 @@ function officeWorkers() {
   return IN_OFFICE ? JSON.parse(run('office-workers', ['list', '--json'])) : null;
 }
 
-/** Hires a worker on `agent` (its provider, model and effort); returns its name, '(dry-run)', or undefined when hiring failed. */
+/** Hires a worker on `agent` (its provider, model and effort, if it has one); returns its name, '(dry-run)', or undefined when hiring failed. */
 function hire(agent, who, title, text, extra = []) {
-  const args = ['hire', '--provider', agent.provider, '--model', agent.model, '--effort', agent.effort, '--json', ...extra];
+  const effort = agent.effort ? ['--effort', agent.effort] : [];
+  const args = ['hire', '--provider', agent.provider, '--model', agent.model, ...effort, '--json', ...extra];
   const w = act(`найняти ${who} (${agent.model}): ${title}`, () => JSON.parse(run('office-workers', args, { input: text })));
   if (w === null) return { name: '(dry-run)' };
   return w && w.name ? { name: w.name, id: w.id } : undefined;
@@ -155,21 +159,57 @@ function jobState(job, workers) {
   return 'running';
 }
 
-/** Whether the end of a worker's terminal says its plan's usage limit ran out. */
-function hitLimit(workerId) {
-  if (!workerId) return false;
-  const file = path.join(SCROLLBACK, `${workerId}.ansi`);
-  if (!existsSync(file)) return false;
-  const size = statSync(file).size;
-  const length = Math.min(size, 4000);
-  const buffer = Buffer.alloc(length);
-  const fd = openSync(file, 'r');
+const scrollbackOf = (workerId) => path.join(SCROLLBACK, `${workerId}.ansi`);
+
+/** How much a worker's terminal has printed so far, so that what it printed before can be told apart. */
+function terminalSize(workerId) {
+  const file = workerId && scrollbackOf(workerId);
+  return file && existsSync(file) ? statSync(file).size : 0;
+}
+
+/** The end of a worker's terminal, from byte `from` on, without colours and cursor moves. */
+function terminalTail(workerId, from = 0) {
+  const size = terminalSize(workerId);
+  const start = Math.max(size - 4000, from <= size ? from : 0);
+  if (size <= start) return '';
+  const buffer = Buffer.alloc(size - start);
+  const fd = openSync(scrollbackOf(workerId), 'r');
   try {
-    readSync(fd, buffer, 0, length, size - length);
+    readSync(fd, buffer, 0, buffer.length, start);
   } finally {
     closeSync(fd);
   }
-  return LIMIT_TEXT.test(buffer.toString('utf8').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ''));
+  return buffer.toString('utf8').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+}
+
+const hour24 = (hour, ampm) => (Number(hour) % 12) + (ampm.toUpperCase() === 'PM' ? 12 : 0);
+
+/**
+ * When a usage limit lifts, if the message says: Codex's "try again at Nov 3rd, 2026 8:00 PM" or
+ * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am".
+ */
+function resetTime(text, now) {
+  let m = /try again at ([a-z]{3})[a-z]* (\d{1,2})(?:st|nd|rd|th)?,? (\d{4}),? (\d{1,2}):(\d{2})\s*([ap]m)/i.exec(text);
+  if (m && MONTHS.includes(m[1].toLowerCase())) {
+    return new Date(Number(m[3]), MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]), hour24(m[4], m[6]), Number(m[5])).getTime();
+  }
+  m = /try again in ((?:\d+\s*(?:days?|hours?|hrs?|minutes?|mins?)[\s,]*(?:and\s*)?)+)/i.exec(text);
+  if (m) return now + [...m[1].matchAll(/(\d+)\s*([dhm])/gi)].reduce((ms, [, n, unit]) => ms + Number(n) * { d: 1440, h: 60, m: 1 }[unit.toLowerCase()] * MINUTE, 0);
+  m = /resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i.exec(text);
+  if (m) {
+    const at = new Date(now);
+    if (m[1] && MONTHS.includes(m[1].toLowerCase())) at.setMonth(MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]));
+    at.setHours(hour24(m[3], m[5]), Number(m[4] ?? 0), 0, 0);
+    if (!m[1] && at.getTime() <= now) at.setDate(at.getDate() + 1);
+    return at.getTime();
+  }
+  return undefined;
+}
+
+/** Whether a worker's terminal, from byte `from` on, says its plan's usage limit ran out, and until when if it says. */
+function usageLimit(workerId, from) {
+  const text = terminalTail(workerId, from);
+  return LIMIT_TEXT.test(text) ? { until: resetTime(text, Date.now()) } : null;
 }
 
 // ── Coders ───────────────────────────────────────────────────────────────────────────────────
@@ -177,7 +217,7 @@ function hitLimit(workerId) {
 /** An issue's difficulty: its label, or the default when it has none. */
 const difficultyOf = (issue) => config.difficultyLabels.find((l) => labelsOf(issue).includes(l)) ?? config.defaultDifficulty;
 
-/** The coder that takes issues of `difficulty`, if any does. */
+/** The first coder that takes issues of `difficulty`, if any does. */
 const coderFor = (difficulty) => Object.keys(config.coders).find((name) => config.coders[name].takes.includes(difficulty));
 
 /** The ports and database an agent runs the shop on, for its prompt. */
@@ -315,8 +355,11 @@ function mergeBlockers(pr) {
     .map((f) => f.path)
     .filter((p) => config.merge.protectedPaths.some((x) => p === x || p.startsWith(x)));
   if (touched.length) why.push(`змінює захищені файли (${touched.join(', ')})`);
-  const size = pr.additions + pr.deletions;
-  if (size > config.merge.maxChangedLines) why.push(`завеликий: ${size} змінених рядків при ліміті ${config.merge.maxChangedLines}`);
+  const files = pr.files ?? [];
+  const size = files.length
+    ? files.filter((f) => !LOCK_FILE.test(f.path)).reduce((n, f) => n + (f.additions ?? 0) + (f.deletions ?? 0), 0)
+    : pr.additions + pr.deletions;
+  if (size > config.merge.maxChangedLines) why.push(`завеликий: ${size} змінених рядків (без lock-файлів) при ліміті ${config.merge.maxChangedLines}`);
   return why;
 }
 
@@ -394,18 +437,55 @@ function tick() {
       if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
         s.job.limited = false;
         s.job.since = now;
+        s.job.scrollFrom = terminalSize(s.job.workerId); // the old limit message stays on its screen
       }
     }
   }
   const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
+
+  /**
+   * A job's agent ran into its plan's usage limit: no more agents on that plan until it lifts. The job waits for
+   * its agent, unless that takes longer than releaseAfterHours: then the agent goes home and the work goes back,
+   * as if it never started. True while the job is held.
+   */
+  const waitOutLimit = (s, kind, n, limit) => {
+    const job = s.job;
+    const provider = job.provider ?? 'claude';
+    const until = limit.until > now ? limit.until : now + pauseMinutes(provider) * MINUTE;
+    state.paused[provider] = Math.max(state.paused[provider] ?? 0, until);
+    const release = until - now > config.releaseAfterHours * 60 * MINUTE;
+    const what = kind === 'qa' ? 'перевірка QA' : `${kind === 'pr' ? 'PR' : 'issue'} #${n}`;
+    log(`${job.worker} уперся в ліміт ${provider}: пауза для агентів ${provider} до ${when(until)}${release ? `, ${what} повертається в чергу` : ''}`);
+    notify('Пауза через ліміт', `${job.worker} уперся в ліміт ${provider}. Агентів ${provider} не наймаю до ${when(until)}`);
+    if (!release) {
+      job.limited = true;
+      return true;
+    }
+    if (workers) sendHome([job.worker], `ліміт ${provider} до ${when(until)}`);
+    delete s.job;
+    if (job.kind === 'code') s.checked = true; // not a failed attempt
+    if (job.kind === 'fix') {
+      s.fixRounds = Math.max(0, (s.fixRounds ?? 1) - 1);
+      delete s.fixFor;
+    }
+    if (job.kind === 'review') {
+      s.reviewRounds = Math.max(0, (s.reviewRounds ?? 1) - 1);
+      delete s.reviewedSha;
+    }
+    return false;
+  };
 
   /** Brings a job up to date; true while its worker is still on it (or waiting out a limit). */
   const busy = (s, kind, n) => {
     const job = s.job;
     if (!job) return false;
     const where = jobState(job, workers);
-    if (where === 'unknown' || where === 'running') return true;
-    if (job.limited) return true;
+    if (where === 'unknown' || job.limited) return true;
+    // A usage limit can leave the agent stuck at a question (Codex offers a cheaper model) while its status
+    // still says it's working, so its terminal is read whatever the status.
+    const limit = where === 'gone' ? null : usageLimit(job.workerId, job.scrollFrom);
+    if (limit) return waitOutLimit(s, kind, n, limit);
+    if (where === 'running') return true;
     if (where === 'needs_input') {
       job.waitingSince ??= now;
       if (now - job.waitingSince > config.needsInputMinutes * MINUTE && !job.escalated) {
@@ -415,14 +495,6 @@ function tick() {
       return true;
     }
     delete job.waitingSince;
-    if (where === 'finished' && hitLimit(job.workerId)) {
-      job.limited = true;
-      const provider = job.provider ?? 'claude';
-      state.paused[provider] = Math.max(state.paused[provider] ?? 0, now + pauseMinutes(provider) * MINUTE);
-      log(`${job.worker} уперся в ліміт використання: пауза для агентів ${provider} до ${when(state.paused[provider])}`);
-      notify('Пауза через ліміт', `${job.worker} уперся в ліміт ${provider}. Агентів ${provider} не наймаю до ${when(state.paused[provider])}`);
-      return true;
-    }
     s.lastJob = { ...job, ended: now };
     delete s.job;
     const done = { review: "рев'ю написане", qa: 'QA закінчив' }[job.kind];
@@ -488,7 +560,7 @@ function tick() {
     let worker;
     if (author) {
       if (tell(author.name, text, `PR #${n}: повертаємо автору ${author.name} (${reasons.join(', ')})`) !== undefined) {
-        worker = { name: author.name, id: author.id };
+        worker = { name: author.name, id: author.id, scrollFrom: terminalSize(author.id) };
       }
     } else {
       worker = hire(coder, `кодера ${s.coder}`, `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
@@ -496,7 +568,7 @@ function tick() {
     if (!worker) return;
     s.fixRounds = (s.fixRounds ?? 0) + 1;
     s.fixFor = key;
-    s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, since: now };
+    s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, scrollFrom: worker.scrollFrom, since: now };
     busyCoders.add(s.coder);
   };
 
@@ -617,10 +689,13 @@ function tick() {
     })
     .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt));
   let started = 0;
+  const claimed = new Set();
   for (const [name, coder] of Object.entries(config.coders)) {
     if (busyCoders.has(name) || pausedFor(coder.provider) || inFlight + started >= config.maxOpenPullRequests) continue;
-    const next = ready.find((i) => coderFor(difficultyOf(i)) === name);
+    // Several coders can take the same difficulty: each free one takes the most important issue it can.
+    const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number));
     if (!next) continue;
+    claimed.add(next.number);
     const text = prompt('coder', { issue: next.number, title: next.title, ...portsOf(coder) });
     const worker = hire(coder, `кодера ${name}`, `issue #${next.number} «${next.title}»`, text, ['--issue', String(next.number)]);
     if (!worker) continue;

@@ -6,6 +6,7 @@ import { productApi } from './ProductApi';
 import { authApi } from './authApi';
 import { cartApi } from './CartApi';
 import { ordersApi } from './OrderApi';
+import { quickOrderApi } from './QuickOrderApi';
 
 export type ApiReturnType = {
   user: ReturnType<typeof userApi>;
@@ -13,6 +14,7 @@ export type ApiReturnType = {
   auth: ReturnType<typeof authApi>;
   cart: ReturnType<typeof cartApi>;
   orders: ReturnType<typeof ordersApi>;
+  quickOrder: ReturnType<typeof quickOrderApi>;
 };
 
 export const Api = (
@@ -33,6 +35,7 @@ export const Api = (
     product: productApi(instance),
     auth: authApi(instance),
     cart: cartApi(instance),
-    orders: ordersApi(instance)
+    orders: ordersApi(instance),
+    quickOrder: quickOrderApi(instance)
   };
 };

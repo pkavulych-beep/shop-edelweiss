@@ -148,6 +148,7 @@ describe('OrderService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+
   describe('update', () => {
     it('changes only the fields from the request', async () => {
       const repository = {
@@ -168,6 +169,22 @@ describe('OrderService', () => {
         status: Status.Sent,
         comment: 'Подзвоніть',
         total: 1800,
+      });
+    });
+  });
+
+  describe('findUserOrders', () => {
+    it('loads the user orders with items in one query, newest first', async () => {
+      const orders = [{ id: 11, items: [{ id: 1, size: 'M', quantity: 2 }] }];
+      const repository = { find: jest.fn().mockResolvedValue(orders) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.findUserOrders(3)).resolves.toBe(orders);
+      expect(repository.find).toHaveBeenCalledTimes(1);
+      expect(repository.find).toHaveBeenCalledWith({
+        relations: { items: { product: true } },
+        where: { user: { id: 3 } },
+        order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
       });
     });
   });

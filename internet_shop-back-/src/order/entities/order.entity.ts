@@ -1,6 +1,7 @@
 import { UserEntity } from 'src/user/entities/user.entity';
 import {
   Column,
+  CreateDateColumn,
   Entity,
   ManyToOne,
   OneToMany,
@@ -35,4 +36,8 @@ export class OrderEntity {
 
   @Column()
   department: string;
+
+  // timestamptz: база в UTC, без поясу дата зсувалася б на різницю часу
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
 }

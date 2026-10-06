@@ -10,6 +10,7 @@ import { Position } from '../components/cartComponents/position/position';
 import { EmptyCart } from '../components/cartComponents/emptyCart/EmptyCart';
 import { Sum } from '../components/cartComponents/sum/sum';
 import { Ordering } from '../components/cartComponents/ordering/Ordering';
+import { LoginRequired } from '../components/cartComponents/ordering/loginRequired/LoginRequired';
 import {
   fetchCartProductDetails,
   loadCartFromLocalStorage,
@@ -75,13 +76,15 @@ const Cart: NextPage = () => {
           >
             {/* Left: Order form */}
             <Box>
-              <Ordering
-                items={enrichedProducts.map((product) => ({
-                  productId: product.id,
-                  size: product.selectedSize,
-                  quantity: product.quantity,
-                }))}
-              />
+              <LoginRequired>
+                <Ordering
+                  items={enrichedProducts.map((product) => ({
+                    productId: product.id,
+                    size: product.selectedSize,
+                    quantity: product.quantity,
+                  }))}
+                />
+              </LoginRequired>
             </Box>
 
             {/* Right: Order summary */}

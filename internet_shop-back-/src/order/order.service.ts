@@ -122,12 +122,14 @@ export class OrderService {
     });
   }
 
-  // findUserOrders(idUser: number) {
-  //   return this.repository.find({
-  //     relations: ['user', 'items'],
-  //     where: [{ user.id: idUser }],
-  //   });
-  // }
+  // Замовлення користувача разом із позиціями одним запитом, нові першими
+  findUserOrders(userId: number) {
+    return this.repository.find({
+      relations: { items: { product: true } },
+      where: { user: { id: userId } },
+      order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
+    });
+  }
 
   async update(updateOrderDto: UpdateOrderDto) {
     const { id, ...changes } = updateOrderDto;

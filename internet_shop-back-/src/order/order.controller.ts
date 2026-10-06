@@ -26,10 +26,12 @@ export class OrderController {
     return this.orderService.create(req.user.id, createOrderDto);
   }
 
-  // @Get('user/:id')
-  // findUserOrders(@Param('id') id: string) {
-  //   return this.orderService.findUserOrders(+id);
-  // }
+  // Оголошено до @Get(':id'), інакше «my» сприймалося б як id
+  @Get('my')
+  @UseGuards(JwtAuthGuard)
+  findMy(@Request() req) {
+    return this.orderService.findUserOrders(req.user.id);
+  }
 
   @Get()
   @Roles('ADMIN')
