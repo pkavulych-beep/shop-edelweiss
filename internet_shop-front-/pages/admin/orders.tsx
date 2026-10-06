@@ -17,7 +17,7 @@ import { Role } from '../../redux/Types/ProductType';
 import { Status } from '../../redux/Types/orderType';
 import { Api } from '../../api/Api';
 import { OrdersPage } from '../../api/OrderApi';
-import { formatPhone } from '../../api/QuickOrderApi';
+import { formatPhone } from '../../utils/phone';
 import { statusColor } from '../../components/MyOrders/MyOrders';
 
 const LIMIT = 20;

@@ -21,6 +21,7 @@ import { toLogOut, updateUserData } from '../redux/slices/auth-reducer';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { MyOrders } from '../components/MyOrders/MyOrders';
+import { maskPhoneInput } from '../utils/phone';
 
 type Tab = 'info' | 'orders' | 'addresses' | 'wishlist';
 
@@ -252,9 +253,10 @@ export default function ProfilePage() {
                 <TextField
                   fullWidth
                   size="small"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  value={maskPhoneInput(phone)}
+                  onChange={(e) => setPhone(maskPhoneInput(e.target.value, phone))}
                   placeholder="+38 (0__) ___-__-__"
+                  inputProps={{ inputMode: 'tel' }}
                 />
               </Box>
 
