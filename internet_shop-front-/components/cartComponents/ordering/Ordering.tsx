@@ -17,6 +17,7 @@ import { CreateOrderItemDto } from '../../../api/OrderApi';
 import { useRouter } from 'next/dist/client/router';
 import { cleanTheBasket } from '../../../redux/slices/cart-reducer';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { normalizePhone } from '../../../utils/phone';
 
 interface OrderingComponentProps {
   items: CreateOrderItemDto[];
@@ -32,7 +33,10 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const id = userData?.id;
 
   const checkUserData = async (newFullName, newPhoneNumber) => {
-    if (fullName === newFullName && phoneNumber === newPhoneNumber) {
+    // Порівнюємо за нормалізованим номером: у полі він із маскою,
+    // у профілі — у форматі бази
+    const samePhone = normalizePhone(phoneNumber) === normalizePhone(newPhoneNumber);
+    if (fullName === newFullName && samePhone) {
       return { success: true };
     }
     return dispatch(

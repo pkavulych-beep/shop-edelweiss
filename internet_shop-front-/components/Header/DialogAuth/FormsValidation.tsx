@@ -1,11 +1,17 @@
 import * as yup from "yup";
+import { normalizePhone, PHONE_MESSAGE } from "../../../utils/phone";
+
+// Рядок, а не число: yup.number().min(10) перевіряє значення числа,
+// тож «12» така схема вважала б валідним номером
+const phoneNumber = yup
+  .string()
+  .typeError("Введіть номер телефону")
+  .trim()
+  .required("Обов'язкове поле")
+  .test("ua-phone", PHONE_MESSAGE, (value) => normalizePhone(value || "") !== null);
 
 export const LoginFormValidation = yup.object().shape({
-  phoneNumber: yup
-    .number()
-    .typeError("Введіть номер телефону цифрами")
-    .min(10, "Введіть номер телефону")
-    .required("Обов'язкове поле"),
+  phoneNumber,
   password: yup
     .string()
     .required("Обов'язкове поле")

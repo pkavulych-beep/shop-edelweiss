@@ -22,7 +22,7 @@ import { useRouter } from 'next/router';
 import css from '../../styles/Product.module.scss';
 import Popup from '../../components/Popup';
 import { Api } from '../../api/Api';
-import { normalizePhone } from '../../api/QuickOrderApi';
+import { maskPhoneInput, normalizePhone } from '../../utils/phone';
 
 export default function Product() {
   const dispatch = useAppDispatch();
@@ -390,9 +390,9 @@ export default function Product() {
             placeholder="+38 (0__) ___-__-__"
             type="tel"
             inputProps={{ 'aria-label': 'Номер телефону' }}
-            value={quickOrderPhone}
+            value={maskPhoneInput(quickOrderPhone)}
             onChange={(e) => {
-              setQuickOrderPhone(e.target.value);
+              setQuickOrderPhone(maskPhoneInput(e.target.value, quickOrderPhone));
               setQuickOrderError(null);
             }}
             error={Boolean(quickOrderError)}
