@@ -1,6 +1,7 @@
 import {
-  ForbiddenException,
+  HttpException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -61,8 +62,11 @@ export class AuthService {
         token: this.generateJwtToken(userData),
       };
     } catch (e) {
+      if (e instanceof HttpException) {
+        throw e;
+      }
       console.error(e);
-      throw new ForbiddenException('Помилка під час реєстрації');
+      throw new InternalServerErrorException('Помилка під час реєстрації');
     }
   }
 }
