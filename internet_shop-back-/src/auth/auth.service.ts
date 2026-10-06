@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { RoleEntity } from 'src/roles/entities/roles.entity';
 import { UsersService } from 'src/user/user.service';
 import { CreateUserDto } from '../user/dto/create-user.dto';
+import { normalizePhone, UA_PHONE_PATTERN } from '../common/phone';
 import { hashPassword, isPasswordHash, verifyPassword } from './password';
 
 @Injectable()
@@ -18,7 +19,12 @@ export class AuthService {
   ) {}
 
   async validateUser(phoneNumber: string, password: string): Promise<any> {
-    const user = await this.usersService.findByPhoneWithPassword(phoneNumber);
+    const phone = normalizePhone(phoneNumber);
+    // Номер, який не вдається звести до українського, шукати зайве
+    if (typeof phone !== 'string' || !UA_PHONE_PATTERN.test(phone)) {
+      return null;
+    }
+    const user = await this.usersService.findByPhoneWithPassword(phone);
     if (!user || !(await verifyPassword(password, user.password))) {
       return null;
     }

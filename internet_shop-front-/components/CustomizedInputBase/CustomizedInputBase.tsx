@@ -1,25 +1,45 @@
-import React, { FC } from 'react';
+import React, { ChangeEvent, FC } from 'react';
 import { useField } from 'formik';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { maskPhoneInput } from '../../utils/phone';
 
 interface Props {
   type: string;
   name: string;
   placeholder: string;
   multiline?: boolean;
+  phoneMask?: boolean;
 }
 
-const CustomizedInputBase: FC<Props> = ({ placeholder, type, name, multiline = false }) => {
-  const [field, meta] = useField(name);
+const CustomizedInputBase: FC<Props> = ({
+  placeholder,
+  type,
+  name,
+  multiline = false,
+  phoneMask = false,
+}) => {
+  const [field, meta, helpers] = useField(name);
   const hasError = meta.touched && !!meta.error;
+
+  const inputProps = phoneMask
+    ? {
+        ...field,
+        value: maskPhoneInput(field.value ?? ''),
+        inputMode: 'tel' as const,
+        onChange: (event: ChangeEvent<HTMLInputElement>) =>
+          helpers.setValue(
+            maskPhoneInput(event.target.value, field.value ?? ''),
+          ),
+      }
+    : field;
 
   return (
     <>
       <TextField
         error={hasError}
         placeholder={placeholder}
-        inputProps={field}
+        inputProps={inputProps}
         margin="dense"
         label={placeholder}
         type={type}
