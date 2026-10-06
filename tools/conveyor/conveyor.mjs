@@ -42,6 +42,8 @@ const IN_OFFICE = Boolean(process.env.AGENT_OFFICE_WORKER_ID && process.env.AGEN
 
 const REVIEW_MARK = /<!--\s*conveyor-review\s+sha=([0-9a-f]{7,40})\s+verdict=(approve|changes)\s*-->/i;
 const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+// A line like "Залежить від #12, #13" in an issue: it waits until those issues are closed.
+const DEPENDS = /^[\s*>-]*(?:залежить від|depends on|blocked by)[:\s](.*)$/gim;
 // What Claude Code and Codex print when a plan's usage window runs out (not their warnings that it's close).
 const LIMIT_TEXT = /hit your (?:usage )?limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -244,18 +246,20 @@ function openPulls() {
   );
 }
 
-/** Open issues the conveyor may take: labelled `agent`, or our own with a priority it takes on its own; never `manual`. */
-function queuedIssues() {
-  return ghJson(
-    'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '200',
-    '--json', 'number,title,labels,assignees,createdAt,author',
-  ).filter((i) => {
-    const labels = labelsOf(i);
-    if (labels.includes(config.manualLabel)) return false;
-    // A priority alone counts only on our own issues: anyone can open one on a public repo, and its text becomes an agent's task.
-    return labels.includes(config.issueLabel) || (i.author?.login === me.login && labels.some((l) => config.autoPriorities.includes(l)));
-  });
+function openIssues() {
+  return ghJson('issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '200', '--json', 'number,title,body,labels,assignees,createdAt,author');
 }
+
+/** Whether the conveyor may take an issue: labelled `agent`, or our own with a priority it takes on its own; never `manual`. */
+function inQueue(issue) {
+  const labels = labelsOf(issue);
+  if (labels.includes(config.manualLabel)) return false;
+  // A priority alone counts only on our own issues: anyone can open one on a public repo, and its text becomes an agent's task.
+  return labels.includes(config.issueLabel) || (issue.author?.login === me.login && labels.some((l) => config.autoPriorities.includes(l)));
+}
+
+/** The issues an issue waits for ("Залежить від #12, #13"). */
+const dependsOn = (issue) => [...(issue.body ?? '').matchAll(DEPENDS)].flatMap((m) => [...m[1].matchAll(/#(\d+)/g)].map((x) => Number(x[1])));
 
 /** Merged pull requests that changed the shop since the last QA run, oldest first. */
 function mergedSinceQa() {
@@ -428,7 +432,10 @@ function tick() {
 
   // Only our own pull requests: agents push as this account, and a stranger's PR must never be merged by a script.
   const pulls = openPulls().filter((p) => !p.isDraft && !p.isCrossRepository && p.author?.login === me.login);
-  const issues = queuedIssues();
+  const open = openIssues();
+  const openNumbers = new Set(open.map((i) => i.number));
+  const issues = open.filter(inQueue);
+  const waits = (i) => dependsOn(i).some((n) => openNumbers.has(n));
   for (const i of issues) if (state.issues[i.number]) onHold(i, state.issues[i.number], ISSUE_COUNTS);
   const busyCoders = new Set();
   let reviewerBusy = false;
@@ -686,7 +693,7 @@ function tick() {
     return i < 0 ? config.priorityLabels.length : i;
   };
   const ready = issues
-    .filter((i) => !labelsOf(i).includes('needs-human') && !taken.has(i.number))
+    .filter((i) => !labelsOf(i).includes('needs-human') && !taken.has(i.number) && !waits(i))
     .filter((i) => {
       const s = state.issues[i.number];
       if (s?.job || (s?.failures ?? 0) >= config.maxIssueAttempts) return false;
@@ -731,9 +738,10 @@ function tick() {
   }
   saveState();
   const noCoder = issues.filter((i) => !coderFor(difficultyOf(i))).length;
+  const waiting = issues.filter(waits).length;
   const notes = [
     `PR у роботі ${inFlight}`,
-    `issues у черзі ${issues.length}${noCoder ? ` (без кодера ${noCoder})` : ''}`,
+    `issues у черзі ${issues.length}${noCoder ? ` (без кодера ${noCoder})` : ''}${waiting ? ` (чекають на інші ${waiting})` : ''}`,
     busyCoders.size ? `працюють ${[...busyCoders].join(', ')}` : '',
     !config.qa?.enabled ? '' : qa.job ? 'QA працює' : `мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`,
     ...Object.entries(state.paused).filter(([, until]) => until > now).map(([p, until]) => `${p} на паузі до ${when(until)}`),

@@ -48,6 +48,12 @@ const scenarios = [
   { name: 'hard, medium, easy, Codex на паузі → Opus hard, Zen medium (P1 раніше за easy P2)',
     fx: { workers: [me], issues: [issue(32, ['hard']), issue(31, ['medium', 'P1-high']), issue(30, ['easy', 'P2-medium'])], state: st({ paused: { codex: later } }) },
     want: [`${HIRE('claude', 'opus')}--effort high --json --issue 32`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 31`], not: ['--issue 30'] },
+  { name: 'P0 «Залежить від #90», а #90 відкрите → Zen бере P2, яке ні від чого не залежить',
+    fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: 'Що зробити…\n\nЗалежить від #90.' }, issue(92, ['easy', 'P2-medium']), { ...issue(90, ['hard', 'P1-high']), labels: [{ name: 'manual' }] }], state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 92`], not: ['--issue 91'] },
+  { name: '«Залежить від #90, #93», обидва вже закриті → бере',
+    fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: '- Залежить від #90, #93' }], state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 91`] },
   { name: 'чуже issue з P0 без agent → не брати', fx: { workers: [me], issues: [{ ...issue(40, ['P0-critical'], 'stranger'), labels: [{ name: 'P0-critical' }] }], state: st() }, not: ['hire'] },
   { name: 'issue з manual → не брати', fx: { workers: [me], issues: [issue(41, ['manual', 'easy'])], state: st() }, not: ['hire'] },
   // ── Pull requests ──
