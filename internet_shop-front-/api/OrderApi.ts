@@ -1,9 +1,15 @@
 import { AxiosInstance } from "axios";
 import { Order } from "../redux/Types/orderType";
 
-// Користувача бекенд бере з JWT-токена
+export interface CreateOrderItemDto {
+  productId: number;
+  size: string;
+  quantity: number;
+}
+
+// Користувача бекенд бере з JWT-токена, ціни й суму рахує сам
 export interface CreateOrderDto {
-  productId: number[];
+  items: CreateOrderItemDto[];
   cityName: string;
   department: string;
   comment: string;

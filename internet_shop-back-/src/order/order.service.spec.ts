@@ -1,129 +1,118 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { OrderService } from './order.service';
+import { Status } from './statusEnum';
 
 describe('OrderService', () => {
-  it('does not create an order with a hidden product', async () => {
-    const repository = { save: jest.fn() };
-    const productService = {
-      assertPurchasable: jest.fn().mockRejectedValue(new NotFoundException()),
-    };
-    const userService = { findOne: jest.fn() };
-    const service = new OrderService(repository as any, productService as any, userService as any);
-
-    await expect(
-      service.create(1, {
-        productId: [1, 5],
-        comment: '',
-        cityName: 'Київ',
-        department: '1',
-        size: 'M',
-      }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    expect(productService.assertPurchasable).toHaveBeenCalledWith([1, 5]);
-    expect(repository.save).not.toHaveBeenCalled();
-  });
-
   describe('create', () => {
-    const dto = {
-      productId: [1, 2],
-      comment: '',
-      cityName: 'Київ',
-      department: '1',
-      size: 'M',
-    };
     const user = { id: 3 };
-    const products = [{ id: 1 }, { id: 2 }];
-    let manager;
+    const products = [
+      { id: 1, sizes: ['S', 'M'], price: 500, salePrice: null },
+      { id: 5, sizes: ['L'], price: 1000, salePrice: 800 },
+    ];
+    const delivery = { comment: '', cityName: 'Київ', department: '1' };
     let repository;
     let productService;
+    let userService;
     let service: OrderService;
 
     beforeEach(() => {
-      manager = {
-        save: jest.fn((_target, order) => Promise.resolve({ id: 10, ...order })),
-      };
       repository = {
-        save: jest.fn(),
-        manager: { transaction: jest.fn((work) => work(manager)) },
+        save: jest.fn().mockResolvedValue({ id: 10 }),
+        findOne: jest.fn().mockResolvedValue({ id: 10, items: [] }),
       };
       productService = {
-        assertPurchasable: jest.fn().mockResolvedValue(undefined),
-        findProductsMain: jest.fn().mockResolvedValue(products),
+        findPurchasable: jest.fn((ids: number[]) =>
+          Promise.resolve(products.filter((p) => ids.includes(p.id))),
+        ),
       };
-      const userService = { findOne: jest.fn().mockResolvedValue(user) };
-      service = new OrderService(repository, productService, userService as any);
+      userService = { findOne: jest.fn().mockResolvedValue(user) };
+      service = new OrderService(repository, productService, userService);
     });
 
-    it('saves the order for the token user with all products in one transaction', async () => {
-      const result = await service.create(3, dto);
-
-      expect(productService.findProductsMain).toHaveBeenCalledTimes(1);
-      expect(productService.findProductsMain).toHaveBeenCalledWith([1, 2], manager);
-      expect(manager.save).toHaveBeenCalledTimes(1);
-      expect(manager.save.mock.calls[0][1]).toMatchObject({
-        user,
-        productsInOrder: products,
+    it('saves items with size, quantity and the price from the database', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [
+          { productId: 1, size: 'M', quantity: 2 },
+          { productId: 5, size: 'L', quantity: 1 },
+        ],
       });
-      expect(repository.save).not.toHaveBeenCalled();
-      expect(result).toMatchObject({ id: 10, productsInOrder: products });
-      expect(result).not.toHaveProperty('user');
+
+      expect(userService.findOne).toHaveBeenCalledWith(3);
+      expect(repository.save).toHaveBeenCalledTimes(1);
+      expect(repository.save.mock.calls[0][0]).toMatchObject({
+        user,
+        ...delivery,
+        items: [
+          { productId: 1, size: 'M', quantity: 2, price: 500 },
+          { productId: 5, size: 'L', quantity: 1, price: 800 },
+        ],
+        total: 1800,
+      });
     });
 
-    it('does not save the order when a product is missing', async () => {
-      productService.findProductsMain.mockRejectedValue(new NotFoundException());
+    it('keeps different sizes of one product as separate items', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [
+          { productId: 1, size: 'S', quantity: 1 },
+          { productId: 1, size: 'M', quantity: 1 },
+          { productId: 1, size: 'S', quantity: 2 },
+        ],
+      });
 
-      await expect(service.create(3, dto)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-      expect(manager.save).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('update', () => {
-    let manager;
-    let productService;
-    let service: OrderService;
-
-    beforeEach(() => {
-      manager = { save: jest.fn((order) => Promise.resolve(order)) };
-      const repository = {
-        findOne: jest.fn().mockResolvedValue({ id: 10, comment: 'old' }),
-        manager: { transaction: jest.fn((work) => work(manager)) },
-      };
-      productService = {
-        findProductsMain: jest.fn().mockResolvedValue([{ id: 7 }]),
-      };
-      service = new OrderService(repository as any, productService, {} as any);
+      expect(productService.findPurchasable).toHaveBeenCalledWith([1]);
+      expect(repository.save.mock.calls[0][0]).toMatchObject({
+        items: [
+          { productId: 1, size: 'S', quantity: 3, price: 500 },
+          { productId: 1, size: 'M', quantity: 1, price: 500 },
+        ],
+        total: 2000,
+      });
     });
 
-    it('replaces the products before saving', async () => {
-      const result = await service.update({ id: 10, productId: [7] } as any);
-
-      expect(productService.findProductsMain).toHaveBeenCalledWith([7], manager);
-      expect(manager.save).toHaveBeenCalledTimes(1);
-      expect(result.productsInOrder).toEqual([{ id: 7 }]);
-    });
-
-    it('keeps the products when productId is not given', async () => {
-      const result = await service.update({ id: 10, comment: 'new' } as any);
-
-      expect(productService.findProductsMain).not.toHaveBeenCalled();
-      expect(result).not.toHaveProperty('productsInOrder');
-      expect(result.comment).toBe('new');
-    });
-
-    it('does not save a product that is not found', async () => {
-      productService.findProductsMain.mockRejectedValue(new NotFoundException());
-
+    it('returns the saved order with its items', async () => {
       await expect(
-        service.update({ id: 10, productId: [99] } as any),
+        service.create(3, {
+          ...delivery,
+          items: [{ productId: 1, size: 'M', quantity: 1 }],
+        }),
+      ).resolves.toEqual({ id: 10, items: [] });
+      expect(repository.findOne.mock.calls[0][0]).toMatchObject({
+        where: { id: 10 },
+      });
+    });
+
+    it('does not create an order with a hidden or missing product', async () => {
+      await expect(
+        service.create(3, {
+          ...delivery,
+          items: [
+            { productId: 1, size: 'M', quantity: 1 },
+            { productId: 7, size: 'M', quantity: 1 },
+          ],
+        }),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(manager.save).not.toHaveBeenCalled();
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('does not create an order with a size the product does not have', async () => {
+      await expect(
+        service.create(3, {
+          ...delivery,
+          items: [{ productId: 5, size: 'XS', quantity: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
     });
   });
 
   describe('findOneForUser', () => {
-    const order = { id: 10, user: { id: 3 }, productsInOrder: [] };
+    const order = { id: 10, user: { id: 3 }, items: [] };
     let service: OrderService;
 
     beforeEach(() => {
@@ -138,13 +127,13 @@ describe('OrderService', () => {
     it('returns the order to its owner without the user relation', async () => {
       await expect(
         service.findOneForUser(10, { id: 3, roles: [{ value: 'USER' }] }),
-      ).resolves.toEqual({ id: 10, productsInOrder: [] });
+      ).resolves.toEqual({ id: 10, items: [] });
     });
 
     it('returns any order to ADMIN', async () => {
       await expect(
         service.findOneForUser(10, { id: 1, roles: [{ value: 'ADMIN' }] }),
-      ).resolves.toEqual({ id: 10, productsInOrder: [] });
+      ).resolves.toEqual({ id: 10, items: [] });
     });
 
     it('forbids another user', async () => {
@@ -160,18 +149,42 @@ describe('OrderService', () => {
     });
   });
 
+  describe('update', () => {
+    it('changes only the fields from the request', async () => {
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          comment: 'Подзвоніть',
+          total: 1800,
+        }),
+        save: jest.fn((order) => Promise.resolve(order)),
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(
+        service.update({ id: 10, status: Status.Sent, comment: undefined }),
+      ).resolves.toEqual({
+        id: 10,
+        status: Status.Sent,
+        comment: 'Подзвоніть',
+        total: 1800,
+      });
+    });
+  });
+
   describe('findUserOrders', () => {
-    it('loads the user orders with products in one query, newest first', async () => {
-      const orders = [{ id: 11, productsInOrder: [{ id: 1 }] }];
+    it('loads the user orders with items in one query, newest first', async () => {
+      const orders = [{ id: 11, items: [{ id: 1, size: 'M', quantity: 2 }] }];
       const repository = { find: jest.fn().mockResolvedValue(orders) };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await expect(service.findUserOrders(3)).resolves.toBe(orders);
       expect(repository.find).toHaveBeenCalledTimes(1);
       expect(repository.find).toHaveBeenCalledWith({
-        relations: ['productsInOrder'],
+        relations: { items: { product: true } },
         where: { user: { id: 3 } },
-        order: { createdAt: 'DESC', id: 'DESC' },
+        order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
       });
     });
   });

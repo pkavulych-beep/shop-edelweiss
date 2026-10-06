@@ -11,7 +11,6 @@ import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
 import { Order, Status } from '../../redux/Types/orderType';
-import { PriceBox } from '../PriceBox/PriceBox';
 
 const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
@@ -26,13 +25,6 @@ const formatDate = (value: string) =>
     month: 'long',
     year: 'numeric',
   });
-
-// Ціна на момент замовлення не зберігається, тож рахуємо за поточними цінами
-const orderTotal = (order: Order) =>
-  order.productsInOrder.reduce(
-    (sum, product) => sum + (product.salePrice ? product.salePrice : product.price),
-    0
-  );
 
 const OrderCard: FC<{ order: Order }> = ({ order }) => (
   <Box
@@ -70,9 +62,9 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
     </Typography>
 
     <Box>
-      {order.productsInOrder.map((product) => (
+      {order.items.map(({ id, product, size, quantity, price }) => (
         <Box
-          key={product.id}
+          key={id}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -108,13 +100,14 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
                 </Typography>
               </a>
             </Link>
-            {order.size && (
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                Розмір: {order.size}
-              </Typography>
-            )}
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+              Розмір: {size} · {quantity} шт.
+            </Typography>
           </Box>
-          <PriceBox price={product.price} salePrice={product.salePrice} />
+          {/* Ціна за одиницю на момент покупки */}
+          <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+            {quantity > 1 ? `${quantity} × ${price}` : price} грн
+          </Typography>
         </Box>
       ))}
     </Box>
@@ -140,7 +133,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
         Сума
       </Typography>
       <Typography sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
-        {orderTotal(order)} грн
+        {order.total} грн
       </Typography>
     </Box>
   </Box>

@@ -77,7 +77,13 @@ const Cart: NextPage = () => {
             {/* Left: Order form */}
             <Box>
               <LoginRequired>
-                <Ordering productIdArr={enrichedProducts.map((product) => product.id)} />
+                <Ordering
+                  items={enrichedProducts.map((product) => ({
+                    productId: product.id,
+                    size: product.selectedSize,
+                    quantity: product.quantity,
+                  }))}
+                />
               </LoginRequired>
             </Box>
 
