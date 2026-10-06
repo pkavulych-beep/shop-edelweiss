@@ -152,6 +152,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
           >
             <Delivery
               cityName={cityName}
+              department={department}
               setCity={setCity}
               setDepartment={setDepartment}
             />
