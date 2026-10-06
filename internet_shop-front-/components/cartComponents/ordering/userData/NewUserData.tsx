@@ -13,7 +13,7 @@ const UserDataComponent: FC = () => {
       }}
     >
       <CustomizedInputBase type="string" name="fullName" placeholder="ПІБ" />
-      <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" />
+      <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
     </Box>
   );
 };

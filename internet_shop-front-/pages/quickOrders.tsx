@@ -9,7 +9,8 @@ import { MainLayout } from '../layouts/MainLayout';
 import { useAppSelector } from '../redux/hooks';
 import { Role } from '../redux/Types/ProductType';
 import { Api } from '../api/Api';
-import { formatPhone, QuickOrder } from '../api/QuickOrderApi';
+import { QuickOrder } from '../api/QuickOrderApi';
+import { formatPhone } from '../utils/phone';
 
 // Заявки «Замовити в 1 клік» для адміна: кому передзвонити і що людина хоче купити
 export default function QuickOrdersPage() {
