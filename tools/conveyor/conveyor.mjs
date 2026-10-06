@@ -159,7 +159,7 @@ function jobState(job, workers) {
   if (!w) return 'gone';
   if (w.status === 'needs_input') return 'needs_input';
   // Just told or hired: give its status a moment to catch up.
-  if (FINISHED.has(w.status) && Date.now() - job.since > MINUTE) return 'finished';
+  if (FINISHED.has(w.status) && Date.now() - (job.wokenAt ?? job.since) > MINUTE) return 'finished';
   return 'running';
 }
 
@@ -441,7 +441,7 @@ function tick() {
       if (!s.job?.limited || (s.job.provider ?? 'claude') !== provider) continue;
       if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
         s.job.limited = false;
-        s.job.since = now;
+        s.job.wokenAt = now; // `since` stays: QA counts what it filed from then on
         s.job.scrollFrom = terminalSize(s.job.workerId); // the old limit message stays on its screen
       }
     }
