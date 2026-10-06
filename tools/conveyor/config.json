@@ -13,6 +13,7 @@
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
   "limitPauseMinutes": { "claude": 60, "codex": 360 },
+  "releaseAfterHours": 12,
   "coders": {
     "opus": {
       "provider": "claude",
@@ -44,7 +45,7 @@
   "merge": {
     "enabled": true,
     "method": "squash",
-    "maxChangedLines": 400,
+    "maxChangedLines": 600,
     "protectedPaths": [
       ".github/",
       ".claude/",
