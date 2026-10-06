@@ -1,8 +1,9 @@
 import { NextPage } from 'next';
 import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { updateUserData } from '../../../redux/slices/auth-reducer';
 import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import { Delivery } from './delivery/delivery';
 import * as React from 'react';
@@ -30,21 +31,41 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const phoneNumber = userData?.phoneNumber || '';
   const id = userData?.id;
 
-  const checkUserData = (newFullName, newPhoneNumber) => {
-    if (fullName !== newFullName || phoneNumber !== newPhoneNumber) {
-      dispatch(
-        updateUserData(id, {
-          fullName: newFullName,
-          phoneNumber: newPhoneNumber,
-        })
-      );
+  const checkUserData = async (newFullName, newPhoneNumber) => {
+    if (fullName === newFullName && phoneNumber === newPhoneNumber) {
+      return { success: true };
     }
+    return dispatch(
+      updateUserData(id, {
+        fullName: newFullName,
+        phoneNumber: newPhoneNumber,
+      })
+    );
   };
 
   const [cityName, setCity] = useState('');
   const [department, setDepartment] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const changeLoading = (value: boolean) => {
+    if (mountedRef.current) {
+      setLoading(value);
+    }
+  };
+
+  const changeError = (value: string | null) => {
+    if (mountedRef.current) {
+      setError(value);
+    }
+  };
 
   return (
     <Formik
@@ -55,10 +76,17 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
       }}
       validationSchema={ValidateOrder}
       onSubmit={async (values) => {
+        changeLoading(true);
+        changeError(null);
         try {
-          setLoading(true);
-          setError(null);
-          await checkUserData(values.fullName, values.phoneNumber);
+          const saved = await checkUserData(values.fullName, values.phoneNumber);
+          if (!saved?.success) {
+            changeError(
+              saved?.message ||
+                'Не вдалося зберегти контактні дані. Спробуйте ще раз.'
+            );
+            return;
+          }
           await Api().orders.create({
             comment: values.comment,
             items,
@@ -68,16 +96,17 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
           await dispatch(cleanTheBasket(id));
           router.push('/orders');
         } catch (e) {
-          const message = e.response?.data?.message;
-          if (e.response?.status === 401) {
-            setError('Сесія завершилась. Увійдіть ще раз, щоб оформити замовлення.');
+          const message = e?.response?.data?.message;
+          if (e?.response?.status === 401) {
+            changeError('Сесія завершилась. Увійдіть ще раз, щоб оформити замовлення.');
           } else {
-            setError(
+            changeError(
               (Array.isArray(message) ? message.join('. ') : message) ||
                 'Не вдалося оформити замовлення. Спробуйте ще раз.'
             );
           }
-          setLoading(false);
+        } finally {
+          changeLoading(false);
         }
       }}
     >
@@ -155,18 +184,9 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
         </LoadingButton>
 
         {error && (
-          <Typography
-            role="alert"
-            sx={{
-              color: 'error.main',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              textAlign: 'center',
-              mt: 2,
-            }}
-          >
+          <Alert severity="error" sx={{ mt: 2, fontSize: '0.85rem' }}>
             {error}
-          </Typography>
+          </Alert>
         )}
 
         <Box
