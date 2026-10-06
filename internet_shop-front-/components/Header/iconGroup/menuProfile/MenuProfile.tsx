@@ -8,6 +8,7 @@ import Divider from '@mui/material/Divider';
 import Settings from '@mui/icons-material/Settings';
 import Logout from '@mui/icons-material/Logout';
 import PhoneInTalkOutlined from '@mui/icons-material/PhoneInTalkOutlined';
+import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined';
 import { useAppDispatch, useAppSelector } from '../../../../redux/hooks';
 import { Role } from '../../../../redux/Types/ProductType';
 import { toLogOut } from '../../../../redux/slices/auth-reducer';
@@ -62,6 +63,18 @@ export const MenuProfile: NextPage<IMenuProfileProps> = ({ open, onClose, onClic
           </MenuItem>
         </a>
       </Link>
+      {isAdmin && (
+        <Link href='/admin/orders'>
+          <a style={{ textDecoration: 'none', color: 'inherit' }}>
+            <MenuItem>
+              <ListItemIcon>
+                <ReceiptLongOutlined fontSize='small' />
+              </ListItemIcon>
+              Замовлення
+            </MenuItem>
+          </a>
+        </Link>
+      )}
       {isAdmin && (
         <Link href='/quickOrders'>
           <a style={{ textDecoration: 'none', color: 'inherit' }}>
