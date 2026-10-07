@@ -7,6 +7,7 @@ import {
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderItemDto } from './dto/order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { FindOrdersDto } from './dto/find-orders.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrderEntity } from './entities/order.entity';
@@ -33,12 +34,9 @@ export class OrderService {
       merged.set(key, { ...item, quantity });
     }
 
-    const ids = [...new Set(items.map((item) => item.productId))];
+    const ids = [...new Set(items.map(item => item.productId))];
     const products = new Map(
-      (await this.productService.findPurchasable(ids)).map((product) => [
-        product.id,
-        product,
-      ]),
+      (await this.productService.findPurchasable(ids)).map(product => [product.id, product]),
     );
 
     return [...merged.values()].map(({ productId, size, quantity }) => {
@@ -62,18 +60,18 @@ export class OrderService {
     });
   }
 
-  // Власник бачить лише свої замовлення, ADMIN — будь-які
-  async findOneForUser(
-    idOrder: number,
-    user: { id: number; roles?: { value: string }[] },
-  ) {
+  // Власник бачить лише свої замовлення, ADMIN — будь-які разом із покупцем
+  async findOneForUser(idOrder: number, user: { id: number; roles?: { value: string }[] }) {
     const order = await this.findOneWithItems(idOrder, true);
     if (!order) {
       throw new NotFoundException(null, 'Не знайдено такого замовлення');
     }
-    const isAdmin = user.roles?.some((role) => role.value === 'ADMIN');
+    const isAdmin = user.roles?.some(role => role.value === 'ADMIN');
     if (order.user?.id !== user.id && !isAdmin) {
       throw new ForbiddenException('Немає доступу до цього замовлення');
+    }
+    if (isAdmin) {
+      return order;
     }
     const { user: _owner, ...result } = order;
     return result;
@@ -91,10 +89,7 @@ export class OrderService {
       status: Status.Processed,
       ...restDto,
       items: orderItems,
-      total: orderItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0,
-      ),
+      total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     });
 
     return this.findOneWithItems(order.id);
@@ -109,17 +104,24 @@ export class OrderService {
     }
   }
 
-  findAll() {
-    return this.repository.find({
-      relations: { user: true, items: { product: true } },
-    });
-  }
+  // Список для адмінки: покупець (ім'я, телефон) і кількість позицій без
+  // самих позицій, нові першими. Аліас не «order»: це ключове слово SQL
+  async findAll({ page = 1, limit = 20, status }: FindOrdersDto) {
+    const query = this.repository
+      .createQueryBuilder('o')
+      .leftJoin('o.user', 'user')
+      .addSelect(['user.id', 'user.fullName', 'user.phoneNumber'])
+      .loadRelationCountAndMap('o.itemsCount', 'o.items')
+      .orderBy('o.createdAt', 'DESC')
+      .addOrderBy('o.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+    if (status) {
+      query.where('o.status = :status', { status });
+    }
 
-  findIncomplete() {
-    return this.repository.find({
-      relations: { user: true, items: { product: true } },
-      where: [{ status: Status.Processed }, { status: Status.Sent }],
-    });
+    const [data, total] = await query.getManyAndCount();
+    return { data, total, page, limit };
   }
 
   // Замовлення користувача разом із позиціями одним запитом, нові першими
@@ -142,8 +144,17 @@ export class OrderService {
     return this.repository.save(order);
   }
 
+  async updateStatus(id: number, status: Status) {
+    const order = await this.findOneById(id);
+    order.status = status;
+    return this.repository.save(order);
+  }
+
   async remove(id: number) {
-    await this.repository.delete(id);
+    const { affected } = await this.repository.delete(id);
+    if (!affected) {
+      throw new NotFoundException(null, 'Не знайдено такого замовлення');
+    }
     return 'Замовлення було успішно видалено';
   }
 }

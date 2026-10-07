@@ -1,11 +1,13 @@
 import * as yup from "yup";
+import { normalizePhone, PHONE_MESSAGE } from "../../../../utils/phone";
 
 export const ValidateOrder = yup.object().shape({
   phoneNumber: yup
-    .number()
-    .typeError("Введіть номер телефону цифрами")
-    .min(10, "Введіть номер телефону")
-    .required("Обов'язкове поле"),
+    .string()
+    .typeError("Введіть номер телефону")
+    .trim()
+    .required("Обов'язкове поле")
+    .test("ua-phone", PHONE_MESSAGE, (value) => normalizePhone(value || "") !== null),
   fullName: yup
     .string()
     .required("Обов'язкове поле")

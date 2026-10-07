@@ -1,5 +1,5 @@
 import { AxiosInstance } from "axios";
-import { Order } from "../redux/Types/orderType";
+import { Order, OrderListItem, Status } from "../redux/Types/orderType";
 
 export interface CreateOrderItemDto {
   productId: number;
@@ -15,6 +15,20 @@ export interface CreateOrderDto {
   comment: string;
 }
 
+// Список усіх замовлень для адміна (GET /order)
+export interface FindOrdersParams {
+  page?: number;
+  limit?: number;
+  status?: Status;
+}
+
+export interface OrdersPage {
+  data: OrderListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export const ordersApi = (instance: AxiosInstance) => ({
   async create(dto: CreateOrderDto) {
     const { data } = await instance.post<Order>("order", dto);
@@ -26,14 +40,8 @@ export const ordersApi = (instance: AxiosInstance) => ({
     return data;
   },
 
-  //for Admin
-  async findAll() {
-    const { data } = await instance.get<Order[]>("order");
-    return data;
-  },
-
-  async findIncomplete() {
-    const { data } = await instance.get<Order[]>("order/Incomplete");
+  async findAll(params: FindOrdersParams = {}) {
+    const { data } = await instance.get<OrdersPage>("order", { params });
     return data;
   },
 });

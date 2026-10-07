@@ -12,7 +12,7 @@ import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
 import { Order, Status } from '../../redux/Types/orderType';
 
-const statusColor: Record<Status, ChipProps['color']> = {
+export const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
   [Status.Sent]: 'info',
   [Status.Received]: 'success',

@@ -62,7 +62,7 @@ export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) =
             >
               Акаунт Edelweiss
             </Typography>
-            <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" />
+<CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
             <CustomizedInputBase
               type="password"
               name="password"

@@ -4,3 +4,5 @@ export enum Status {
   Received = 'отримано',
   Canceled = 'відмінено',
 }
+
+export const statusMessage = `Статус має бути одним із: ${Object.values(Status).join(', ')}`;

@@ -1,4 +1,4 @@
-import React, { FC, useState } from 'react';
+import React, { ChangeEvent, FC, useState } from 'react';
 import { useField } from 'formik';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -6,6 +6,7 @@ import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { maskPhoneInput } from '../../utils/phone';
 
 interface Props {
   type: string;
@@ -13,6 +14,7 @@ interface Props {
   placeholder: string;
   multiline?: boolean;
   autoComplete?: string;
+  phoneMask?: boolean;
 }
 
 const CustomizedInputBase: FC<Props> = ({
@@ -21,18 +23,31 @@ const CustomizedInputBase: FC<Props> = ({
   name,
   multiline = false,
   autoComplete,
+  phoneMask = false,
 }) => {
-  const [field, meta] = useField(name);
+  const [field, meta, helpers] = useField(name);
   const hasError = meta.touched && !!meta.error;
   const isPassword = type === 'password';
   const [showPassword, setShowPassword] = useState(false);
+
+  const inputProps = phoneMask
+    ? {
+        ...field,
+        value: maskPhoneInput(field.value ?? ''),
+        inputMode: 'tel' as const,
+        onChange: (event: ChangeEvent<HTMLInputElement>) =>
+          helpers.setValue(
+            maskPhoneInput(event.target.value, field.value ?? ''),
+          ),
+      }
+    : field;
 
   return (
     <>
       <TextField
         error={hasError}
         placeholder={placeholder}
-        inputProps={{ ...field, autoComplete }}
+        inputProps={{ ...inputProps, autoComplete }}
         margin="dense"
         label={placeholder}
         type={isPassword && showPassword ? 'text' : type}

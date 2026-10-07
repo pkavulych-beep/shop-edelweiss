@@ -27,7 +27,8 @@ export const DialogRegister: FC<IDialogRegister> = ({ open, setRegister, setLogi
   };
 
   const submit = async (values, { resetForm }) => {
-    let res = await dispatch(registerUser(values));
+    const dto = { ...values, email: values.email.trim() || undefined };
+    let res = await dispatch(registerUser(dto));
     if (res === 'response') {
       handleClose();
       resetForm();
@@ -69,7 +70,7 @@ export const DialogRegister: FC<IDialogRegister> = ({ open, setRegister, setLogi
             </Typography>
             <CustomizedInputBase type="string" name="fullName" placeholder="ПІБ" />
             <CustomizedInputBase type="email" name="email" placeholder="Електронна пошта" />
-            <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" />
+<CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
             <CustomizedInputBase
               type="password"
               name="password"
