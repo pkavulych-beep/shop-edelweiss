@@ -21,7 +21,7 @@ import { useAppSelector } from '../../../redux/hooks';
 import { Role } from '../../../redux/Types/ProductType';
 import { Order, Status } from '../../../redux/Types/orderType';
 import { Api } from '../../../api/Api';
-import { formatPhone } from '../../../api/QuickOrderApi';
+import { formatPhone } from '../../../utils/phone';
 import { statusColor } from '../../../components/MyOrders/MyOrders';
 
 const sectionSx = {
