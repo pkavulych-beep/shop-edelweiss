@@ -176,11 +176,6 @@ export class ProductService {
     return { data, total };
   }
 
-  // Старий метод — залишаємо для зворотної сумісності
-  async findAllFiltered(data): Promise<ProductEntity[]> {
-    return await this.repository.find(data);
-  }
-
   async findDiscounts(gender): Promise<ProductEntity[]> {
     if (gender) {
       return await this.repository.findBy({
