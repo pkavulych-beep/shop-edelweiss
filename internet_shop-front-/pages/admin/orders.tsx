@@ -32,23 +32,32 @@ export default function AdminOrdersPage() {
   );
   const [status, setStatus] = useState<Status | null>(null);
   const [page, setPage] = useState(1);
-  const [orders, setOrders] = useState<OrdersPage | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Результат прив'язаний до фільтра й сторінки, тож при їх зміні старий список не показуємо
+  const [loaded, setLoaded] = useState<{
+    status: Status | null;
+    page: number;
+    orders?: OrdersPage;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
     // Відповідь на попередній фільтр чи сторінку може прийти пізніше за нову
     let cancelled = false;
-    setOrders(null);
-    setError(null);
     Api()
       .orders.findAll({ page, limit: LIMIT, status: status ?? undefined })
-      .then(result => !cancelled && setOrders(result))
-      .catch(() => !cancelled && setError('Не вдалося завантажити замовлення'));
+      .then(result => !cancelled && setLoaded({ status, page, orders: result }))
+      .catch(
+        () => !cancelled && setLoaded({ status, page, error: 'Не вдалося завантажити замовлення' })
+      );
     return () => {
       cancelled = true;
     };
   }, [isAdmin, status, page]);
+
+  const current = loaded?.status === status && loaded.page === page ? loaded : null;
+  const orders = current?.orders ?? null;
+  const error = current?.error ?? null;
 
   const changeStatus = (value: Status | null) => {
     setStatus(value);
