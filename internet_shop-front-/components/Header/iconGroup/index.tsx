@@ -58,13 +58,11 @@ export const IconGroup: NextPage<IIconGroupProps> = () => {
         <FavoriteBorderIcon />
       </IconButton>
       <Link href='/cart'>
-        <a>
-          <IconButton size='large' color='inherit'>
-            <Badge badgeContent={cartCount} color='error'>
-              <ShoppingCartOutlinedIcon />
-            </Badge>
-          </IconButton>
-        </a>
+        <IconButton size='large' color='inherit'>
+          <Badge badgeContent={cartCount} color='error'>
+            <ShoppingCartOutlinedIcon />
+          </Badge>
+        </IconButton>
       </Link>
     </Box>
   );

@@ -89,13 +89,12 @@ export default function AdminOrdersPage() {
                   onClick={() => openOrder(id)}
                 >
                   <TableCell>
-                    <Link href={`/admin/orders/${id}`}>
-                      <a
-                        style={{ color: 'inherit' }}
-                        onClick={event => event.stopPropagation()}
-                      >
-                        {id}
-                      </a>
+                    <Link
+                      href={`/admin/orders/${id}`}
+                      style={{ color: 'inherit' }}
+                      onClick={event => event.stopPropagation()}
+                    >
+                      {id}
                     </Link>
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
