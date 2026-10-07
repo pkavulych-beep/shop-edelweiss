@@ -34,9 +34,18 @@
       "model": "opencode/big-pickle",
       "takes": ["easy", "medium"],
       "ports": { "back": 7780, "front": 3003, "db": "Edelweiss_zen" }
+    },
+    "nemotron": {
+      "provider": "opencode",
+      "model": "opencode/nemotron-3-ultra-free",
+      "takes": ["easy", "medium"],
+      "ports": { "back": 7781, "front": 3005, "db": "Edelweiss_nemotron" }
     }
   },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
+  "reviewerFor": {
+    "easy": { "provider": "claude", "model": "sonnet", "effort": "medium" }
+  },
   "qa": {
     "enabled": true,
     "everyMerges": 10,
