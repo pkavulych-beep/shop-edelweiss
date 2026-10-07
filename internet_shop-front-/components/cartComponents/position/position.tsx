@@ -58,34 +58,30 @@ export const Position: FC<IPositionProps> = ({
         }}
       >
         <Link href={'/product/' + id}>
-          <a>
-            <img
-              src={cover}
-              alt={name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </a>
+          <img
+            src={cover}
+            alt={name}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
         </Link>
       </Box>
 
       {/* Product info */}
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 0.5 }}>
         <Box>
-          <Link href={'/product/' + id}>
-            <a style={{ textDecoration: 'none' }}>
-              <Typography
-                sx={{
-                  fontWeight: 700,
-                  fontSize: '0.8125rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  color: 'text.primary',
-                  lineHeight: 1.3,
-                }}
-              >
-                {name}
-              </Typography>
-            </a>
+          <Link href={'/product/' + id} style={{ textDecoration: 'none' }}>
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.8125rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: 'text.primary',
+                lineHeight: 1.3,
+              }}
+            >
+              {name}
+            </Typography>
           </Link>
           <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
             Розмір: {size}
