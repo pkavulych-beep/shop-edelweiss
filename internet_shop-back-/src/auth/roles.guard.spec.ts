@@ -116,6 +116,22 @@ describe('RolesGuard', () => {
     expect(usersService.findById).not.toHaveBeenCalled();
   });
 
+  // super.canActivate має кинути 401, але якщо автентифікація колись поверне
+  // true без користувача, відповідь усе одно має бути 401, а не 403
+  it('gives 401, not 403, when authentication leaves no user in the request', async () => {
+    const base = Object.getPrototypeOf(RolesGuard.prototype);
+    const spy = jest.spyOn(base, 'canActivate').mockResolvedValue(true);
+
+    try {
+      await expect(guard.canActivate(adminRequest().context)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    } finally {
+      spy.mockRestore();
+    }
+    expect(usersService.findById).not.toHaveBeenCalled();
+  });
+
   it('does not check anything for a handler without @Roles', async () => {
     const { context } = contextFor(AdminController.prototype.open);
 
