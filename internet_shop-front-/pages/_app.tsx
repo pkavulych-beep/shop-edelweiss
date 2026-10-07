@@ -9,7 +9,7 @@ import { theme } from "../styles/theme";
 import { addUserData } from "../redux/slices/auth-reducer";
 import nookies from "nookies";
 import axios from "axios";
-import { Api } from "../api/Api";
+import { Api, clearTokens } from "../api/Api";
 import {
   setCartData,
   setProductDetails,
@@ -40,8 +40,8 @@ WrappedApp.getInitialProps = wrapper.getInitialPageProps((store) =>
   // @ts-ignore
   async ({ ctx, Component }) => {
     try {
-      const { token } = nookies.get(ctx);
-      if (!token) return;
+      const { token, refreshToken } = nookies.get(ctx);
+      if (!token && !refreshToken) return;
 
       const userData = await Api(ctx).auth.authorization();
       const { cartItems, ...userInfo } = userData;
@@ -76,7 +76,7 @@ WrappedApp.getInitialProps = wrapper.getInitialPageProps((store) =>
         `Не вдалося отримати профіль: ${status ?? "без статусу"} ${e?.message}`
       );
       if (status === 401) {
-        nookies.destroy(ctx, "token", { path: "/" });
+        clearTokens(ctx);
       }
     }
   }

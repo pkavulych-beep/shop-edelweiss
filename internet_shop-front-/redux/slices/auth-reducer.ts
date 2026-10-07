@@ -1,10 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { destroyCookie, setCookie } from 'nookies';
 import { AppThunk } from '../redux-store';
 import { IUserData } from '../Types/ProductType';
 import { HYDRATE } from 'next-redux-wrapper';
-import { Api } from '../../api/Api';
-import nookies from 'nookies';
+import { Api, clearTokens, getRefreshToken, saveTokens } from '../../api/Api';
 import { syncCartOnLogin, setCartData } from './cart-reducer';
 
 export const initialAuthState = {
@@ -42,14 +40,11 @@ export default authSlice.reducer;
 const thunkCreateUser = (request) => (dto) => async (dispatch) => {
   try {
     const response = await request(dto);
-    const { token, userData } = response.data;
+    const { token, refreshToken, userData } = response.data;
 
     dispatch(addUserData(userData));
     dispatch(setErrorMessage(null));
-    setCookie(null, 'token', token, {
-      maxAge: 30 * 24 * 60 * 60,
-      path: '/',
-    });
+    saveTokens({ token, refreshToken });
 
     // Синхронізуємо localStorage корзину з бекендом після логіну/реєстрації
     if (userData?.id) {
@@ -67,11 +62,16 @@ export const getUserData = thunkCreateUser(Api().auth.login);
 export const registerUser = thunkCreateUser(Api().auth.register);
 
 export const toLogOut = (): AppThunk => async (dispatch) => {
-  setCookie(null, 'token', null, {
-    maxAge: -1,
-    path: '/',
-  });
-  destroyCookie(null, 'token');
+  const refreshToken = getRefreshToken();
+  if (refreshToken) {
+    try {
+      await Api().auth.logout(refreshToken);
+    } catch (e) {
+      // Вийти локально все одно треба, навіть якщо бек недоступний
+      console.error(`Не вдалося завершити сесію на сервері: ${e?.message}`);
+    }
+  }
+  clearTokens();
   dispatch(addUserData(null));
   dispatch(setCartData([]));
 };
