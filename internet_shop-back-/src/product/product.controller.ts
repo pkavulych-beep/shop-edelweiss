@@ -43,12 +43,6 @@ export class ProductController {
     return this.productService.findFiltered(filters);
   }
 
-  // Старий ендпоінт — залишаємо для зворотної сумісності
-  @Post('/getFiltered')
-  findAllFiltered(@Body() data) {
-    return this.productService.findAllFiltered(data);
-  }
-
   @Post('/byIds')
   findByIds(@Body() dto: FindByIdsDto) {
     return this.productService.findByIds(dto.ids);
