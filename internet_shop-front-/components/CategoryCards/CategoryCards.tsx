@@ -33,66 +33,64 @@ const CategoryCard: React.FC<{ item: CategoryItem; height: { xs: number; md: num
   item,
   height,
 }) => (
-  <Link href={item.href}>
-    <a style={{ textDecoration: 'none', display: 'block' }}>
+  <Link href={item.href} style={{ textDecoration: 'none', display: 'block' }}>
+    <Box
+      sx={{
+        position: 'relative',
+        borderRadius: 3,
+        overflow: 'hidden',
+        height,
+        cursor: 'pointer',
+        '&:hover img': {
+          transform: 'scale(1.05)',
+        },
+      }}
+    >
+      <Box
+        component="img"
+        src={item.image}
+        alt={item.title}
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transition: 'transform 0.6s ease',
+        }}
+      />
+      {/* Overlay */}
       <Box
         sx={{
-          position: 'relative',
-          borderRadius: 3,
-          overflow: 'hidden',
-          height,
-          cursor: 'pointer',
-          '&:hover img': {
-            transform: 'scale(1.05)',
-          },
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
+        }}
+      />
+      {/* Label */}
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        <Box
-          component="img"
-          src={item.image}
-          alt={item.title}
+        <Typography
           sx={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            transition: 'transform 0.6s ease',
-          }}
-        />
-        {/* Overlay */}
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
-          }}
-        />
-        {/* Label */}
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            color: '#fff',
+            fontWeight: 800,
+            fontSize: { xs: '1.1rem', md: '1.4rem' },
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            textShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}
         >
-          <Typography
-            sx={{
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: { xs: '1.1rem', md: '1.4rem' },
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              textShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            }}
-          >
-            {item.title}
-          </Typography>
-        </Box>
+          {item.title}
+        </Typography>
       </Box>
-    </a>
+    </Box>
   </Link>
 );
 

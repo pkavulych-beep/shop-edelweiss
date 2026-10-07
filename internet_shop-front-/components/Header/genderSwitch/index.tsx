@@ -15,16 +15,12 @@ export const GenderSwitch: NextPage = () => {
       {gender === Gender.Man ? (
         <p className={s.selectedGender}>{forMan}</p>
       ) : (
-        <Link href={'/productsList/' + Gender.Man}>
-          <a>{forMan}</a>
-        </Link>
+        <Link href={'/productsList/' + Gender.Man}>{forMan}</Link>
       )}
       {gender === Gender.Woman ? (
         <p className={s.selectedGender}>{forWoman}</p>
       ) : (
-        <Link href={'/productsList/' + Gender.Woman}>
-          <a>{forWoman}</a>
-        </Link>
+        <Link href={'/productsList/' + Gender.Woman}>{forWoman}</Link>
       )}
     </div>
   );

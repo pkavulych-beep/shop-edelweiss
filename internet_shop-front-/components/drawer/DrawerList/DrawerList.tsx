@@ -30,11 +30,9 @@ export const DrawerList: NextPage<IDrawerListProps> = ({ anchor, toggleDrawer })
       <List>
         {itemsListArray.map(({ name, color, url }) => (
           <Link key={name} href={url}>
-            <a>
-              <ListItem button>
-                <ListItemText primary={name} sx={{ color }} />
-              </ListItem>
-            </a>
+            <ListItem button>
+              <ListItemText primary={name} sx={{ color }} />
+            </ListItem>
           </Link>
         ))}
       </List>
