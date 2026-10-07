@@ -56,5 +56,8 @@
       "Bash(pkill:*)",
       "Bash(killall:*)"
     ]
+  },
+  "skillOverrides": {
+    "auto-mode-setup": "off"
   }
 }
