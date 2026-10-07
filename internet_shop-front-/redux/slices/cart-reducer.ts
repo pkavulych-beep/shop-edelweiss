@@ -42,7 +42,7 @@ export const cartSlice = createSlice({
       const existing = state.data.find(
         (el) =>
           el.idProduct === action.payload.idProduct &&
-          el.size === action.payload.size,
+          (el.size ?? "") === (action.payload.size ?? ""),
       );
       if (existing) {
         existing.quantity += action.payload.quantity;
@@ -54,7 +54,7 @@ export const cartSlice = createSlice({
       if (action.payload.size) {
         state.data = state.data.filter(
           (el) =>
-            !(el.idProduct === action.payload.idProduct && el.size === action.payload.size),
+            !(el.idProduct === action.payload.idProduct && (el.size ?? "") === (action.payload.size ?? "")),
         );
       } else {
         state.data = state.data.filter(
@@ -121,16 +121,16 @@ export const fetchCartProductDetails =
 
 // Додати товар в корзину
 export const addPositionsToCart =
-  (dto: { idProduct: number; size: string }): AppThunk =>
+  (dto: { idProduct: number; size?: string }): AppThunk =>
   async (dispatch, getState) => {
     const idUser = getState().user.userData?.id;
-    const newItem: CartItem = { idProduct: dto.idProduct, size: dto.size, quantity: 1 };
+    const newItem: CartItem = { idProduct: dto.idProduct, size: dto.size ?? "", quantity: 1 };
 
     if (idUser) {
       try {
         await Api().cart.addProductToCart({
           idProduct: dto.idProduct,
-          size: dto.size,
+          size: dto.size ?? "",
         });
       } catch (e) {
         console.error('Failed to add product to cart:', e);
@@ -141,7 +141,7 @@ export const addPositionsToCart =
       // Зберігати в localStorage для незалогінених
       const currentCart = getLocalCart();
       const existing = currentCart.find(
-        (el) => el.idProduct === dto.idProduct && el.size === dto.size,
+        (el) => el.idProduct === dto.idProduct && (el.size ?? "") === (dto.size ?? ""),
       );
       if (existing) {
         existing.quantity += 1;
@@ -156,20 +156,20 @@ export const addPositionsToCart =
 
 // Видалити товар з корзини
 export const pickUpFromTheCart =
-  (dto: { idProduct: number; size: string; idUser?: number }): AppThunk =>
+  (dto: { idProduct: number; size?: string; idUser?: number }): AppThunk =>
   async (dispatch) => {
     try {
       if (dto.idUser) {
         await Api().cart.pickUpFromTheBasket({
           idProduct: dto.idProduct,
-          size: dto.size,
+          size: dto.size ?? "",
         });
-        dispatch(removeItem({ idProduct: dto.idProduct, size: dto.size }));
+        dispatch(removeItem({ idProduct: dto.idProduct, size: dto.size ?? "" }));
       } else {
         // Видалити з localStorage
         const currentCart = getLocalCart();
         const updatedCart = currentCart.filter(
-          (el) => !(el.idProduct === dto.idProduct && el.size === dto.size),
+          (el) => !(el.idProduct === dto.idProduct && (el.size ?? "") === (dto.size ?? "")),
         );
         setLocalCart(updatedCart);
         // localStorage — єдине джерело правди для гостей

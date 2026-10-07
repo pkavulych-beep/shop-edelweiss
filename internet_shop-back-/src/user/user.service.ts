@@ -137,16 +137,11 @@ export class UsersService {
       if (!product.sizes.includes(effectiveSize)) {
         throw new BadRequestException('Такого розміру немає в цього товару');
       }
-    } else {
-      // Для товарів без розмірів зберігаємо порожній рядок
-      if (effectiveSize && effectiveSize.trim()) {
-        // Не очікуємо розмір для такого товару
-      }
     }
 
     // Перевірити чи вже є такий товар з таким розміром в корзині
     const existing = await this.basketRepository.findOne({
-      where: { userId: idUser, productId: idProduct, size: effectiveSize || '' },
+      where: { userId: idUser, productId: idProduct, size: effectiveSize },
     });
 
     if (existing) {
@@ -157,7 +152,7 @@ export class UsersService {
     const basketItem = this.basketRepository.create({
       userId: idUser,
       productId: idProduct,
-      size: effectiveSize || '',
+      size: effectiveSize,
       quantity: 1,
     });
     return await this.basketRepository.save(basketItem);

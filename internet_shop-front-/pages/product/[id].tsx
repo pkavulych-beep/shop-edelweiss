@@ -72,7 +72,7 @@ export default function Product() {
     dispatch(
       addPositionsToCart({
         idProduct: currentProduct.id,
-        size: hasSizes ? selectedSize : '',
+        size: hasSizes ? selectedSize : undefined,
       }),
     );
     setIsCartConfirmOpen(true);
