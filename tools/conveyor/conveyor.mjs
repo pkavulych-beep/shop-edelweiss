@@ -149,6 +149,9 @@ function tell(worker, text, what) {
   return act(what, () => run('office-workers', ['tell', worker], { input: text }));
 }
 
+/** A worker's git branch, from its worktree as the office lists it. */
+const branchOf = (w) => w.worktree?.branch ?? (typeof w.worktree === 'string' ? `office/${path.basename(w.worktree)}` : undefined);
+
 const sentHome = new Set(); // who went home this tick, so nobody is sent twice
 
 function sendHome(names, why) {
@@ -411,7 +414,7 @@ function needsHuman(kind, n, reason) {
 }
 
 // What the conveyor counts per PR and per issue to know when to give up.
-const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'fixRounds', 'fixFor', 'mergeFailures', 'updatedFor'];
+const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'reviewRetried', 'fixRounds', 'fixFor', 'fixRetried', 'mergeFailures', 'updatedFor'];
 const ISSUE_COUNTS = ['failures'];
 
 /**
@@ -584,19 +587,25 @@ function tick() {
 
   const requestFix = (pr, s, reasons, key) => {
     const n = pr.number;
-    if (s.fixFor === key) {
+    // The same request as last time: nothing was pushed since. The work may have been cut short (the office
+    // restarted, the agent crashed), so it gets one more go, not counted as a round, before a person is asked.
+    const again = s.fixFor === key;
+    if (again && s.fixRetried === key) {
       needsHuman('pr', n, `після доопрацювання (${reasons.join(', ')}) нічого не змінилося`);
       return;
     }
-    if (s.fixRounds >= config.maxFixRounds) {
+    if (!again && s.fixRounds >= config.maxFixRounds) {
       needsHuman('pr', n, `${s.fixRounds} доопрацювань не довели PR до мерджу`);
       return;
     }
-    const author = workers?.find((w) => w.kind === 'agent' && w.pr?.number === n);
+    // The office doesn't always know which pull request an OpenCode or Codex agent opened: its branch tells. The
+    // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog).
+    const author = again ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
     const coder = config.coders[s.coder];
     if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
+    if (again) reasons = [...reasons, 'минулого разу PR після доопрацювання не змінився: доведи його до кінця й запуш'];
     const text = prompt('fix', {
       pr: n, title: pr.title, url: pr.url, branch: pr.headRefName,
       reasons: reasons.map((r) => `- ${r}`).join('\n'),
@@ -611,22 +620,26 @@ function tick() {
       worker = hire(coder, `кодера ${s.coder}`, `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
     }
     if (!worker) return;
-    s.fixRounds = (s.fixRounds ?? 0) + 1;
+    if (again) s.fixRetried = key;
+    else s.fixRounds = (s.fixRounds ?? 0) + 1;
     s.fixFor = key;
     s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, scrollFrom: worker.scrollFrom, since: now };
     busyCoders.add(s.coder);
   };
 
-  const requestReview = (pr, s) => {
-    if (reviewerBusy || pausedFor(config.reviewer.provider)) return;
+  /** Hires the reviewer for a PR; true if it was hired. */
+  const requestReview = (pr, s, again = false) => {
+    if (reviewerBusy || pausedFor(config.reviewer.provider)) return false;
     const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
-    const worker = hire(config.reviewer, "рев'юера", `рев'ю PR #${pr.number}`, text, ['--no-worktree']);
-    if (!worker) return;
+    const title = `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
+    const worker = hire(config.reviewer, "рев'юера", title, text, ['--no-worktree']);
+    if (!worker) return false;
     s.reviewRounds = (s.reviewRounds ?? 0) + 1;
     s.reviewedSha = pr.headRefOid;
     delete s.fixFor; // a new verdict starts a new round of fixes
     s.job = { kind: 'review', provider: config.reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
     reviewerBusy = true;
+    return true;
   };
 
   // Pull requests, oldest first.
@@ -696,8 +709,15 @@ function tick() {
       }
       continue;
     }
+    // The reviewer stopped without a verdict on this commit. Its work may have been cut short, so another one gets
+    // a go, not counted as a round, before a person is asked.
     if (!current && s.reviewedSha && sameCommit(s.reviewedSha, pr.headRefOid)) {
-      needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
+      if (s.reviewRetried && sameCommit(s.reviewRetried, pr.headRefOid)) {
+        needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
+      } else if (requestReview(pr, s, true)) {
+        s.reviewRetried = pr.headRefOid;
+        s.reviewRounds -= 1;
+      }
       continue;
     }
     requestReview(pr, s);
@@ -759,7 +779,6 @@ function tick() {
   if (workers && me.name) {
     const onJob = new Set([...Object.values(state.prs), ...Object.values(state.issues), state.qa].map((s) => s.job?.worker));
     const openBranches = new Set(pulls.map((p) => p.headRefName));
-    const branchOf = (w) => w.worktree?.branch ?? (typeof w.worktree === 'string' ? `office/${path.basename(w.worktree)}` : undefined);
     const free = workers.filter((w) => w.kind === 'agent' && w.hiredBy === me.name && FINISHED.has(w.status) && !onJob.has(w.name));
     sendHome(free.filter((w) => w.merged).map((w) => w.name), 'PR змерджено');
     sendHome(free.filter((w) => !w.merged && w.pr?.state !== 'OPEN' && !openBranches.has(branchOf(w))).map((w) => w.name), 'роботи більше немає');
