@@ -346,12 +346,10 @@ export default function ProfilePage() {
               <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
                 У вас ще немає вподобаних товарів
               </Typography>
-              <Link href={`/productsList/woman`}>
-                <a style={{ textDecoration: 'none' }}>
-                  <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
-                    Перейти до каталогу
-                  </Button>
-                </a>
+              <Link href={`/productsList/woman`} style={{ textDecoration: 'none' }}>
+                <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
+                  Перейти до каталогу
+                </Button>
               </Link>
             </Box>
           </Box>

@@ -43,31 +43,29 @@ const BottomNav: React.FC = () => {
         const Icon = item.icon;
 
         return (
-          <Link key={item.label} href={item.href}>
-            <a style={{ textDecoration: 'none' }}>
-              <Box
+          <Link key={item.label} href={item.href} style={{ textDecoration: 'none' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 0.3,
+                minWidth: 64,
+                color: isActive ? 'primary.main' : 'text.secondary',
+                transition: 'color 0.2s',
+              }}
+            >
+              <Icon sx={{ fontSize: 22 }} />
+              <Typography
                 sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 0.3,
-                  minWidth: 64,
-                  color: isActive ? 'primary.main' : 'text.secondary',
-                  transition: 'color 0.2s',
+                  fontSize: '0.6rem',
+                  fontWeight: isActive ? 700 : 500,
+                  letterSpacing: '0.05em',
                 }}
               >
-                <Icon sx={{ fontSize: 22 }} />
-                <Typography
-                  sx={{
-                    fontSize: '0.6rem',
-                    fontWeight: isActive ? 700 : 500,
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {item.label}
-                </Typography>
-              </Box>
-            </a>
+                {item.label}
+              </Typography>
+            </Box>
           </Link>
         );
       })}

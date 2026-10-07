@@ -113,43 +113,39 @@ const Hero: React.FC = () => {
           Відкрийте для себе ексклюзивну колекцію від Edelweiss
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href={`/productsList/${Gender.Woman}`}>
-            <a style={{ textDecoration: 'none' }}>
-              <Button
-                variant="contained"
-                sx={{
-                  minWidth: 180,
-                  py: 1.5,
-                  bgcolor: '#fff',
-                  color: '#2f3334',
-                  fontWeight: 700,
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.9)',
-                  },
-                }}
-              >
-                Жінкам
-              </Button>
-            </a>
+          <Link href={`/productsList/${Gender.Woman}`} style={{ textDecoration: 'none' }}>
+            <Button
+              variant="contained"
+              sx={{
+                minWidth: 180,
+                py: 1.5,
+                bgcolor: '#fff',
+                color: '#2f3334',
+                fontWeight: 700,
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.9)',
+                },
+              }}
+            >
+              Жінкам
+            </Button>
           </Link>
-          <Link href={`/productsList/${Gender.Man}`}>
-            <a style={{ textDecoration: 'none' }}>
-              <Button
-                variant="outlined"
-                sx={{
-                  minWidth: 180,
-                  py: 1.5,
-                  borderColor: 'rgba(255,255,255,0.6)',
-                  color: '#fff',
-                  '&:hover': {
-                    borderColor: '#fff',
-                    bgcolor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
-              >
-                Чоловікам
-              </Button>
-            </a>
+          <Link href={`/productsList/${Gender.Man}`} style={{ textDecoration: 'none' }}>
+            <Button
+              variant="outlined"
+              sx={{
+                minWidth: 180,
+                py: 1.5,
+                borderColor: 'rgba(255,255,255,0.6)',
+                color: '#fff',
+                '&:hover': {
+                  borderColor: '#fff',
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              Чоловікам
+            </Button>
           </Link>
         </Box>
       </Box>

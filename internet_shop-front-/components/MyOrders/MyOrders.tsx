@@ -93,12 +93,10 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
             )}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Link href={'/product/' + product.id}>
-              <a style={{ textDecoration: 'none', color: 'inherit' }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                  {product.name}
-                </Typography>
-              </a>
+            <Link href={'/product/' + product.id} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                {product.name}
+              </Typography>
             </Link>
             <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
               Розмір: {size} · {quantity} шт.
@@ -182,12 +180,10 @@ export const MyOrders: FC = () => {
         <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
           У вас ще немає замовлень
         </Typography>
-        <Link href={`/productsList/woman`}>
-          <a style={{ textDecoration: 'none' }}>
-            <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
-              Перейти до каталогу
-            </Button>
-          </a>
+        <Link href={`/productsList/woman`} style={{ textDecoration: 'none' }}>
+          <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
+            Перейти до каталогу
+          </Button>
         </Link>
       </Box>
     );

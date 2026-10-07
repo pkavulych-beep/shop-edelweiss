@@ -13,33 +13,31 @@ export const ProductsList: FC = () => {
       {data.map((product) => {
         const { id, cover, name, salePrice, price, brand, category } = product;
         return (
-          <Link key={id} href={'/product/' + id}>
-            <a className={s.card}>
-              <div className={s.imageWrapper}>
-                <img
-                  className={s.image}
-                  src={cover}
-                  alt={name}
-                  loading="lazy"
-                />
-              </div>
-              {(brand || category) && (
-                <p className={s.meta}>
-                  {brand || category}
-                </p>
+          <Link key={id} href={'/product/' + id} className={s.card}>
+            <div className={s.imageWrapper}>
+              <img
+                className={s.image}
+                src={cover}
+                alt={name}
+                loading="lazy"
+              />
+            </div>
+            {(brand || category) && (
+              <p className={s.meta}>
+                {brand || category}
+              </p>
+            )}
+            <p className={s.name}>{name}</p>
+            <div className={s.price}>
+              {salePrice ? (
+                <>
+                  <span className={s.salePrice}>{salePrice} грн</span>
+                  <span className={s.oldPrice}>{price} грн</span>
+                </>
+              ) : (
+                <span>{price} грн</span>
               )}
-              <p className={s.name}>{name}</p>
-              <div className={s.price}>
-                {salePrice ? (
-                  <>
-                    <span className={s.salePrice}>{salePrice} грн</span>
-                    <span className={s.oldPrice}>{price} грн</span>
-                  </>
-                ) : (
-                  <span>{price} грн</span>
-                )}
-              </div>
-            </a>
+            </div>
           </Link>
         );
       })}

@@ -75,21 +75,19 @@ const Footer: React.FC = () => {
               {title}
             </Typography>
             {links.map((link) => (
-              <Link key={link.label} href={link.href}>
-                <a style={{ textDecoration: 'none' }}>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: 'text.primary',
-                      mb: 1,
-                      cursor: 'pointer',
-                      transition: 'color 0.3s',
-                      '&:hover': { color: 'primary.main' },
-                    }}
-                  >
-                    {link.label}
-                  </Typography>
-                </a>
+              <Link key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.primary',
+                    mb: 1,
+                    cursor: 'pointer',
+                    transition: 'color 0.3s',
+                    '&:hover': { color: 'primary.main' },
+                  }}
+                >
+                  {link.label}
+                </Typography>
               </Link>
             ))}
           </Box>

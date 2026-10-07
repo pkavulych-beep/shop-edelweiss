@@ -66,9 +66,7 @@ export default function QuickOrdersPage() {
           </Typography>
           <Typography sx={{ fontSize: '0.85rem' }}>
             {product ? (
-              <Link href={`/product/${product.id}`}>
-                <a>{product.name}</a>
-              </Link>
+              <Link href={`/product/${product.id}`}>{product.name}</Link>
             ) : (
               'Товар видалено'
             )}
