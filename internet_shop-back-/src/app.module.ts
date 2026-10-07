@@ -20,9 +20,24 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
 import { getUploadsDir } from './file/uploads-dir';
 import { QuickOrderModule } from './quick-order/quick-order.module';
 import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
+import { ThrottlerModule } from '@nestjs/throttler';
+import {
+  AUTH_ATTEMPTS_LIMIT,
+  AUTH_ATTEMPTS_TTL,
+  TOO_MANY_ATTEMPTS_MESSAGE,
+} from './auth/throttling';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          limit: AUTH_ATTEMPTS_LIMIT,
+          ttl: AUTH_ATTEMPTS_TTL,
+        },
+      ],
+      errorMessage: TOO_MANY_ATTEMPTS_MESSAGE,
+    }),
     ServeStaticModule.forRoot({
       rootPath: getUploadsDir(),
     }),
