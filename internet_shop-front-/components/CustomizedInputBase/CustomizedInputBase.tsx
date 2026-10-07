@@ -1,7 +1,11 @@
-import React, { ChangeEvent, FC } from 'react';
+import React, { ChangeEvent, FC, useState } from 'react';
 import { useField } from 'formik';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { maskPhoneInput } from '../../utils/phone';
 
 interface Props {
@@ -9,6 +13,7 @@ interface Props {
   name: string;
   placeholder: string;
   multiline?: boolean;
+  autoComplete?: string;
   phoneMask?: boolean;
 }
 
@@ -17,10 +22,13 @@ const CustomizedInputBase: FC<Props> = ({
   type,
   name,
   multiline = false,
+  autoComplete,
   phoneMask = false,
 }) => {
   const [field, meta, helpers] = useField(name);
   const hasError = meta.touched && !!meta.error;
+  const isPassword = type === 'password';
+  const [showPassword, setShowPassword] = useState(false);
 
   const inputProps = phoneMask
     ? {
@@ -39,14 +47,35 @@ const CustomizedInputBase: FC<Props> = ({
       <TextField
         error={hasError}
         placeholder={placeholder}
-        inputProps={inputProps}
+        inputProps={{ ...inputProps, autoComplete }}
         margin="dense"
         label={placeholder}
-        type={type}
+        type={isPassword && showPassword ? 'text' : type}
         fullWidth
         variant="outlined"
         multiline={multiline}
         size="small"
+        InputProps={
+          isPassword
+            ? {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      type="button"
+                      edge="end"
+                      size="small"
+                      aria-label={showPassword ? 'Сховати пароль' : 'Показати пароль'}
+                      title={showPassword ? 'Сховати пароль' : 'Показати пароль'}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => setShowPassword((value) => !value)}
+                    >
+                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }
+            : undefined
+        }
         sx={{
           mb: 1,
           '& .MuiOutlinedInput-root': {
