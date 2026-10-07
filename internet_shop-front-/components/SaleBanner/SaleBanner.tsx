@@ -65,24 +65,22 @@ const SaleBanner: React.FC = () => {
           >
             Встигніть придбати улюблені речі за найкращими цінами
           </Typography>
-          <Link href="/productsList/discounts">
-            <a style={{ textDecoration: 'none' }}>
-              <Button
-                variant="contained"
-                sx={{
-                  bgcolor: '#f9d461',
-                  color: '#1a1a1a',
-                  px: 5,
-                  py: 1.5,
-                  fontWeight: 700,
-                  '&:hover': {
-                    bgcolor: '#e6c250',
-                  },
-                }}
-              >
-                Переглянути
-              </Button>
-            </a>
+          <Link href="/productsList/discounts" style={{ textDecoration: 'none' }}>
+            <Button
+              variant="contained"
+              sx={{
+                bgcolor: '#f9d461',
+                color: '#1a1a1a',
+                px: 5,
+                py: 1.5,
+                fontWeight: 700,
+                '&:hover': {
+                  bgcolor: '#e6c250',
+                },
+              }}
+            >
+              Переглянути
+            </Button>
           </Link>
         </Box>
 

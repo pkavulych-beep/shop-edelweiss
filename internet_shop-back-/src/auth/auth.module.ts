@@ -4,17 +4,22 @@ import { AuthController } from './auth.controller';
 import { UserModule } from '../user/user.module';
 import { LocalStrategy } from './strategy/local.strategy';
 import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { JwtStrategy } from './strategy/jwt.strategy';
-import { ProductModule } from '../product/product.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { RefreshTokenEntity } from './entities/refresh-token.entity';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '30d' },
+      signOptions: {
+        // Значення з env — рядок на кшталт '15m'; тип jsonwebtoken очікує формат ms
+        expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '15m') as JwtSignOptions['expiresIn'],
+      },
     }),
+    TypeOrmModule.forFeature([RefreshTokenEntity]),
     forwardRef(() => UserModule),
   ],
   controllers: [AuthController],

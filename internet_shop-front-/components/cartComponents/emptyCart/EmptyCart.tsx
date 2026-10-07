@@ -38,12 +38,10 @@ export const EmptyCart: FC<IEmptyCartProps> = ({ title = 'Кошик порож�
       >
         Додайте товари, які вам сподобались, та оформіть замовлення
       </Typography>
-      <Link href="/">
-        <a style={{ textDecoration: 'none' }}>
-          <Button variant="contained" sx={{ px: 5, py: 1.5 }}>
-            На головну
-          </Button>
-        </a>
+      <Link href="/" style={{ textDecoration: 'none' }}>
+        <Button variant="contained" sx={{ px: 5, py: 1.5 }}>
+          На головну
+        </Button>
       </Link>
     </Box>
   );

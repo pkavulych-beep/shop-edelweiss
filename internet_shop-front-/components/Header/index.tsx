@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
@@ -38,6 +38,14 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const profileMenuOpen = Boolean(anchorEl);
+
+  // Сюди веде api/Api.ts, коли сесія завершилася і токен оновити не вдалося
+  useEffect(() => {
+    if (router.query.login !== '1') return;
+    if (userData === null) setDialogLogin(true);
+    const { login, ...query } = router.query;
+    router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+  }, [router, userData]);
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     if (userData === null) {
@@ -106,61 +114,60 @@ export default function Header() {
               }}
             >
               {navLinks.map((link) => (
-                <Link key={link.href} href={link.href}>
-                  <a
-                    style={{
-                      textDecoration: 'none',
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  style={{
+                    textDecoration: 'none',
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontSize: '0.7rem',
+                      letterSpacing: '0.15em',
+                      color: isActive(link.href) ? 'primary.main' : 'text.secondary',
+                      borderBottom: isActive(link.href) ? '2px solid' : '2px solid transparent',
+                      borderColor: isActive(link.href) ? 'primary.main' : 'transparent',
+                      pb: 0.5,
+                      transition: 'all 0.3s ease',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        color: 'primary.main',
+                      },
                     }}
                   >
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontSize: '0.7rem',
-                        letterSpacing: '0.15em',
-                        color: isActive(link.href) ? 'primary.main' : 'text.secondary',
-                        borderBottom: isActive(link.href) ? '2px solid' : '2px solid transparent',
-                        borderColor: isActive(link.href) ? 'primary.main' : 'transparent',
-                        pb: 0.5,
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          color: 'primary.main',
-                        },
-                      }}
-                    >
-                      {link.label}
-                    </Typography>
-                  </a>
+                    {link.label}
+                  </Typography>
                 </Link>
               ))}
             </Box>
           </Box>
 
           {/* Center: Logo */}
-          <Link href="/">
-            <a
-              style={{
-                position: 'absolute',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                textDecoration: 'none',
+          <Link
+            href="/"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              textDecoration: 'none',
+            }}
+          >
+            <Typography
+              sx={{
+                fontFamily: "'Manrope', sans-serif",
+                fontWeight: 800,
+                fontSize: { xs: '0.75rem', sm: '1rem', md: '1.4rem' },
+                letterSpacing: { xs: '0.12em', sm: '0.2em', md: '0.25em' },
+                textTransform: 'uppercase',
+                color: 'text.primary',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
-              <Typography
-                sx={{
-                  fontFamily: "'Manrope', sans-serif",
-                  fontWeight: 800,
-                  fontSize: { xs: '0.75rem', sm: '1rem', md: '1.4rem' },
-                  letterSpacing: { xs: '0.12em', sm: '0.2em', md: '0.25em' },
-                  textTransform: 'uppercase',
-                  color: 'text.primary',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Edelweiss
-              </Typography>
-            </a>
+              Edelweiss
+            </Typography>
           </Link>
 
           {/* Right: Icons */}
@@ -187,30 +194,28 @@ export default function Header() {
             </IconButton>
 
             <Link href="/cart">
-              <a>
-                <IconButton
+              <IconButton
+                sx={{
+                  color: 'text.primary',
+                  '&:hover': { color: 'primary.main' },
+                  transition: 'color 0.3s',
+                }}
+              >
+                <Badge
+                  badgeContent={cartCount}
                   sx={{
-                    color: 'text.primary',
-                    '&:hover': { color: 'primary.main' },
-                    transition: 'color 0.3s',
+                    '& .MuiBadge-badge': {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      fontSize: '0.6rem',
+                      minWidth: 18,
+                      height: 18,
+                    },
                   }}
                 >
-                  <Badge
-                    badgeContent={cartCount}
-                    sx={{
-                      '& .MuiBadge-badge': {
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        fontSize: '0.6rem',
-                        minWidth: 18,
-                        height: 18,
-                      },
-                    }}
-                  >
-                    <ShoppingBagOutlinedIcon />
-                  </Badge>
-                </IconButton>
-              </a>
+                  <ShoppingBagOutlinedIcon />
+                </Badge>
+              </IconButton>
             </Link>
           </Box>
         </Toolbar>
@@ -247,27 +252,27 @@ export default function Header() {
             </IconButton>
           </Box>
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <a
-                onClick={() => setMobileMenuOpen(false)}
-                style={{ textDecoration: 'none' }}
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setMobileMenuOpen(false)}
+              style={{ textDecoration: 'none' }}
+            >
+              <Typography
+                sx={{
+                  py: 2,
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  color: isActive(link.href) ? 'primary.main' : 'text.primary',
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  cursor: 'pointer',
+                }}
               >
-                <Typography
-                  sx={{
-                    py: 2,
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    letterSpacing: '0.15em',
-                    textTransform: 'uppercase',
-                    color: isActive(link.href) ? 'primary.main' : 'text.primary',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {link.label}
-                </Typography>
-              </a>
+                {link.label}
+              </Typography>
             </Link>
           ))}
         </Box>

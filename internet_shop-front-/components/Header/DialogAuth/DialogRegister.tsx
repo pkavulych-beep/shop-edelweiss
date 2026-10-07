@@ -70,9 +70,19 @@ export const DialogRegister: FC<IDialogRegister> = ({ open, setRegister, setLogi
             </Typography>
             <CustomizedInputBase type="string" name="fullName" placeholder="ПІБ" />
             <CustomizedInputBase type="email" name="email" placeholder="Електронна пошта" />
-            <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
-            <CustomizedInputBase type="string" name="password" placeholder="Пароль" />
-            <CustomizedInputBase type="string" name="confirmPassword" placeholder="Підтвердити пароль" />
+<CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
+            <CustomizedInputBase
+              type="password"
+              name="password"
+              placeholder="Пароль"
+              autoComplete="new-password"
+            />
+            <CustomizedInputBase
+              type="password"
+              name="confirmPassword"
+              placeholder="Підтвердити пароль"
+              autoComplete="new-password"
+            />
             {error && (
               <Typography
                 sx={{

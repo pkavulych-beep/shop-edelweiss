@@ -33,6 +33,11 @@ export const authApi = (instance: AxiosInstance) => ({
     return data;
   },
 
+  async logout(refreshToken: string) {
+    // Робить refresh-токен недійсним на беку
+    await instance.post('/auth/logout', { refreshToken });
+  },
+
   async authorization() {
     const { data } = await instance.get<IUserDataAndCart>('/auth/profile');
     return data;
