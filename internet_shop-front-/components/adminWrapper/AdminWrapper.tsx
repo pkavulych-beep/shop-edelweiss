@@ -7,9 +7,13 @@ interface IAdmin {
 }
 
 export const AdminWrapper: FC<IAdmin> = ({ children }) => {
-  const value = useAppSelector(state => state.user.userData?.roles[0]?.value);
+  const isAdmin = useAppSelector(
+    state =>
+      state.user.userData?.roles.some(role => role.value === Role.admin) ??
+      false
+  );
 
-  if (value !== Role.admin) {
+  if (!isAdmin) {
     return null;
   } else {
     return (
