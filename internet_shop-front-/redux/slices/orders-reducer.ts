@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { HYDRATE } from 'next-redux-wrapper';
+import { hydrate } from '../hydrate';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
 import { Order } from '../Types/orderType';
@@ -14,10 +14,10 @@ export const ordersSlice = createSlice({
       state.data = action.payload;
     },
   },
-  extraReducers: {
-    [HYDRATE]: (state, action) => {
+  extraReducers: (builder) => {
+    builder.addCase(hydrate, (state, action) => {
       state.data = action.payload.orders.data;
-    },
+    });
   },
 });
 
