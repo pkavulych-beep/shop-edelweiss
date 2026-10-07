@@ -105,9 +105,7 @@ export default function AdminOrderDetailsPage() {
           <Alert severity='error' sx={{ mb: 2 }}>
             {error}
           </Alert>
-          <Link href='/admin/orders'>
-            <a style={{ color: 'inherit' }}>← До списку замовлень</a>
-          </Link>
+          <Link href='/admin/orders' style={{ color: 'inherit' }}>← До списку замовлень</Link>
         </>
       ) : (
         <CircularProgress sx={{ display: 'block', mx: 'auto', my: 4 }} />
@@ -133,9 +131,7 @@ export default function AdminOrderDetailsPage() {
                 {order.items.map(({ id: itemId, product, size, quantity, price }) => (
                   <TableRow key={itemId}>
                     <TableCell>
-                      <Link href={`/product/${product.id}`}>
-                        <a style={{ color: 'inherit' }}>{product.name}</a>
-                      </Link>
+                      <Link href={`/product/${product.id}`} style={{ color: 'inherit' }}>{product.name}</Link>
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{size}</TableCell>
                     <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
@@ -225,12 +221,10 @@ export default function AdminOrderDetailsPage() {
   return (
     <MainLayout title={`Замовлення №${id || ''}`}>
       <Box sx={{ maxWidth: 1000, mx: 'auto', px: { xs: 2, md: 4 }, py: { xs: 3, md: 6 } }}>
-        <Link href='/admin/orders'>
-          <a style={{ color: 'inherit', textDecoration: 'none' }}>
-            <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', mb: 1 }}>
-              ← До списку замовлень
-            </Typography>
-          </a>
+        <Link href='/admin/orders' style={{ color: 'inherit', textDecoration: 'none' }}>
+          <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', mb: 1 }}>
+            ← До списку замовлень
+          </Typography>
         </Link>
         <Typography variant='h4' sx={{ fontSize: '1.25rem', mb: 3 }}>
           Замовлення №{id || ''}
