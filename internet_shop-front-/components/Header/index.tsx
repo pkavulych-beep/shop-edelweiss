@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
@@ -38,6 +38,14 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const profileMenuOpen = Boolean(anchorEl);
+
+  // Сюди веде api/Api.ts, коли сесія завершилася і токен оновити не вдалося
+  useEffect(() => {
+    if (router.query.login !== '1') return;
+    if (userData === null) setDialogLogin(true);
+    const { login, ...query } = router.query;
+    router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+  }, [router, userData]);
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     if (userData === null) {
