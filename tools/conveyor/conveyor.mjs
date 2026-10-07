@@ -578,11 +578,26 @@ function tick() {
   const qa = state.qa;
   if (!busy(qa, 'qa') && qa.lastJob && !qa.lastJob.checked) finishQa(qa);
 
-  /** Whose pull request this is: the coder on its author's plan, else the one its issue's difficulty picks. */
+  /** The queued issues a pull request closes. */
+  const issuesOfPr = (pr) => [...(pr.body ?? '').matchAll(CLOSES)].map((m) => Number(m[1]));
+  const issueOfPr = (pr) => issuesOfPr(pr).map((n) => issues.find((i) => i.number === n)).find(Boolean);
+
+  /**
+   * Whose pull request this is: the coder that did its issue, as the conveyor remembers it (two coders can share a
+   * provider), else the one on its author's provider and model, else the one its issue's difficulty picks.
+   */
   const coderOfPr = (pr, author) => {
-    const byAuthor = author && Object.keys(config.coders).find((k) => config.coders[k].provider === author.provider);
-    const issue = [...(pr.body ?? '').matchAll(CLOSES)].map((m) => issues.find((i) => i.number === Number(m[1]))).find(Boolean);
-    return byAuthor ?? (issue && coderFor(difficultyOf(issue))) ?? CLAUDE_CODER;
+    const byJob = issuesOfPr(pr).map((n) => (state.issues[n]?.lastJob ?? state.issues[n]?.job)?.coder).find((c) => config.coders[c]);
+    const byAuthor = author && Object.keys(config.coders).find((k) =>
+      config.coders[k].provider === author.provider && (!author.model || config.coders[k].model === author.model));
+    const issue = issueOfPr(pr);
+    return byJob ?? byAuthor ?? (issue && coderFor(difficultyOf(issue))) ?? CLAUDE_CODER;
+  };
+
+  /** Who reviews a pull request: the one `reviewerFor` gives its issue's difficulty, else the reviewer. */
+  const reviewerOf = (pr) => {
+    const issue = issueOfPr(pr);
+    return (issue && config.reviewerFor?.[difficultyOf(issue)]) ?? config.reviewer;
   };
 
   const requestFix = (pr, s, reasons, key) => {
@@ -629,15 +644,16 @@ function tick() {
 
   /** Hires the reviewer for a PR; true if it was hired. */
   const requestReview = (pr, s, again = false) => {
-    if (reviewerBusy || pausedFor(config.reviewer.provider)) return false;
+    const reviewer = reviewerOf(pr);
+    if (reviewerBusy || pausedFor(reviewer.provider)) return false;
     const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
     const title = `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
-    const worker = hire(config.reviewer, "рев'юера", title, text, ['--no-worktree']);
+    const worker = hire(reviewer, "рев'юера", title, text, ['--no-worktree']);
     if (!worker) return false;
     s.reviewRounds = (s.reviewRounds ?? 0) + 1;
     s.reviewedSha = pr.headRefOid;
     delete s.fixFor; // a new verdict starts a new round of fixes
-    s.job = { kind: 'review', provider: config.reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
+    s.job = { kind: 'review', provider: reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
     reviewerBusy = true;
     return true;
   };
