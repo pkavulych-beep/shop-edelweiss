@@ -45,7 +45,10 @@ const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 // A line like "Залежить від #12, #13" in an issue: it waits until those issues are closed.
 const DEPENDS = /^[\s*>-]*(?:залежить від|depends on|blocked by)[:\s](.*)$/gim;
 // What Claude Code and Codex print when a plan's usage window runs out (not their warnings that it's close).
-const LIMIT_TEXT = /hit your (?:usage )?limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+// Claude Code names the limit ("You've hit your session limit · resets 1:50am"), Codex doesn't ("hit your usage limit").
+const LIMIT_TEXT = /hit your (?:[\w']+ ){0,2}limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+// Claude Code's limits counted over a week: their reset can be up to a day away even when it shows only the time.
+const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 // Generated files: their lines don't count towards a pull request's size.
 const LOCK_FILE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/;
@@ -192,7 +195,8 @@ const hour24 = (hour, ampm) => (Number(hour) % 12) + (ampm.toUpperCase() === 'PM
 
 /**
  * When a usage limit lifts, if the message says: Codex's "try again at Nov 3rd, 2026 8:00 PM" or
- * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am".
+ * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am". It can be in the past:
+ * the message is an old one, and the limit has already lifted.
  */
 function resetTime(text, now) {
   let m = /try again at ([a-z]{3})[a-z]* (\d{1,2})(?:st|nd|rd|th)?,? (\d{4}),? (\d{1,2}):(\d{2})\s*([ap]m)/i.exec(text);
@@ -201,15 +205,31 @@ function resetTime(text, now) {
   }
   m = /try again in ((?:\d+\s*(?:days?|hours?|hrs?|minutes?|mins?)[\s,]*(?:and\s*)?)+)/i.exec(text);
   if (m) return now + [...m[1].matchAll(/(\d+)\s*([dhm])/gi)].reduce((ms, [, n, unit]) => ms + Number(n) * { d: 1440, h: 60, m: 1 }[unit.toLowerCase()] * MINUTE, 0);
-  m = /resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i.exec(text);
+  // The last one: an older message can still be on the screen above it.
+  m = [...text.matchAll(/resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/gi)].at(-1);
   if (m) {
     const at = new Date(now);
     if (m[1] && MONTHS.includes(m[1].toLowerCase())) at.setMonth(MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]));
     at.setHours(hour24(m[3], m[5]), Number(m[4] ?? 0), 0, 0);
-    if (!m[1] && at.getTime() <= now) at.setDate(at.getDate() + 1);
+    // Claude Code shows only the time while the reset is less than a day away, and goes on showing it once it has
+    // passed. A weekly limit resets at the next such time. A session limit resets at most 5 hours ahead, so its
+    // time is the one between 18 hours ago and 6 hours ahead, and one in the past has already come.
+    if (!m[1]) {
+      if (LONG_LIMIT.test(text)) {
+        if (at.getTime() <= now) at.setDate(at.getDate() + 1);
+      } else if (at.getTime() > now + 6 * 60 * MINUTE) at.setDate(at.getDate() - 1);
+      else if (at.getTime() <= now - 18 * 60 * MINUTE) at.setDate(at.getDate() + 1);
+    }
     return at.getTime();
   }
   return undefined;
+}
+
+/** The same time of day, a day later. */
+function nextDay(time) {
+  const at = new Date(time);
+  at.setDate(at.getDate() + 1);
+  return at.getTime();
 }
 
 /** Whether a worker's terminal, from byte `from` on, says its plan's usage limit ran out, and until when if it says. */
@@ -440,17 +460,21 @@ function tick() {
   const busyCoders = new Set();
   let reviewerBusy = false;
 
+  /** Tells the agent of a job that stopped on a usage limit to go on. True if it was told. */
+  const wake = (job) => {
+    if (tell(job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${job.worker}`) === undefined) return false;
+    job.limited = false;
+    job.wokenAt = now; // `since` stays: QA counts what it filed from then on
+    job.scrollFrom = terminalSize(job.workerId); // the old limit message stays on its screen
+    return true;
+  };
+
   // Usage limits: each plan's window runs out on its own, so wait it out, then wake whoever stopped on it.
   for (const [provider, until] of Object.entries(state.paused)) {
     if (until > now) continue;
     delete state.paused[provider];
     for (const s of [...Object.values(state.prs), ...Object.values(state.issues), state.qa]) {
-      if (!s.job?.limited || (s.job.provider ?? 'claude') !== provider) continue;
-      if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
-        s.job.limited = false;
-        s.job.wokenAt = now; // `since` stays: QA counts what it filed from then on
-        s.job.scrollFrom = terminalSize(s.job.workerId); // the old limit message stays on its screen
-      }
+      if (s.job?.limited && (s.job.provider ?? 'claude') === provider && wake(s.job)) s.job.wokeFor = until; // the reset it woke after
     }
   }
   const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
@@ -496,7 +520,16 @@ function tick() {
     // A usage limit can leave the agent stuck at a question (Codex offers a cheaper model) while its status
     // still says it's working, so its terminal is read whatever the status.
     const limit = where === 'gone' ? null : usageLimit(job.workerId, job.scrollFrom);
-    if (limit) return waitOutLimit(s, kind, n, limit);
+    // An old message: the reset it names has passed, or it's the one the agent woke after, read as tomorrow's. The
+    // screen still shows it or printed it again, so it pauses nothing: an agent that stopped on it is told to go on,
+    // once, and otherwise the job goes on as if it weren't there.
+    if (limit && (limit.until <= now || limit.until === nextDay(job.wokeFor))) {
+      if (where !== 'running' && job.nudgedFor !== limit.until) {
+        job.nudgedFor = limit.until;
+        wake(job);
+        return true;
+      }
+    } else if (limit) return waitOutLimit(s, kind, n, limit);
     if (where === 'running') return true;
     if (where === 'needs_input') {
       job.waitingSince ??= now;

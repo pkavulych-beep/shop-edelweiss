@@ -32,6 +32,17 @@ const verdict = (v, sha = HEAD) => ({ 50: [{ author: { login: 'pkavulych-beep' }
 const later = Date.now() + 3600_000;
 const app = (number, i) => ({ number, title: `PR ${number}`, url: `u${number}`, mergedAt: `2026-10-05T1${Math.floor(i / 6)}:${String((i % 6) * 10).padStart(2, '0')}:00Z`, files: [{ path: 'internet_shop-front-/pages/x.tsx' }] });
 const CODEX_LIMIT = '■ You’ve hit your usage limit. To continue using Codex ... or try again at Nov 3rd, 2026 8:00 PM.\n› 1. Switch to gpt-6-luna\n';
+// Claude Code's limit message, with the reset time as it prints it ("1:50am"); `minute` is that time as a timestamp.
+const NOW = Date.now();
+const MIN = 60_000;
+const clock = (t) => { const d = new Date(t); return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}${d.getHours() < 12 ? 'am' : 'pm'}`; };
+const minute = (t) => new Date(t).setSeconds(0, 0);
+const tomorrow = (t) => { const d = new Date(t); d.setDate(d.getDate() + 1); return d.getTime(); };
+const hitLimit = (t, limit = 'session') => `⎿  You've hit your ${limit} limit · resets ${clock(t)} (Europe/Kyiv) · progress saved\n`;
+// With automatic continue on, Claude Code also shows this until the limit resets, and again if it runs into it once more.
+const claudeLimit = (t, limit) => `${hitLimit(t, limit)}Usage limit reached again · continuing automatically in 2m · esc to cancel\n`;
+const cosmo = (status) => ({ name: 'Cosmo', id: 'w-c', kind: 'agent', provider: 'claude', status });
+const coding = (job = {}) => ({ issues: { 94: { job: { kind: 'code', coder: 'opus', provider: 'claude', worker: 'Cosmo', workerId: 'w-c', since: 0, ...job } } } });
 
 const HIRE = (provider, model) => `^office-workers hire --provider ${provider} --model ${model.replace(/\//g, '\\/')} `;
 const scenarios = [
@@ -106,6 +117,27 @@ const scenarios = [
     fx: { workers: [me, { name: 'Byte', id: 'w-b', kind: 'agent', provider: 'codex', status: 'working' }], issues: [issue(27, ['medium'])], scrollback: { 'w-b': CODEX_LIMIT },
       state: st({ issues: { 27: { job: { kind: 'code', coder: 'codex', provider: 'codex', worker: 'Byte', workerId: 'w-b', since: 0 } } } }) },
     want: ['^office-workers home Byte ', `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 27`], state: (s) => s.paused.codex === new Date(2026, 10, 3, 20, 0).getTime() && s.issues[27]?.job?.coder === 'zen' },
+  { name: 'Claude: «hit your session limit · resets <за 2 год>» → пауза claude до цього часу, задача чекає того ж агента',
+    fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': hitLimit(NOW + 120 * MIN) }, state: st(coding()) },
+    not: ['^office-workers (home|tell)'], state: (s) => s.paused.claude === minute(NOW + 120 * MIN) && s.issues[94]?.job?.limited },
+  { name: 'Claude: «hit your weekly limit · resets <годину тому>» → це завтра, агент додому, задача в чергу',
+    fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 60 * MIN, 'weekly') }, state: st(coding()) },
+    want: ['^office-workers home Cosmo '], state: (s) => s.paused.claude === tomorrow(minute(NOW - 60 * MIN)) && !s.issues[94]?.job },
+  { name: 'пауза claude скінчилась → будимо агента й памʼятаємо, після якого скидання',
+    fx: { workers: [me, cosmo('idle')], issues: [], state: st({ paused: { claude: minute(NOW - MIN) }, ...coding({ limited: true }) }) },
+    once: ['^office-workers tell Cosmo <<Ліміт використання мав відновитися'], state: (s) => !s.paused.claude && s.issues[94]?.job?.wokeFor === minute(NOW - MIN) },
+  { name: 'після пробудження на екрані старе «resets <5 хв тому>», агент працює → без паузи, не чіпати',
+    fx: { workers: [me, cosmo('working')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN) }, state: st(coding({ wokeFor: minute(NOW - 5 * MIN), wokenAt: NOW - 2 * MIN })) },
+    not: ['^office-workers (home|tell)'], state: (s) => !s.paused.claude && s.issues[94]?.job && !s.issues[94]?.job.limited },
+  { name: 'після пробудження на екрані старе «hit your weekly limit · resets <5 хв тому>» → не завтрашній ліміт, без паузи',
+    fx: { workers: [me, cosmo('working')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN, 'weekly') }, state: st(coding({ wokeFor: minute(NOW - 5 * MIN), wokenAt: NOW - 2 * MIN })) },
+    not: ['^office-workers (home|tell)'], state: (s) => !s.paused.claude && s.issues[94]?.job },
+  { name: 'агент зупинився на старому «resets <5 хв тому>» → один раз попросити продовжити, без паузи',
+    fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN) }, state: st(coding()) },
+    once: ['^office-workers tell Cosmo <<Ліміт використання мав відновитися'], state: (s) => !s.paused.claude && s.issues[94]?.job?.nudgedFor === minute(NOW - 5 * MIN) },
+  { name: 'після цього знову стоїть на тому ж старому повідомленні → без паузи й без другого прохання, задача закінчена',
+    fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN) }, state: st(coding({ nudgedFor: minute(NOW - 5 * MIN) })) },
+    not: ['^office-workers tell'], state: (s) => !s.paused.claude && !s.issues[94]?.job },
   // ── QA ──
   { name: '10 мерджів коду → QA на Sonnet, порти 7779/3002',
     fx: { workers: [me], issues: [], merged: Array.from({ length: 10 }, (_, i) => app(100 + i, i)), state: st() },
