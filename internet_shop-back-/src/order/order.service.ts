@@ -29,7 +29,7 @@ export class OrderService {
   async buildItems(items: OrderItemDto[]) {
     const merged = new Map<string, OrderItemDto>();
     for (const item of items) {
-      const key = `${item.productId}:${item.size}`;
+      const key = `${item.productId}:${item.size ?? ''}`;
       const quantity = (merged.get(key)?.quantity ?? 0) + item.quantity;
       merged.set(key, { ...item, quantity });
     }
@@ -44,11 +44,14 @@ export class OrderService {
       if (!product) {
         throw new NotFoundException(null, 'Товар не знайдено');
       }
-      if (product.sizes?.length && !product.sizes.includes(size)) {
-        throw new BadRequestException(`Розміру ${size} немає в наявності`);
+      const effectiveSize = size ?? '';
+      if (product.sizes?.length) {
+        if (!effectiveSize || !product.sizes.includes(effectiveSize)) {
+          throw new BadRequestException(`Розміру ${effectiveSize || size} немає в наявності`);
+        }
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
-      return { productId, size, quantity, price };
+      return { productId, size: effectiveSize, quantity, price };
     });
   }
 

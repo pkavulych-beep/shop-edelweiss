@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -126,10 +127,26 @@ export class UsersService {
     { idProduct, size }: productToBasketDto,
   ) {
     await this.productService.assertPurchasable([idProduct]);
+    const [product] = await this.productService.findProductsMain([idProduct]);
+
+    const effectiveSize = size ?? '';
+    if (product.sizes?.length) {
+      if (!effectiveSize) {
+        throw new BadRequestException('Оберіть розмір товару');
+      }
+      if (!product.sizes.includes(effectiveSize)) {
+        throw new BadRequestException('Такого розміру немає в цього товару');
+      }
+    } else {
+      // Для товарів без розмірів зберігаємо порожній рядок
+      if (effectiveSize && effectiveSize.trim()) {
+        // Не очікуємо розмір для такого товару
+      }
+    }
 
     // Перевірити чи вже є такий товар з таким розміром в корзині
     const existing = await this.basketRepository.findOne({
-      where: { userId: idUser, productId: idProduct, size },
+      where: { userId: idUser, productId: idProduct, size: effectiveSize || '' },
     });
 
     if (existing) {
@@ -140,7 +157,7 @@ export class UsersService {
     const basketItem = this.basketRepository.create({
       userId: idUser,
       productId: idProduct,
-      size,
+      size: effectiveSize || '',
       quantity: 1,
     });
     return await this.basketRepository.save(basketItem);
@@ -150,7 +167,7 @@ export class UsersService {
     idUser: number,
     { idProduct, size }: productToBasketDto,
   ) {
-    await this.basketRepository.delete({ userId: idUser, productId: idProduct, size });
+    await this.basketRepository.delete({ userId: idUser, productId: idProduct, size: size ?? '' });
     return await this.getCartItems(idUser);
   }
 
@@ -171,7 +188,7 @@ export class UsersService {
       if (!purchasable.has(item.productId)) continue;
 
       const existing = await this.basketRepository.findOne({
-        where: { userId: idUser, productId: item.productId, size: item.size },
+        where: { userId: idUser, productId: item.productId, size: item.size ?? '' },
       });
 
       if (existing) {
@@ -181,7 +198,7 @@ export class UsersService {
         const basketItem = this.basketRepository.create({
           userId: idUser,
           productId: item.productId,
-          size: item.size,
+          size: item.size ?? '',
           quantity: item.quantity,
         });
         await this.basketRepository.save(basketItem);

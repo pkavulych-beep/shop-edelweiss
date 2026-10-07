@@ -1,10 +1,11 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class productToBasketDto {
   @IsNotEmpty({ message: 'Не вказано товар' })
   idProduct: number;
 
-  @IsNotEmpty({ message: 'Оберіть розмір' })
+  @IsOptional()
   @IsString({ message: 'Розмір має бути рядком' })
-  size: string;
+  @IsNotEmpty({ message: 'Розмір не може бути порожнім' })
+  size?: string;
 }

@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsNumber, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SyncCartItemDto {
@@ -6,9 +6,10 @@ export class SyncCartItemDto {
   @IsNumber({}, { message: 'Ідентифікатор товару має бути числом' })
   productId: number;
 
-  @IsNotEmpty({ message: 'Оберіть розмір' })
+  @IsOptional()
   @IsString({ message: 'Розмір має бути рядком' })
-  size: string;
+  @IsNotEmpty({ message: 'Розмір не може бути порожнім' })
+  size?: string;
 
   @IsNotEmpty({ message: 'Вкажіть кількість' })
   @IsNumber({}, { message: 'Кількість має бути числом' })

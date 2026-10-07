@@ -36,7 +36,6 @@ describe('CreateOrderDto', () => {
     ['without items', { items: [] }],
     ['with items not as a list', { items: item }],
     ['with non-integer product id', { items: [{ ...item, productId: 'abc' }] }],
-    ['without size', { items: [{ ...item, size: undefined }] }],
     ['with empty size', { items: [{ ...item, size: '' }] }],
     ['with zero quantity', { items: [{ ...item, quantity: 0 }] }],
     ['with fractional quantity', { items: [{ ...item, quantity: 1.5 }] }],

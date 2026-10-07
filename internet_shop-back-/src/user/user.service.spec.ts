@@ -17,6 +17,7 @@ describe('UsersService cart', () => {
     productService = {
       assertPurchasable: jest.fn(),
       findPurchasableIds: jest.fn(),
+      findProductsMain: jest.fn().mockResolvedValue([{ id: 5, sizes: ['M'] }]),
     };
     service = new UsersService({} as any, basketRepository, {} as any, productService);
   });
