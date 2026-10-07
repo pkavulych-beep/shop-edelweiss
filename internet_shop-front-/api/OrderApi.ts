@@ -44,4 +44,16 @@ export const ordersApi = (instance: AxiosInstance) => ({
     const { data } = await instance.get<OrdersPage>("order", { params });
     return data;
   },
+
+  async findById(id: number) {
+    // Деталі одного замовлення: разом із позиціями, товарами і покупцем
+    const { data } = await instance.get<Order>(`order/${id}`);
+    return data;
+  },
+
+  async updateStatus(id: number, status: Status) {
+    // Зміна статусу — PATCH /order/:id/status, лише для адміна
+    const { data } = await instance.patch<Order>(`order/${id}/status`, { status });
+    return data;
+  },
 });
