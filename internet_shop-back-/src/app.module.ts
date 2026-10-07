@@ -20,6 +20,7 @@ import { BasketItemEntity } from './user/entities/basket-item.entity';
 import { getUploadsDir } from './file/uploads-dir';
 import { QuickOrderModule } from './quick-order/quick-order.module';
 import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
+import { RefreshTokenEntity } from './auth/entities/refresh-token.entity';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
         OrderItemEntity,
         BasketItemEntity,
         QuickOrderEntity,
+        RefreshTokenEntity,
       ],
       synchronize: true,
     }),
