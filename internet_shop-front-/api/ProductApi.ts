@@ -1,15 +1,6 @@
 import { IProduct, IProductFilters, IProductsResponse, CartProductDetails, photo } from '../redux/Types/ProductType';
 import { AxiosInstance } from 'axios';
 
-interface whereGetRequest {
-  filters?: Object;
-  take: number;
-  skip?: number;
-  order?: Object;
-}
-
-const LIMIT = 20;
-
 export const productApi = (instance: AxiosInstance) => ({
   async create(dto) {
     const { data } = await instance.post<IProduct>('/product', dto);
@@ -22,11 +13,6 @@ export const productApi = (instance: AxiosInstance) => ({
       if (val != null && val !== '') params.append(key, String(val));
     });
     const { data } = await instance.get<IProductsResponse>(`/product/filter?${params.toString()}`);
-    return data;
-  },
-  // Старий метод — для зворотної сумісності
-  async findAll(whereObj: whereGetRequest = { take: LIMIT }) {
-    const { data } = await instance.post<IProduct[]>('/product/getFiltered', whereObj);
     return data;
   },
   async findById(id) {

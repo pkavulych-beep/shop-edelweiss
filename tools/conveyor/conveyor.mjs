@@ -45,7 +45,10 @@ const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 // A line like "Залежить від #12, #13" in an issue: it waits until those issues are closed.
 const DEPENDS = /^[\s*>-]*(?:залежить від|depends on|blocked by)[:\s](.*)$/gim;
 // What Claude Code and Codex print when a plan's usage window runs out (not their warnings that it's close).
-const LIMIT_TEXT = /hit your (?:usage )?limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+// Claude Code names the limit ("You've hit your session limit · resets 1:50am"), Codex doesn't ("hit your usage limit").
+const LIMIT_TEXT = /hit your (?:[\w']+ ){0,2}limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+// Claude Code's limits counted over a week: their reset can be up to a day away even when it shows only the time.
+const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 // Generated files: their lines don't count towards a pull request's size.
 const LOCK_FILE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/;
@@ -146,6 +149,9 @@ function tell(worker, text, what) {
   return act(what, () => run('office-workers', ['tell', worker], { input: text }));
 }
 
+/** A worker's git branch, from its worktree as the office lists it. */
+const branchOf = (w) => w.worktree?.branch ?? (typeof w.worktree === 'string' ? `office/${path.basename(w.worktree)}` : undefined);
+
 const sentHome = new Set(); // who went home this tick, so nobody is sent twice
 
 function sendHome(names, why) {
@@ -192,7 +198,8 @@ const hour24 = (hour, ampm) => (Number(hour) % 12) + (ampm.toUpperCase() === 'PM
 
 /**
  * When a usage limit lifts, if the message says: Codex's "try again at Nov 3rd, 2026 8:00 PM" or
- * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am".
+ * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am". It can be in the past:
+ * the message is an old one, and the limit has already lifted.
  */
 function resetTime(text, now) {
   let m = /try again at ([a-z]{3})[a-z]* (\d{1,2})(?:st|nd|rd|th)?,? (\d{4}),? (\d{1,2}):(\d{2})\s*([ap]m)/i.exec(text);
@@ -201,15 +208,31 @@ function resetTime(text, now) {
   }
   m = /try again in ((?:\d+\s*(?:days?|hours?|hrs?|minutes?|mins?)[\s,]*(?:and\s*)?)+)/i.exec(text);
   if (m) return now + [...m[1].matchAll(/(\d+)\s*([dhm])/gi)].reduce((ms, [, n, unit]) => ms + Number(n) * { d: 1440, h: 60, m: 1 }[unit.toLowerCase()] * MINUTE, 0);
-  m = /resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i.exec(text);
+  // The last one: an older message can still be on the screen above it.
+  m = [...text.matchAll(/resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/gi)].at(-1);
   if (m) {
     const at = new Date(now);
     if (m[1] && MONTHS.includes(m[1].toLowerCase())) at.setMonth(MONTHS.indexOf(m[1].toLowerCase()), Number(m[2]));
     at.setHours(hour24(m[3], m[5]), Number(m[4] ?? 0), 0, 0);
-    if (!m[1] && at.getTime() <= now) at.setDate(at.getDate() + 1);
+    // Claude Code shows only the time while the reset is less than a day away, and goes on showing it once it has
+    // passed. A weekly limit resets at the next such time. A session limit resets at most 5 hours ahead, so its
+    // time is the one between 18 hours ago and 6 hours ahead, and one in the past has already come.
+    if (!m[1]) {
+      if (LONG_LIMIT.test(text)) {
+        if (at.getTime() <= now) at.setDate(at.getDate() + 1);
+      } else if (at.getTime() > now + 6 * 60 * MINUTE) at.setDate(at.getDate() - 1);
+      else if (at.getTime() <= now - 18 * 60 * MINUTE) at.setDate(at.getDate() + 1);
+    }
     return at.getTime();
   }
   return undefined;
+}
+
+/** The same time of day, a day later. */
+function nextDay(time) {
+  const at = new Date(time);
+  at.setDate(at.getDate() + 1);
+  return at.getTime();
 }
 
 /** Whether a worker's terminal, from byte `from` on, says its plan's usage limit ran out, and until when if it says. */
@@ -391,7 +414,7 @@ function needsHuman(kind, n, reason) {
 }
 
 // What the conveyor counts per PR and per issue to know when to give up.
-const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'fixRounds', 'fixFor', 'mergeFailures', 'updatedFor'];
+const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'reviewRetried', 'fixRounds', 'fixFor', 'fixRetried', 'mergeFailures', 'updatedFor'];
 const ISSUE_COUNTS = ['failures'];
 
 /**
@@ -440,17 +463,21 @@ function tick() {
   const busyCoders = new Set();
   let reviewerBusy = false;
 
+  /** Tells the agent of a job that stopped on a usage limit to go on. True if it was told. */
+  const wake = (job) => {
+    if (tell(job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${job.worker}`) === undefined) return false;
+    job.limited = false;
+    job.wokenAt = now; // `since` stays: QA counts what it filed from then on
+    job.scrollFrom = terminalSize(job.workerId); // the old limit message stays on its screen
+    return true;
+  };
+
   // Usage limits: each plan's window runs out on its own, so wait it out, then wake whoever stopped on it.
   for (const [provider, until] of Object.entries(state.paused)) {
     if (until > now) continue;
     delete state.paused[provider];
     for (const s of [...Object.values(state.prs), ...Object.values(state.issues), state.qa]) {
-      if (!s.job?.limited || (s.job.provider ?? 'claude') !== provider) continue;
-      if (tell(s.job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${s.job.worker}`) !== undefined) {
-        s.job.limited = false;
-        s.job.wokenAt = now; // `since` stays: QA counts what it filed from then on
-        s.job.scrollFrom = terminalSize(s.job.workerId); // the old limit message stays on its screen
-      }
+      if (s.job?.limited && (s.job.provider ?? 'claude') === provider && wake(s.job)) s.job.wokeFor = until; // the reset it woke after
     }
   }
   const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
@@ -496,7 +523,16 @@ function tick() {
     // A usage limit can leave the agent stuck at a question (Codex offers a cheaper model) while its status
     // still says it's working, so its terminal is read whatever the status.
     const limit = where === 'gone' ? null : usageLimit(job.workerId, job.scrollFrom);
-    if (limit) return waitOutLimit(s, kind, n, limit);
+    // An old message: the reset it names has passed, or it's the one the agent woke after, read as tomorrow's. The
+    // screen still shows it or printed it again, so it pauses nothing: an agent that stopped on it is told to go on,
+    // once, and otherwise the job goes on as if it weren't there.
+    if (limit && (limit.until <= now || limit.until === nextDay(job.wokeFor))) {
+      if (where !== 'running' && job.nudgedFor !== limit.until) {
+        job.nudgedFor = limit.until;
+        wake(job);
+        return true;
+      }
+    } else if (limit) return waitOutLimit(s, kind, n, limit);
     if (where === 'running') return true;
     if (where === 'needs_input') {
       job.waitingSince ??= now;
@@ -551,19 +587,25 @@ function tick() {
 
   const requestFix = (pr, s, reasons, key) => {
     const n = pr.number;
-    if (s.fixFor === key) {
+    // The same request as last time: nothing was pushed since. The work may have been cut short (the office
+    // restarted, the agent crashed), so it gets one more go, not counted as a round, before a person is asked.
+    const again = s.fixFor === key;
+    if (again && s.fixRetried === key) {
       needsHuman('pr', n, `після доопрацювання (${reasons.join(', ')}) нічого не змінилося`);
       return;
     }
-    if (s.fixRounds >= config.maxFixRounds) {
+    if (!again && s.fixRounds >= config.maxFixRounds) {
       needsHuman('pr', n, `${s.fixRounds} доопрацювань не довели PR до мерджу`);
       return;
     }
-    const author = workers?.find((w) => w.kind === 'agent' && w.pr?.number === n);
+    // The office doesn't always know which pull request an OpenCode or Codex agent opened: its branch tells. The
+    // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog).
+    const author = again ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
     const coder = config.coders[s.coder];
     if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
+    if (again) reasons = [...reasons, 'минулого разу PR після доопрацювання не змінився: доведи його до кінця й запуш'];
     const text = prompt('fix', {
       pr: n, title: pr.title, url: pr.url, branch: pr.headRefName,
       reasons: reasons.map((r) => `- ${r}`).join('\n'),
@@ -578,22 +620,26 @@ function tick() {
       worker = hire(coder, `кодера ${s.coder}`, `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
     }
     if (!worker) return;
-    s.fixRounds = (s.fixRounds ?? 0) + 1;
+    if (again) s.fixRetried = key;
+    else s.fixRounds = (s.fixRounds ?? 0) + 1;
     s.fixFor = key;
     s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, scrollFrom: worker.scrollFrom, since: now };
     busyCoders.add(s.coder);
   };
 
-  const requestReview = (pr, s) => {
-    if (reviewerBusy || pausedFor(config.reviewer.provider)) return;
+  /** Hires the reviewer for a PR; true if it was hired. */
+  const requestReview = (pr, s, again = false) => {
+    if (reviewerBusy || pausedFor(config.reviewer.provider)) return false;
     const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
-    const worker = hire(config.reviewer, "рев'юера", `рев'ю PR #${pr.number}`, text, ['--no-worktree']);
-    if (!worker) return;
+    const title = `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
+    const worker = hire(config.reviewer, "рев'юера", title, text, ['--no-worktree']);
+    if (!worker) return false;
     s.reviewRounds = (s.reviewRounds ?? 0) + 1;
     s.reviewedSha = pr.headRefOid;
     delete s.fixFor; // a new verdict starts a new round of fixes
     s.job = { kind: 'review', provider: config.reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
     reviewerBusy = true;
+    return true;
   };
 
   // Pull requests, oldest first.
@@ -663,8 +709,15 @@ function tick() {
       }
       continue;
     }
+    // The reviewer stopped without a verdict on this commit. Its work may have been cut short, so another one gets
+    // a go, not counted as a round, before a person is asked.
     if (!current && s.reviewedSha && sameCommit(s.reviewedSha, pr.headRefOid)) {
-      needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
+      if (s.reviewRetried && sameCommit(s.reviewRetried, pr.headRefOid)) {
+        needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
+      } else if (requestReview(pr, s, true)) {
+        s.reviewRetried = pr.headRefOid;
+        s.reviewRounds -= 1;
+      }
       continue;
     }
     requestReview(pr, s);
@@ -726,7 +779,6 @@ function tick() {
   if (workers && me.name) {
     const onJob = new Set([...Object.values(state.prs), ...Object.values(state.issues), state.qa].map((s) => s.job?.worker));
     const openBranches = new Set(pulls.map((p) => p.headRefName));
-    const branchOf = (w) => w.worktree?.branch ?? (typeof w.worktree === 'string' ? `office/${path.basename(w.worktree)}` : undefined);
     const free = workers.filter((w) => w.kind === 'agent' && w.hiredBy === me.name && FINISHED.has(w.status) && !onJob.has(w.name));
     sendHome(free.filter((w) => w.merged).map((w) => w.name), 'PR змерджено');
     sendHome(free.filter((w) => !w.merged && w.pr?.state !== 'OPEN' && !openBranches.has(branchOf(w))).map((w) => w.name), 'роботи більше немає');
