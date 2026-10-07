@@ -36,12 +36,16 @@ const WrappedApp = ({ Component, pageProps }: AppProps) => {
   );
 };
 
-WrappedApp.getInitialProps = wrapper.getInitialPageProps((store) =>
+WrappedApp.getInitialProps = wrapper.getInitialAppProps((store) =>
   // @ts-ignore
   async ({ ctx, Component }) => {
+    const pageProps = Component.getInitialProps
+      ? await Component.getInitialProps(ctx)
+      : {};
+
     try {
       const { token, refreshToken } = nookies.get(ctx);
-      if (!token && !refreshToken) return;
+      if (!token && !refreshToken) return { pageProps };
 
       const userData = await Api(ctx).auth.authorization();
       const { cartItems, ...userInfo } = userData;
@@ -79,6 +83,8 @@ WrappedApp.getInitialProps = wrapper.getInitialPageProps((store) =>
         clearTokens(ctx);
       }
     }
+
+    return { pageProps };
   }
 );
 
