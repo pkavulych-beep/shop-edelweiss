@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as uuid from 'uuid';
@@ -12,6 +12,8 @@ export const baseUrl = process.env.BASE_URL || 'http://localhost:7777/';
 
 @Injectable()
 export class FileService {
+  private readonly logger = new Logger(FileService.name);
+
   createFile(type: FileType, file): string {
     try {
       const fileExtension = file.originalname.split('.').pop();
@@ -23,7 +25,8 @@ export class FileService {
       fs.writeFileSync(path.resolve(filePath, fileName), file.buffer);
       return baseUrl + type + '/' + fileName;
     } catch (e) {
-      throw new HttpException(e.message, HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error('Failed to create file', e);
+      throw new HttpException('Не вдалося створити файл', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -37,20 +40,19 @@ export class FileService {
 
       // Перевіряємо, чи існує файл
       if (!fs.existsSync(absolutePath)) {
-        throw new HttpException(
-          `Файл не знайдено: ${filePath}`,
-          HttpStatus.NOT_FOUND,
-        );
+        this.logger.warn(`File not found: ${filePath}`);
+        throw new HttpException('Файл не знайдено', HttpStatus.NOT_FOUND);
       }
 
       // Видаляємо файл
       fs.unlinkSync(absolutePath);
-      console.log(filePath + ' was deleted');
+      this.logger.log(`${filePath} was deleted`);
     } catch (e) {
-      throw new HttpException(
-        `Не вдалося видалити файл: ${e.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      if (e instanceof HttpException) {
+        throw e;
+      }
+      this.logger.error('Failed to delete file', e);
+      throw new HttpException('Не вдалося видалити файл', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

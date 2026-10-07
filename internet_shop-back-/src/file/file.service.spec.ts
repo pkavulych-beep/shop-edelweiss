@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { baseUrl, FileService, FileType } from './file.service';
 import { getUploadsDir } from './uploads-dir';
 
@@ -63,5 +64,65 @@ describe('FileService', () => {
     await service.deleteFile(url);
 
     expect(fs.existsSync(path.join(uploadsDir, url.replace(baseUrl, '')))).toBe(false);
+  });
+
+  it('deleteFile returns 404 with generic message for non-existent file (no server paths)', async () => {
+    await expect(service.deleteFile(baseUrl + 'image/nonexistent.jpg')).rejects.toThrow(HttpException);
+
+    try {
+      await service.deleteFile(baseUrl + 'image/nonexistent.jpg');
+    } catch (e) {
+      expect(e).toBeInstanceOf(HttpException);
+      expect(e.getStatus()).toBe(HttpStatus.NOT_FOUND);
+      const response = e.getResponse();
+      expect(typeof response).toBe('string');
+      expect(response).toBe('Файл не знайдено');
+      expect(response).not.toContain('/');
+      expect(response).not.toMatch(/[A-Za-z]:\\/);
+    }
+  });
+
+  it('createFile returns 500 with generic message on error (no server paths)', () => {
+    const invalidFile = { originalname: 'test', buffer: null };
+
+    try {
+      service.createFile(FileType.IMAGE, invalidFile);
+    } catch (e) {
+      expect(e).toBeInstanceOf(HttpException);
+      expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      const response = e.getResponse();
+      expect(typeof response).toBe('string');
+      expect(response).toBe('Не вдалося створити файл');
+      expect(response).not.toContain('/');
+      expect(response).not.toMatch(/[A-Za-z]:\\/);
+    }
+  });
+
+  it('deleteFile returns 500 with generic message on filesystem error (no server paths)', async () => {
+    const url = service.createFile(FileType.IMAGE, {
+      originalname: 'photo-perm.jpg',
+      buffer: Buffer.from('jpg-perm'),
+    });
+
+    const filePath = path.join(uploadsDir, url.replace(baseUrl, ''));
+    fs.chmodSync(filePath, 0o000);
+
+    try {
+      await service.deleteFile(url);
+    } catch (e) {
+      expect(e).toBeInstanceOf(HttpException);
+      expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+      const response = e.getResponse();
+      expect(typeof response).toBe('string');
+      expect(response).toBe('Не вдалося видалити файл');
+      expect(response).not.toContain('/');
+      expect(response).not.toMatch(/[A-Za-z]:\\/);
+    } finally {
+      try {
+        fs.chmodSync(filePath, 0o644);
+      } catch {
+        // ignore cleanup errors
+      }
+    }
   });
 });
