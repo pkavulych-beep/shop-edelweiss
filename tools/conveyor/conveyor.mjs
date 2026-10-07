@@ -598,8 +598,9 @@ function tick() {
       needsHuman('pr', n, `${s.fixRounds} доопрацювань не довели PR до мерджу`);
       return;
     }
-    // The office doesn't always know which pull request an OpenCode or Codex agent opened: its branch tells.
-    const author = workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
+    // The office doesn't always know which pull request an OpenCode or Codex agent opened: its branch tells. The
+    // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog).
+    const author = again ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
     const coder = config.coders[s.coder];
     if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
