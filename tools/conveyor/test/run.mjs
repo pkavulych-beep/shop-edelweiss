@@ -72,6 +72,9 @@ const scenarios = [
   { name: '«Залежить від #90, #93», обидва вже закриті → бере',
     fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: '- Залежить від #90, #93' }], state: st() },
     want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 91`] },
+  { name: 'своє P3 і своє P2 без agent → обидва в черзі, P2 першим',
+    fx: { workers: [me], issues: [{ ...issue(35, []), labels: [{ name: 'easy' }, { name: 'P3-low' }] }, { ...issue(36, []), labels: [{ name: 'easy' }, { name: 'P2-medium' }] }], state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 36`, `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 35`] },
   { name: 'чуже issue з P0 без agent → не брати', fx: { workers: [me], issues: [{ ...issue(40, ['P0-critical'], 'stranger'), labels: [{ name: 'P0-critical' }] }], state: st() }, not: ['hire'] },
   { name: 'issue з manual → не брати', fx: { workers: [me], issues: [issue(41, ['manual', 'easy'])], state: st() }, not: ['hire'] },
   // ── Pull requests ──

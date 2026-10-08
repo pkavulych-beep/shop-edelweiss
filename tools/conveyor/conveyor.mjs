@@ -10,7 +10,7 @@
 //   verdict "changes"         → hand it back for fixes, then review again (a limited number of rounds)
 //   verdict "approve"         → merge, unless it touches protected paths or is too big
 //   every few merges          → hire QA, who tries them in a browser          → bug issues and a report
-// The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P2);
+// The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P3);
 // `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
 // `medium`, `easy`) which coder takes it. Each coder does one task at a time, alongside the others, on
 // ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
