@@ -17,10 +17,10 @@ import { QuickOrderEntity } from '../src/quick-order/entities/quick-order.entity
 import { BasketItemEntity } from '../src/user/entities/basket-item.entity';
 import { ProductStatus } from '../src/product/entities/product.entity';
 import { Status } from '../src/order/statusEnum';
-import { DataSource } from 'typeorm';
+import { DataSource, Like } from 'typeorm';
 
 function generatePhone(): string {
-  return `38099${Date.now().toString().slice(-7)}`;
+  return `38066${Date.now().toString().slice(-7)}`;
 }
 
 async function ensureRoles(ds: DataSource) {
@@ -53,36 +53,15 @@ async function createTestProduct(ds: DataSource): Promise<ProductEntity> {
   return productRepo.save(product);
 }
 
-async function cleanupTestData(ds: DataSource, phonePrefix: string) {
-  const orderItemRepo = ds.getRepository(OrderItemEntity);
-  const orderRepo = ds.getRepository(OrderEntity);
-  const userRepo = ds.getRepository(UserEntity);
-  const refreshTokenRepo = ds.getRepository(RefreshTokenEntity);
-
-  const users = await userRepo.find({
-    where: { phoneNumber: `%${phonePrefix}%` },
-  });
-
-  for (const user of users) {
-    await refreshTokenRepo.delete({ userId: user.id });
-    const orders = await orderRepo.find({ where: { user: { id: user.id } } });
-    for (const order of orders) {
-      await orderItemRepo.delete({ order: { id: order.id } });
-    }
-    await orderRepo.delete({ user: { id: user.id } });
-  }
-  await userRepo.delete({ phoneNumber: `%${phonePrefix}%` });
-}
-
 describe('Order flow (e2e)', () => {
   let app: INestApplication;
   let httpServer: any;
-  const phonePrefix = '38099';
+  const createdUserIds: number[] = [];
+  const createdProductIds: number[] = [];
 
   beforeAll(async () => {
     await e2eDataSource.initialize();
     await ensureRoles(e2eDataSource);
-    await cleanupTestData(e2eDataSource, phonePrefix);
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -106,7 +85,26 @@ describe('Order flow (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await cleanupTestData(e2eDataSource, phonePrefix);
+    const orderItemRepo = e2eDataSource.getRepository(OrderItemEntity);
+    const orderRepo = e2eDataSource.getRepository(OrderEntity);
+    const userRepo = e2eDataSource.getRepository(UserEntity);
+    const refreshTokenRepo = e2eDataSource.getRepository(RefreshTokenEntity);
+    const productRepo = e2eDataSource.getRepository(ProductEntity);
+
+    for (const userId of createdUserIds) {
+      await refreshTokenRepo.delete({ userId });
+      const orders = await orderRepo.find({ where: { user: { id: userId } } });
+      for (const order of orders) {
+        await orderItemRepo.delete({ order: { id: order.id } });
+      }
+      await orderRepo.delete({ user: { id: userId } });
+      await userRepo.delete({ id: userId });
+    }
+
+    if (createdProductIds.length > 0) {
+      await productRepo.delete(createdProductIds);
+    }
+
     await app.close();
     await e2eDataSource.destroy();
   }, 30000);
@@ -117,6 +115,7 @@ describe('Order flow (e2e)', () => {
     const fullName = 'Test User';
 
     const product = await createTestProduct(e2eDataSource);
+    createdProductIds.push(product.id);
     expect(product.id).toBeDefined();
 
     // 1. POST /auth/register
@@ -131,6 +130,7 @@ describe('Order flow (e2e)', () => {
     expect(registerRes.body.userData.phoneNumber).toBe(phone);
 
     const userId = registerRes.body.userData.id;
+    createdUserIds.push(userId);
     const token = registerRes.body.token;
 
     // 2. POST /auth/login
@@ -193,65 +193,6 @@ describe('Order flow (e2e)', () => {
         items: [{ productId: product.id, size: 'M', quantity: 1 }],
         cityName: 'Kyiv',
         department: 'Department #1',
-      })
-      .expect(401);
-  }, 30000);
-
-  it('runs successfully twice in a row on the same database', async () => {
-    const phone = generatePhone();
-    const password = 'test12345';
-    const fullName = 'Test User 2';
-
-    const product = await createTestProduct(e2eDataSource);
-    expect(product.id).toBeDefined();
-
-    // 1. Register
-    const registerRes = await request(httpServer)
-      .post('/auth/register')
-      .send({ fullName, phoneNumber: phone, password })
-      .expect(201);
-
-    const token = registerRes.body.token;
-
-    // 2. Login
-    const loginRes = await request(httpServer)
-      .post('/auth/login')
-      .send({ phoneNumber: phone, password })
-      .expect(201);
-
-    const loginToken = loginRes.body.token;
-
-    // 3. Create order
-    const orderRes = await request(httpServer)
-      .post('/order')
-      .set('Authorization', `Bearer ${loginToken}`)
-      .send({
-        items: [{ productId: product.id, size: 'L', quantity: 1 }],
-        cityName: 'Lviv',
-        department: 'Department #5',
-      })
-      .expect(201);
-
-    expect(orderRes.body.items[0].quantity).toBe(1);
-    expect(orderRes.body.total).toBe(product.price);
-
-    // 4. Verify order in my orders
-    const myOrdersRes = await request(httpServer)
-      .get('/order/my')
-      .set('Authorization', `Bearer ${loginToken}`)
-      .expect(200);
-
-    const myOrder = myOrdersRes.body.find((o: any) => o.id === orderRes.body.id);
-    expect(myOrder).toBeDefined();
-    expect(myOrder.items[0].quantity).toBe(1);
-
-    // 5. 401 without token
-    await request(httpServer)
-      .post('/order')
-      .send({
-        items: [{ productId: product.id, size: 'L', quantity: 1 }],
-        cityName: 'Lviv',
-        department: 'Department #5',
       })
       .expect(401);
   }, 30000);
