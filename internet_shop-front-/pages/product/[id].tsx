@@ -27,12 +27,8 @@ import { maskPhoneInput, normalizePhone } from '../../utils/phone';
 export default function Product() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { currentProduct, userPhone } = useAppSelector(({ product, user, cart }) => ({
-    ...product,
-    idUser: user.userData?.id,
-    userPhone: user.userData?.phoneNumber,
-    ...cart,
-  }));
+  const currentProduct = useAppSelector(({ product }) => product.currentProduct);
+  const userPhone = useAppSelector(({ user }) => user.userData?.phoneNumber);
 
   const [selectedSize, setSelectedSize] = useState<null | string>(null);
   const [isOpenSizeReminder, setIsOpenSizeReminder] = useState(false);
@@ -61,18 +57,25 @@ export default function Product() {
   const { cover, photos, ...productInfo } = currentProduct;
   const photosArr = [{ id: 0, url: cover }, ...photos];
 
+  const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
+
   const putInTheCart = () => {
-    if (!selectedSize) {
+    if (hasSizes && !selectedSize) {
       setIsOpenSizeReminder(true);
       return;
     }
 
-    dispatch(addPositionsToCart({ idProduct: currentProduct.id, size: selectedSize }));
+    dispatch(
+      addPositionsToCart({
+        idProduct: currentProduct.id,
+        size: hasSizes ? selectedSize : undefined,
+      }),
+    );
     setIsCartConfirmOpen(true);
   };
 
   const openQuickOrder = () => {
-    if (!selectedSize) {
+    if (hasSizes && !selectedSize) {
       setIsOpenSizeReminder(true);
       return;
     }
@@ -96,7 +99,7 @@ export default function Product() {
       await Api().quickOrder.create({
         phoneNumber,
         productId: currentProduct.id,
-        size: selectedSize ?? undefined,
+        size: hasSizes ? selectedSize : undefined,
       });
       setIsQuickOrderOpen(false);
       setIsQuickOrderDone(true);
@@ -287,9 +290,11 @@ export default function Product() {
                 width: 'fit-content',
               }}
             >
-              <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontWeight: 500 }}>
-                Розмір: {selectedSize}
-              </Typography>
+              {hasSizes && selectedSize && (
+                <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontWeight: 500 }}>
+                  Розмір: {selectedSize}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Box>
@@ -363,7 +368,7 @@ export default function Product() {
               {productInfo.name}
             </Typography>
             <PriceBox price={productInfo.price} salePrice={productInfo.salePrice} />
-            {selectedSize && (
+            {hasSizes && selectedSize && (
               <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', mt: 0.5 }}>
                 Розмір: {selectedSize}
               </Typography>

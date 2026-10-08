@@ -1,18 +1,14 @@
-import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
-import {
-  normalizePhone,
-  UA_PHONE_MESSAGE,
-  UA_PHONE_PATTERN,
-} from '../../common/phone';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, Validate } from 'class-validator';
+import { IsValidPhoneConstraint } from '../../common/phone-validator';
+import { MAX_INT } from '../../common/constants';
 
 export class CreateQuickOrderDto {
-  @Transform(({ value }) => normalizePhone(value))
-  @IsString({ message: 'Телефон має бути рядком' })
-  @Matches(UA_PHONE_PATTERN, { message: UA_PHONE_MESSAGE })
+  @Validate(IsValidPhoneConstraint)
   phoneNumber: string;
 
   @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Min(1, { message: 'Ідентифікатор товару має бути більшим за 0' })
+  @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 
   @IsOptional()

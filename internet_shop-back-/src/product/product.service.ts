@@ -254,10 +254,10 @@ export class ProductService {
     });
   }
 
-  async findOnlyPhotos(id: string) {
+  async findOnlyPhotos(id: number) {
     try {
       const commodity = await this.repository.findOne({
-        where: { id: +id },
+        where: { id },
         relations: ['photos'],
       });
       const { photos } = commodity;

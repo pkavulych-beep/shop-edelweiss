@@ -99,7 +99,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
               </Typography>
             </Link>
             <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-              Розмір: {size} · {quantity} шт.
+              {size ? `Розмір: ${size} · ` : ''}{quantity} шт.
             </Typography>
           </Box>
           {/* Ціна за одиницю на момент покупки */}
@@ -140,26 +140,30 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
 // Список замовлень поточного користувача: і в профілі, і на /orders
 export const MyOrders: FC = () => {
   const userId = useAppSelector((state) => state.user.userData?.id);
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [error, setError] = useState(false);
+  // Результат прив'язаний до користувача, тож після зміни акаунта старі замовлення не показуємо
+  const [loaded, setLoaded] = useState<{ userId: number; orders?: Order[]; error?: boolean } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    setOrders(null);
-    setError(false);
     Api()
       .orders.findMy()
       .then((data) => {
-        if (!cancelled) setOrders(data);
+        if (!cancelled) setLoaded({ userId, orders: data });
       })
       .catch(() => {
-        if (!cancelled) setError(true);
+        if (!cancelled) setLoaded({ userId, error: true });
       });
     return () => {
       cancelled = true;
     };
   }, [userId]);
+
+  const current = loaded?.userId === userId ? loaded : null;
+  const orders = current?.orders ?? null;
+  const error = current?.error ?? false;
 
   if (error) {
     return <Alert severity="error">Не вдалося завантажити замовлення. Спробуйте пізніше.</Alert>;

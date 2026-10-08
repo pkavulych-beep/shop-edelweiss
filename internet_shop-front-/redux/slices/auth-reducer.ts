@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { AppThunk } from '../redux-store';
 import { IUserData } from '../Types/ProductType';
-import { HYDRATE } from 'next-redux-wrapper';
+import { hydrate } from '../hydrate';
 import { Api, clearTokens, getRefreshToken, saveTokens } from '../../api/Api';
 import { syncCartOnLogin, setCartData } from './cart-reducer';
 
@@ -23,12 +23,12 @@ export const authSlice = createSlice({
       state.error = action.payload;
     },
   },
-  extraReducers: {
-    [HYDRATE]: (state, action) => {
+  extraReducers: (builder) => {
+    builder.addCase(hydrate, (state, action) => {
       // Якщо на клієнті вже є userData — не перезаписувати серверними даними
       if (state.userData) return;
       state.userData = action.payload.user.userData;
-    },
+    });
   },
 });
 

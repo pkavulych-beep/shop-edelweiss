@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +11,9 @@ import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateQuickOrderDto } from './dto/create-quick-order.dto';
 import { QuickOrderService } from './quick-order.service';
+import { ParseIdPipe } from '../common/parse-id.pipe';
+
+const QUICK_ORDER_NOT_FOUND = new ParseIdPipe('Заявку не знайдено');
 
 @Controller('quick-order')
 export class QuickOrderController {
@@ -33,7 +35,7 @@ export class QuickOrderController {
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', QUICK_ORDER_NOT_FOUND) id: number) {
     return this.quickOrderService.remove(id);
   }
 }
