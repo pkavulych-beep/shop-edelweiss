@@ -9,8 +9,8 @@ export const UA_PHONE_MESSAGE =
 // "099 123 45 67", "+38 (099) 123-45-67", "0991234567", "991234567"
 // і "380991234567" → "380991234567". Рядки, які не вдається звести до
 // українського номера, повертаються як є — їх відсіє UA_PHONE_PATTERN.
-export const normalizePhone = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value;
+export const normalizePhone = (value: unknown): string => {
+  if (typeof value !== 'string') return value as unknown as string;
   const digits = value.replace(/\D/g, '');
   const core = digits.startsWith('380')
     ? digits.slice(3)

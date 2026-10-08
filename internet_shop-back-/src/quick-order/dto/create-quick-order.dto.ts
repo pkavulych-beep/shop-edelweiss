@@ -1,18 +1,12 @@
-import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
-import {
-  normalizePhone,
-  UA_PHONE_MESSAGE,
-  UA_PHONE_PATTERN,
-} from '../../common/phone';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Validate } from 'class-validator';
+import { IsValidPhoneConstraint } from '../../common/phone-validator';
 
 export class CreateQuickOrderDto {
-  @Transform(({ value }) => normalizePhone(value))
-  @IsString({ message: 'Телефон має бути рядком' })
-  @Matches(UA_PHONE_PATTERN, { message: UA_PHONE_MESSAGE })
+  @Validate(IsValidPhoneConstraint, { message: 'Вкажіть український номер телефону у форматі +38 (0XX) XXX-XX-XX' })
   phoneNumber: string;
 
   @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Max(2147483647, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 
   @IsOptional()
