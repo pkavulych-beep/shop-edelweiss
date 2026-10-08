@@ -92,11 +92,6 @@ export default function Index() {
             {total} {pluralizeProduct(total)}
           </Typography>
         )}
-        {total === 0 && (
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            Нічого не знайдено
-          </Typography>
-        )}
       </Box>
 
       {/* Mobile filter button */}
@@ -206,11 +201,6 @@ export default function Index() {
               <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
                 Спробуйте змінити параметри пошуку або скиньте фільтри
               </Typography>
-              <AppliedFilters
-                filters={query}
-                onRemove={handleRemoveFilter}
-                onClearAll={handleClearAll}
-              />
             </Box>
           )}
         </Box>
