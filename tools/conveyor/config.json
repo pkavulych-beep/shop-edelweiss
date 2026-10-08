@@ -49,6 +49,7 @@
   "qa": {
     "enabled": true,
     "everyMerges": 10,
+    "maxWaitHours": 24,
     "provider": "claude",
     "model": "sonnet",
     "effort": "medium",
@@ -56,6 +57,7 @@
     "paths": ["internet_shop-back-/", "internet_shop-front-/"],
     "ports": { "back": 7779, "front": 3002, "db": "Edelweiss_qa" }
   },
+  "docker": { "enabled": true, "app": "Docker", "service": "db", "waitMinutes": 5 },
   "notify": { "enabled": true },
   "merge": {
     "enabled": true,

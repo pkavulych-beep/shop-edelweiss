@@ -4,8 +4,8 @@
 
 ## Проєкт
 
-- `internet_shop-back-/` — API на NestJS 8 + TypeORM 0.3 + PostgreSQL, порт 7777.
-- `internet_shop-front-/` — Next.js 12 + MUI + Redux, порт 3000.
+- `internet_shop-back-/` — API на NestJS 11 + TypeORM 0.3 + PostgreSQL, порт 7777.
+- `internet_shop-front-/` — Next.js 16 (pages router) + React 19 + MUI + Redux, порт 3000.
 - Менеджер пакетів в обох проєктах — **npm** (`npm ci`). Не використовуй yarn і не додавай `yarn.lock`.
 
 ## Як запустити локально
@@ -15,6 +15,7 @@
    docker compose up -d db
    ```
    Якщо Docker не запущений, не встановлюй і не запускай його сам: напиши про це в описі PR.
+   Контейнер бази один на всі worktree, і ним користуються всі агенти, тож не зупиняй і не видаляй його (`docker compose down`, `stop`, `rm`).
 2. `.env` бека не зберігається в git. У своєму worktree скопіюй його з основної копії репозиторію, а якщо його там немає, створи з прикладу:
    ```bash
    main=$(git worktree list --porcelain | head -1 | cut -d' ' -f2)
@@ -55,5 +56,4 @@
 
 ## Відомі особливості
 
-- Паролі користувачів зберігаються відкритим текстом. Не логуй їх і не вставляй у PR.
-- `@nestjs/typeorm` 8 офіційно не підтримує typeorm 0.3, тому в `internet_shop-back-/.npmrc` стоїть `legacy-peer-deps=true`.
+- Паролі користувачів зберігаються як bcrypt-хеші (`internet_shop-back-/src/auth/password.ts`). Не логуй паролі й токени і не вставляй їх у PR.
