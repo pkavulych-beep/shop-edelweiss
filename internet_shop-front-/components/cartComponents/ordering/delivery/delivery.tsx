@@ -24,15 +24,20 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
   setCity,
   setDepartment,
 }) => {
-  const [cities, setCities] = useState<string[]>([]);
+  // Результати прив'язані до запиту й міста: завантаження і помилку виводимо з них
+  const [citiesResult, setCitiesResult] = useState<{
+    query: string;
+    cities: string[];
+    error: string | null;
+  } | null>(null);
   const [cityQuery, setCityQuery] = useState("");
-  const [citiesLoading, setCitiesLoading] = useState(false);
-  const [citiesError, setCitiesError] = useState<string | null>(null);
 
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [departmentsResult, setDepartmentsResult] = useState<{
+    city: string;
+    departments: string[];
+    error: string | null;
+  } | null>(null);
   const [departmentQuery, setDepartmentQuery] = useState("");
-  const [departmentsLoading, setDepartmentsLoading] = useState(false);
-  const [departmentsError, setDepartmentsError] = useState<string | null>(null);
 
   const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cityRequestIdRef = useRef(0);
@@ -59,33 +64,25 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     const requestId = ++cityRequestIdRef.current;
 
     if (!query || query === cityName) {
-      setCitiesLoading(false);
-      setCitiesError(null);
-      if (!query) {
-        setCities([]);
-      }
       return;
     }
 
-    setCitiesLoading(true);
-    setCitiesError(null);
     cityTimerRef.current = setTimeout(async () => {
       try {
         const foundCities = await mailApi.getCities(query);
         if (requestId !== cityRequestIdRef.current) {
           return;
         }
-        setCities(foundCities);
+        setCitiesResult({ query, cities: foundCities, error: null });
       } catch (error) {
         if (requestId !== cityRequestIdRef.current) {
           return;
         }
-        setCities([]);
-        setCitiesError(toMessage(error, "Не вдалося завантажити міста."));
-      } finally {
-        if (requestId === cityRequestIdRef.current) {
-          setCitiesLoading(false);
-        }
+        setCitiesResult({
+          query,
+          cities: [],
+          error: toMessage(error, "Не вдалося завантажити міста."),
+        });
       }
     }, SEARCH_DELAY);
 
@@ -98,36 +95,48 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
 
   useEffect(() => {
     const requestId = ++departmentRequestIdRef.current;
-    setDepartments([]);
-    setDepartmentsError(null);
 
     if (!cityName) {
-      setDepartmentsLoading(false);
       return;
     }
 
-    setDepartmentsLoading(true);
     (async () => {
       try {
         const cityDepartments = await mailApi.getDepartment(cityName);
         if (requestId !== departmentRequestIdRef.current) {
           return;
         }
-        setDepartments(cityDepartments);
+        setDepartmentsResult({
+          city: cityName,
+          departments: cityDepartments,
+          error: null,
+        });
       } catch (error) {
         if (requestId !== departmentRequestIdRef.current) {
           return;
         }
-        setDepartmentsError(
-          toMessage(error, "Не вдалося завантажити відділення.")
-        );
-      } finally {
-        if (requestId === departmentRequestIdRef.current) {
-          setDepartmentsLoading(false);
-        }
+        setDepartmentsResult({
+          city: cityName,
+          departments: [],
+          error: toMessage(error, "Не вдалося завантажити відділення."),
+        });
       }
     })();
   }, [cityName]);
+
+  const trimmedCityQuery = cityQuery.trim();
+  const searchingCities = Boolean(trimmedCityQuery) && trimmedCityQuery !== cityName;
+  const citiesLoading =
+    searchingCities && citiesResult?.query !== trimmedCityQuery;
+  const citiesError =
+    searchingCities && !citiesLoading ? citiesResult?.error ?? null : null;
+  const cities = trimmedCityQuery ? citiesResult?.cities ?? [] : [];
+
+  const currentDepartments =
+    cityName && departmentsResult?.city === cityName ? departmentsResult : null;
+  const departments = currentDepartments?.departments ?? [];
+  const departmentsLoading = Boolean(cityName) && !currentDepartments;
+  const departmentsError = currentDepartments?.error ?? null;
 
   const handleCityChange = (_: unknown, value: string | null) => {
     setCity(value || "");
