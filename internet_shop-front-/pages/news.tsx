@@ -1,29 +1,9 @@
-import { NextPage } from 'next';
-import { useAppDispatch, useAppSelector } from '../redux/hooks';
-import React, { useEffect } from 'react';
-import { setOrdersData } from '../redux/slices/orders-reducer';
+import { GetServerSideProps, NextPage } from 'next';
 import { MainLayout } from '../layouts/MainLayout';
-import { EmptyCart } from '../components/cartComponents/emptyCart/EmptyCart';
 
-export const News: NextPage = () => {
-  const dispatch = useAppDispatch();
-  const id = useAppSelector(({ user }) => user?.userData?.id);
-  const data = useAppSelector(({ orders }) => orders?.data);
+// Заготовка під міні-блог «новини і відгуки» (#154). Поки блогу немає, сторінку сховано: /news віддає 404.
+export const getServerSideProps: GetServerSideProps = async () => ({ notFound: true });
 
-  useEffect(() => {
-    //??
-    if (id) {
-      dispatch(setOrdersData());
-    }
-  }, []);
-
-  console.log(data);
-
-  return (
-    <MainLayout title={'новини і відгуки'}>
-      {!data || data.length === 0 ? <EmptyCart /> : <div>test</div>}
-    </MainLayout>
-  );
-};
+export const News: NextPage = () => <MainLayout title={'новини і відгуки'}>{null}</MainLayout>;
 
 export default News;

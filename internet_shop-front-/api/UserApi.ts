@@ -12,15 +12,6 @@ export type UpdateUserData = Pick<
 >;
 
 export const userApi = instance => ({
-  async register(dto: IRegisterUserDto) {
-    const { data } = await instance.post('/users', dto);
-    return data;
-  },
-
-  async getUsers() {
-    const { data } = await instance.get('/users');
-    return data;
-  },
 
   async update(id: number, dto: UpdateUserData) {
     const { data } = await instance.patch(`/users/${id}`, dto);

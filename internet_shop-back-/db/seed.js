@@ -88,8 +88,7 @@ async function main() {
         [adminId, roleIds[value]],
       );
     }
-
-    console.log(`Seed done. Admin login: phone ${ADMIN.phoneNumber}, password ${ADMIN.password}`);
+    console.log(`Seed done. Admin login: phone ${ADMIN.phoneNumber}`);
   } finally {
     await client.end();
   }
