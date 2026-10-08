@@ -1,17 +1,11 @@
 import { FC } from 'react';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
 import * as React from 'react';
-import { Form, Formik } from 'formik';
-import CustomizedInputBase from '../../CustomizedInputBase/CustomizedInputBase';
+import { Formik, FormikHelpers } from 'formik';
 import { LoginFormValidation } from './FormsValidation';
-import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
-import { DialogHeader } from './dialogHeader/HeaderDialog';
-import { getUserData } from '../../../redux/slices/auth-reducer';
+import { useAppDispatch } from '../../../redux/hooks';
+import { getUserData, clearError } from '../../../redux/slices/auth-reducer';
+import { LoginForm } from './LoginForm';
 
 interface IDialogLogin {
   open: boolean;
@@ -21,10 +15,18 @@ interface IDialogLogin {
 
 export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) => {
   const dispatch = useAppDispatch();
-  const error = useAppSelector((store) => store.user.error);
 
   const handleClose = () => {
     setLogin(false);
+  };
+
+  const submit = async (values: any, { resetForm }: FormikHelpers<any>) => {
+    dispatch(clearError());
+    let res = await dispatch(getUserData(values));
+    if (res === 'response') {
+      handleClose();
+      resetForm();
+    }
   };
 
   return (
@@ -43,60 +45,9 @@ export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) =
       <Formik
         initialValues={{ phoneNumber: '', password: '' }}
         validationSchema={LoginFormValidation}
-        onSubmit={async (values, { resetForm }) => {
-          let res = await dispatch(getUserData(values));
-          if (res === 'response') {
-            handleClose();
-            resetForm();
-          }
-        }}
+        onSubmit={submit}
       >
-        <Form>
-          <DialogHeader text="Вхід" handleClose={handleClose} />
-          <DialogContent sx={{ px: 3, pt: 1 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ color: 'text.secondary', mb: 2 }}
-            >
-              Акаунт Edelweiss
-            </Typography>
-            <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
-            <CustomizedInputBase
-              type="password"
-              name="password"
-              placeholder="Пароль"
-              autoComplete="current-password"
-            />
-            {error && (
-              <Typography
-                sx={{
-                  color: 'error.main',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  textAlign: 'center',
-                  mt: 1,
-                }}
-              >
-                {error}
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-            <Button
-              onClick={() => {
-                handleClose();
-                setRegister(true);
-              }}
-              fullWidth
-              variant="outlined"
-            >
-              Реєстрація
-            </Button>
-            <Button type="submit" fullWidth variant="contained">
-              Увійти
-            </Button>
-          </DialogActions>
-        </Form>
+        <LoginForm handleClose={handleClose} setRegister={setRegister} />
       </Formik>
     </Dialog>
   );
