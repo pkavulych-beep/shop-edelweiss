@@ -22,6 +22,9 @@ export const authSlice = createSlice({
     setErrorMessage: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
     },
+    clearError: (state) => {
+      state.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(hydrate, (state, action) => {
@@ -32,7 +35,7 @@ export const authSlice = createSlice({
   },
 });
 
-export const { addUserData, setErrorMessage } = authSlice.actions;
+export const { addUserData, setErrorMessage, clearError } = authSlice.actions;
 
 export default authSlice.reducer;
 
