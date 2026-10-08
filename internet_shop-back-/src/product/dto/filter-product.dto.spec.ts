@@ -58,6 +58,12 @@ describe('FilterProductDto', () => {
         );
       },
     );
+
+    it('rejects a repeated category param', async () => {
+      await expect(
+        validate({ category: ['dresses', 'hoodies'] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 
   describe('season', () => {
@@ -80,6 +86,12 @@ describe('FilterProductDto', () => {
       await expect(validate({ season: value })).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+
+    it('rejects a repeated season param', async () => {
+      await expect(
+        validate({ season: ['spring-summer', 'autumn-winter'] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

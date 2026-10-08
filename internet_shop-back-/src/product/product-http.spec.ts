@@ -186,6 +186,16 @@ describe('ProductController over HTTP', () => {
         category: 'dresses',
       });
     });
+
+    it.each(['category=dresses&category=hoodies', 'season=a&season=b'])(
+      'GET /product/filter?%s answers 400 for a repeated param',
+      async query => {
+        await request(app.getHttpServer())
+          .get(`/product/filter?${query}`)
+          .expect(400);
+        expect(productService.findFiltered).not.toHaveBeenCalled();
+      },
+    );
   });
 
   it('DELETE /product/1 removes the product for an admin', async () => {

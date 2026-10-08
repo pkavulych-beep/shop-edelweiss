@@ -32,8 +32,11 @@ function IsEnumEach(
           if (value === undefined || value === '') {
             return true;
           }
+          if (typeof value !== 'string') {
+            return false;
+          }
           const allowed = Object.values(args.constraints[0] as object);
-          return String(value)
+          return value
             .split(',')
             .every((item) => allowed.includes(item.trim()));
         },
