@@ -30,6 +30,9 @@ internet_shop-back-/uploads/
 # Agent Office data and worker worktrees
 .agent-office/
 
+# Page snapshots that Playwright MCP leaves after agents' browser checks
+.playwright-mcp/
+
 # Conveyor runtime state and log
 tools/conveyor/state.json
 tools/conveyor/conveyor.log
