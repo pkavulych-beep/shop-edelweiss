@@ -76,7 +76,9 @@ WrappedApp.getInitialProps = wrapper.getInitialAppProps((store) =>
     } catch (e) {
       // Не логуємо e.config: у заголовках запиту є токен авторизації
       const status = axios.isAxiosError(e) ? e.response?.status : undefined;
-      // ignore error
+      console.error(
+        `Не вдалося отримати профіль: ${status ?? "без статусу"} ${e?.message}`
+      );
       if (status === 401) {
         clearTokens(ctx);
       }

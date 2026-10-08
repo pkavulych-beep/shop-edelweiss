@@ -23,7 +23,7 @@ export const DeleteProduct: NextPage<IDeleteProductProps> = ({ id }) => {
       dispatch(removeProduct(id));
       router.push('/');
     } catch (e) {
-      // ignore error
+      console.error('Failed to delete product:', e);
     }
   };
 
