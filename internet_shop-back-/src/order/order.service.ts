@@ -47,7 +47,7 @@ export class OrderService {
       const effectiveSize = size ?? '';
       if (product.sizes?.length) {
         if (!effectiveSize || !product.sizes.includes(effectiveSize)) {
-          throw new BadRequestException(`Розміру ${effectiveSize || size} немає в наявності`);
+          throw new BadRequestException(effectiveSize ? `Розміру ${effectiveSize} немає в наявності` : 'Оберіть розмір товару');
         }
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
