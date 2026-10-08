@@ -127,6 +127,27 @@ describe('UsersService passwords', () => {
     expect(user.password).not.toBe('secret123');
     await expect(verifyPassword('secret123', user.password)).resolves.toBe(true);
   });
+  it('rejects registration if email differs only by case', async () => {
+    const repository = {
+      findOne: jest.fn().mockResolvedValue({ id: 1, phoneNumber: 'other', email: 'test@example.com' }),
+      create: jest.fn((user) => user),
+      save: jest.fn((user) => Promise.resolve(user)),
+    };
+    const rolesService = {
+      getRoleByValue: jest.fn().mockResolvedValue({ value: 'USER' }),
+    };
+    const service = new UsersService(repository as any, {} as any, rolesService as any, {} as any);
+
+    await expect(
+      service.create({
+        fullName: 'Тест',
+        phoneNumber: '380991112233',
+        password: 'secret123',
+        email: 'TEST@example.com',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
 
   it('hashes a new password on update', async () => {
     await service.update(3, {

@@ -15,6 +15,7 @@ import { ProductService } from '../product/product.service';
 import { productToBasketDto } from './dto/productToBasket.dto';
 import { SyncCartItemDto } from './dto/sync-cart.dto';
 import { hashPassword } from '../auth/password';
+import { normalizeEmail } from '../common/email';
 
 @Injectable()
 export class UsersService {
@@ -28,20 +29,25 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto) {
+    const email = normalizeEmail(dto.email) as string | undefined;
+
     const existing = await this.repository.findOne({
-      where: [{ phoneNumber: dto.phoneNumber }, { email: dto.email }],
+      where: email
+        ? [{ phoneNumber: dto.phoneNumber }, { email }]
+        : [{ phoneNumber: dto.phoneNumber }],
     });
 
     if (existing) {
       const message =
         existing.phoneNumber === dto.phoneNumber
-          ? 'Користувач з таким номером телефону вже існує'
-          : 'Користувач з такою електронною поштою вже існує';
+          ? '\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447 \u0437 \u0442\u0430\u043a\u0438\u043c \u043d\u043e\u043c\u0435\u0440\u043e\u043c \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443 \u0432\u0436\u0435 \u0456\u0441\u043d\u0443\u0454'
+          : '\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447 \u0437 \u0442\u0430\u043a\u043e\u044e \u0435\u043b\u0435\u043a\u0442\u0440\u043e\u043d\u043d\u043e\u044e \u043f\u043e\u0448\u0442\u043e\u044e \u0432\u0436\u0435 \u0456\u0441\u043d\u0443\u0454';
       throw new ConflictException(message);
     }
 
     const user = this.repository.create({
       ...dto,
+      email,
       password: await hashPassword(dto.password),
     });
     const role = await this.roleRepository.getRoleByValue('USER');
@@ -93,13 +99,19 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const changes = { ...updateUserDto };
+    const email = normalizeEmail(changes.email) as string | undefined;
+    if (email === undefined) {
+      delete changes.email;
+    } else {
+      changes.email = email;
+    }
 
     const [phoneOwner, emailOwner] = await Promise.all([
       this.repository.findOne({
         where: { phoneNumber: changes.phoneNumber },
       }),
-      changes.email
-        ? this.repository.findOne({ where: { email: changes.email } })
+      email
+        ? this.repository.findOne({ where: { email } })
         : undefined,
     ]);
 
