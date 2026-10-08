@@ -45,7 +45,6 @@ export class FileService {
 
       // Видаляємо файл
       fs.unlinkSync(absolutePath);
-      console.log(filePath + ' was deleted');
     } catch (e) {
       throw new HttpException(
         `Не вдалося видалити файл: ${e.message}`,

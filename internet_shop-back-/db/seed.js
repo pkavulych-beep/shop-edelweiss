@@ -60,7 +60,6 @@ async function main() {
           'INSERT INTO roles (value, description) VALUES ($1, $2) RETURNING id',
           [role.value, role.description],
         ));
-        console.log(`Created role ${role.value}`);
       }
       roleIds[role.value] = rows[0].id;
     }
@@ -74,7 +73,6 @@ async function main() {
          VALUES ($1, $2, $3, $4) RETURNING id`,
         [ADMIN.fullName, ADMIN.email, ADMIN.phoneNumber, await bcrypt.hash(ADMIN.password, 10)],
       ));
-      console.log(`Created admin ${ADMIN.phoneNumber}`);
     }
     const adminId = rows[0].id;
 
@@ -89,7 +87,6 @@ async function main() {
       );
     }
 
-    console.log(`Seed done. Admin login: phone ${ADMIN.phoneNumber}, password ${ADMIN.password}`);
   } finally {
     await client.end();
   }

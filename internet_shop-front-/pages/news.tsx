@@ -19,8 +19,6 @@ export const News: NextPage = () => {
     }
   }, []);
 
-  console.log(data);
-
   return (
     <MainLayout title={'новини і відгуки'}>
       {!data || data.length === 0 ? <EmptyCart /> : <div>test</div>}

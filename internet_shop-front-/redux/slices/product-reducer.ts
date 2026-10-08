@@ -121,6 +121,6 @@ export const fetchProduct =
       const photos = await Api().product.getPhotosProduct(+idProduct);
       dispatch(getPhotosProduct(photos));
     } catch (e) {
-      console.log('error photos');
+      // ignore
     }
   };
