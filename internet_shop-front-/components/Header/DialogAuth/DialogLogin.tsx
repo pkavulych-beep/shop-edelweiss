@@ -80,7 +80,6 @@ export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) =
                 {error}
               </Typography>
             )}
-
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button
