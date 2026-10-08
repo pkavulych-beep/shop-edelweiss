@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { HYDRATE } from 'next-redux-wrapper';
+import { hydrate } from '../hydrate';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
 import { CartItem, CartProductDetails } from '../Types/ProductType';
@@ -78,14 +78,14 @@ export const cartSlice = createSlice({
       state.loading = action.payload;
     },
   },
-  extraReducers: {
-    [HYDRATE]: (state, action) => {
+  extraReducers: (builder) => {
+    builder.addCase(hydrate, (state, action) => {
       // Якщо на клієнті вже є дані корзини — не перезаписувати серверними
       // (серверний store створюється заново при кожній навігації)
       if (state.data.length > 0) return;
       state.data = action.payload.cart.data ?? [];
       state.productDetails = action.payload.cart.productDetails ?? {};
-    },
+    });
   },
 });
 

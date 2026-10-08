@@ -27,12 +27,8 @@ import { maskPhoneInput, normalizePhone } from '../../utils/phone';
 export default function Product() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { currentProduct, userPhone } = useAppSelector(({ product, user, cart }) => ({
-    ...product,
-    idUser: user.userData?.id,
-    userPhone: user.userData?.phoneNumber,
-    ...cart,
-  }));
+  const currentProduct = useAppSelector(({ product }) => product.currentProduct);
+  const userPhone = useAppSelector(({ user }) => user.userData?.phoneNumber);
 
   const [selectedSize, setSelectedSize] = useState<null | string>(null);
   const [isOpenSizeReminder, setIsOpenSizeReminder] = useState(false);
