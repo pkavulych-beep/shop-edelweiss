@@ -658,7 +658,9 @@ function tick() {
     return true;
   };
 
-  // Pull requests, oldest first.
+  // Pull requests, oldest first. One merge a tick: it moves main, and branch protection then wants every other PR
+  // brought up to date before it merges, which the next tick sees and does.
+  let mergedNow = false;
   for (const pr of [...pulls].sort((a, b) => a.number - b.number)) {
     const n = pr.number;
     const s = (state.prs[n] ??= {});
@@ -711,7 +713,7 @@ function tick() {
     // CI is green and the branch is up to date: an approval merges it, otherwise the reviewer has a look.
     if (current && v.verdict === 'approve') {
       setReviewLabel(pr, 'approve');
-      if (!config.merge.enabled) continue;
+      if (!config.merge.enabled || mergedNow) continue;
       const blockers = mergeBlockers(pr);
       if (blockers.length) {
         needsHuman('pr', n, `рев'ю пройдено, але автоматично не мерджу: ${blockers.join('; ')}`);
@@ -720,7 +722,8 @@ function tick() {
       // Run from outside the checkout, so gh doesn't try to delete local branches that worktrees hold.
       const merged = act(`PR #${n}: мерджимо в main («${pr.title}»)`, () =>
         run('gh', ['pr', 'merge', String(n), '--repo', REPO, `--${config.merge.method}`, '--delete-branch'], { cwd: tmpdir() }));
-      if (merged === undefined && (s.mergeFailures = (s.mergeFailures ?? 0) + 1) >= 3) {
+      if (merged !== undefined) mergedNow = true;
+      else if ((s.mergeFailures = (s.mergeFailures ?? 0) + 1) >= 3) {
         needsHuman('pr', n, 'не вдається змерджити: подробиці в лозі конвеєра');
       }
       continue;
