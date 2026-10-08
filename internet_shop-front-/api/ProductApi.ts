@@ -32,10 +32,6 @@ export const productApi = (instance: AxiosInstance) => ({
     const { data } = await instance.get<photo[]>(`/product/photos/${id}`);
     return data;
   },
-  async getDiscountList(gender) {
-    const { data } = await instance.get<IProduct[]>(`/product/discounts/${gender}`);
-    return data;
-  },
   async findByIds(ids: number[]) {
     const { data } = await instance.post<CartProductDetails[]>('/product/byIds', { ids });
     return data;

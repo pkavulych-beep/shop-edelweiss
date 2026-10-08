@@ -46,7 +46,6 @@ export class FileService {
 
       // Видаляємо файл
       fs.unlinkSync(absolutePath);
-      this.logger.log(`${filePath} was deleted`);
     } catch (e) {
       if (e instanceof HttpException) {
         throw e;
