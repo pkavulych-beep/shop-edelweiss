@@ -1,12 +1,29 @@
-import { IsNotEmpty, IsOptional, IsEnum, IsArray, IsString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsString,
+  IsInt,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Gender, Category, Season, ProductStatus } from '../entities/product.entity';
+
+// Створення товару йде через FormData, де числа приходять рядками ("1000"),
+// тому рядки конвертуємо у числа. Решту значень не чіпаємо: нечислові дані
+// відкине валідація зі зрозумілим повідомленням, а не база даних із 500.
+const toNumber = ({ value }) =>
+  typeof value === 'string' && value.trim() !== ''
+    ? Number(value.trim())
+    : value;
 
 export class CreateProductDto {
   @IsNotEmpty({ message: 'Вкажіть назву товару' })
   name: string;
 
   @IsOptional()
+  @Transform(toNumber)
+  @IsInt({ message: 'Кількість має бути цілим числом' })
   count: number;
 
   @IsNotEmpty({ message: 'Вкажіть опис товару' })
@@ -37,9 +54,13 @@ export class CreateProductDto {
   material: string;
 
   @IsNotEmpty({ message: 'Вкажіть ціну' })
+  @Transform(toNumber)
+  @IsInt({ message: 'Ціна має бути цілим числом' })
   price: number;
 
   @IsOptional()
+  @Transform(toNumber)
+  @IsInt({ message: 'Ціна зі знижкою має бути цілим числом' })
   salePrice: number;
 
   @IsNotEmpty({ message: 'Оберіть стать' })
