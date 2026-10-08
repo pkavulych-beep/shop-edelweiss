@@ -4,8 +4,8 @@
 
 ## Проєкт
 
-- `internet_shop-back-/` — API на NestJS 8 + TypeORM 0.3 + PostgreSQL, порт 7777.
-- `internet_shop-front-/` — Next.js 12 + MUI + Redux, порт 3000.
+- `internet_shop-back-/` — API на NestJS 11 + TypeORM 0.3 + PostgreSQL, порт 7777.
+- `internet_shop-front-/` — Next.js 16 (pages router) + React 19 + MUI + Redux, порт 3000.
 - Менеджер пакетів в обох проєктах — **npm** (`npm ci`). Не використовуй yarn і не додавай `yarn.lock`.
 
 ## Як запустити локально
@@ -55,5 +55,4 @@
 
 ## Відомі особливості
 
-- Паролі користувачів зберігаються відкритим текстом. Не логуй їх і не вставляй у PR.
-- `@nestjs/typeorm` 8 офіційно не підтримує typeorm 0.3, тому в `internet_shop-back-/.npmrc` стоїть `legacy-peer-deps=true`.
+- Паролі користувачів зберігаються як bcrypt-хеші (`internet_shop-back-/src/auth/password.ts`). Не логуй паролі й токени і не вставляй їх у PR.
