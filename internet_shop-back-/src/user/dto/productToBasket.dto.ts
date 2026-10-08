@@ -8,6 +8,5 @@ export class productToBasketDto {
   @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsString({ message: 'Розмір має бути рядком' })
-  @IsNotEmpty({ message: 'Розмір не може бути порожнім' })
   size?: string;
 }
