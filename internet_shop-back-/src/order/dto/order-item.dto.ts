@@ -1,8 +1,10 @@
 import { Transform } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { MAX_INT } from '../../common/constants';
 
 export class OrderItemDto {
   @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 
   @Transform(({ value }) => (value === '' ? undefined : value))

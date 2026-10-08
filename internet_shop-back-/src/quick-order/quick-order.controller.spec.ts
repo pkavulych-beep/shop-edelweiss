@@ -1,8 +1,8 @@
-import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { NotFoundException } from '@nestjs/common';
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { ParseIdPipe } from '../common/parse-id.pipe';
 import { QuickOrderController } from './quick-order.controller';
 import { QuickOrderService } from './quick-order.service';
 
@@ -34,13 +34,13 @@ describe('QuickOrderController', () => {
   });
 
   describe('remove', () => {
-    it.each([
-      ['too large id', 99999999999],
-      ['zero', 0],
-      ['negative', -1],
-    ])('returns 404 for %s without calling service', async (_name, id) => {
-      await expect(controller.remove(id)).rejects.toBeInstanceOf(NotFoundException);
-      expect(service.remove).not.toHaveBeenCalled();
+    it('checks the id range in the shared ParseIdPipe, not in the handler', () => {
+      const args = Object.values(
+        Reflect.getMetadata(ROUTE_ARGS_METADATA, QuickOrderController, 'remove'),
+      ) as { data?: string; pipes: unknown[] }[];
+      expect(args.find(arg => arg.data === 'id').pipes.some(pipe => pipe instanceof ParseIdPipe)).toBe(
+        true,
+      );
     });
 
     it('calls service.remove for valid id', async () => {

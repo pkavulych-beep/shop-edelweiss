@@ -30,4 +30,10 @@ describe('order status validation', () => {
       status: Status.Sent,
     });
   });
+
+  it('UpdateOrderDto rejects an id bigger than PostgreSQL integer', async () => {
+    await expect(validate(UpdateOrderDto, { id: 99999999999 })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
 });

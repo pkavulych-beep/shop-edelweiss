@@ -4,7 +4,6 @@ import {
   Body,
   Patch,
   Param,
-  ParseIntPipe,
   UseGuards,
   Delete,
   Post,
@@ -18,8 +17,11 @@ import { SyncCartDto } from './dto/sync-cart.dto';
 import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ParseIdPipe } from '../common/parse-id.pipe';
 
 type AuthUser = { id: number; roles?: { value: string }[] };
+
+const USER_NOT_FOUND = new ParseIdPipe('Користувача не знайдено');
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -42,7 +44,7 @@ export class UserController {
   }
 
   @Get('order/:id')
-  findOrders(@Request() req, @Param('id', ParseIntPipe) id: number) {
+  findOrders(@Request() req, @Param('id', USER_NOT_FOUND) id: number) {
     this.assertOwnerOrAdmin(req.user, id);
     return this.userService.findOrders(id);
   }
@@ -63,7 +65,7 @@ export class UserController {
   }
 
   @Delete('/basket/:id')
-  cleanTheBasket(@Request() req, @Param('id', ParseIntPipe) id: number) {
+  cleanTheBasket(@Request() req, @Param('id', USER_NOT_FOUND) id: number) {
     this.assertOwnerOrAdmin(req.user, id);
     return this.userService.cleanTheBasket(id);
   }
@@ -71,7 +73,7 @@ export class UserController {
   @Patch(':id')
   update(
     @Request() req,
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', USER_NOT_FOUND) id: number,
     @Body() updateUserDto: UpdateUserDto,
   ) {
     this.assertOwnerOrAdmin(req.user, id);
@@ -79,7 +81,7 @@ export class UserController {
   }
 
   @Get(':id')
-  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+  findOne(@Request() req, @Param('id', USER_NOT_FOUND) id: number) {
     this.assertOwnerOrAdmin(req.user, id);
     return this.userService.findById(id);
   }

@@ -1,9 +1,11 @@
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Max, ValidateNested } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { MAX_INT } from '../../common/constants';
 
 export class SyncCartItemDto {
   @IsNotEmpty({ message: 'Не вказано товар' })
   @IsNumber({}, { message: 'Ідентифікатор товару має бути числом' })
+  @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 
   @Transform(({ value }) => (value === '' ? undefined : value))
