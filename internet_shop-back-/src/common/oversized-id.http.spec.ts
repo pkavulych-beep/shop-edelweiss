@@ -161,11 +161,12 @@ describe('an id bigger than PostgreSQL integer', () => {
     expect(receivedHugeId(serviceMock)).toBe(false);
   });
 
-  it.each([
+  // Ті сами запити з різним id у тілі: межі DTO перевіряються до того, як id потрапить у SQL
+  const bodiesWithId = (id: number): [string, () => any, () => jest.Mock][] => [
     [
       'POST /order',
       () => request(app.getHttpServer()).post('/order').set(adminHeaders).send({
-        items: [{ productId: Number(HUGE), quantity: 1 }],
+        items: [{ productId: id, quantity: 1 }],
         cityName: 'Київ',
         department: 'Відділення №1',
       }),
@@ -173,7 +174,7 @@ describe('an id bigger than PostgreSQL integer', () => {
     ],
     [
       'POST /product/byIds',
-      () => request(app.getHttpServer()).post('/product/byIds').send({ ids: [Number(HUGE)] }),
+      () => request(app.getHttpServer()).post('/product/byIds').send({ ids: [id] }),
       () => productService.findByIds,
     ],
     [
@@ -182,7 +183,7 @@ describe('an id bigger than PostgreSQL integer', () => {
         request(app.getHttpServer())
           .patch('/users/addProduct')
           .set(adminHeaders)
-          .send({ idProduct: Number(HUGE), size: 'M' }),
+          .send({ idProduct: id, size: 'M' }),
       () => usersService.addProductToBasket,
     ],
     [
@@ -191,7 +192,7 @@ describe('an id bigger than PostgreSQL integer', () => {
         request(app.getHttpServer())
           .patch('/users/pickUpFromTheBasket')
           .set(adminHeaders)
-          .send({ idProduct: Number(HUGE), size: 'M' }),
+          .send({ idProduct: id, size: 'M' }),
       () => usersService.pickUpFromTheBasket,
     ],
     [
@@ -200,24 +201,40 @@ describe('an id bigger than PostgreSQL integer', () => {
         request(app.getHttpServer())
           .post('/users/syncCart')
           .set(adminHeaders)
-          .send({ items: [{ productId: Number(HUGE), quantity: 1, size: 'M' }] }),
+          .send({ items: [{ productId: id, quantity: 1, size: 'M' }] }),
       () => usersService.syncCart,
     ],
-  ] as [string, () => any, () => jest.Mock][])(
-    '%s answers 400 instead of 500',
-    async (_name, send, serviceMock) => {
-      await send()
-        .expect(400)
-        .expect(res => {
-          expect(res.body.message).toEqual(
-            expect.arrayContaining([
-              expect.stringContaining('Ідентифікатор товару занадто великий'),
-            ]),
-          );
-        });
-      expect(receivedHugeId(serviceMock())).toBe(false);
-      expect(serviceMock()).not.toHaveBeenCalled();
-    },
+  ];
+
+  const expectBadRequest = async (
+    send: () => any,
+    serviceMock: () => jest.Mock,
+    message: string,
+  ) => {
+    await send()
+      .expect(400)
+      .expect(res => {
+        expect(res.body.message).toEqual(
+          expect.arrayContaining([expect.stringContaining(message)]),
+        );
+      });
+    expect(serviceMock()).not.toHaveBeenCalled();
+  };
+
+  it.each(bodiesWithId(Number(HUGE)))(
+    '%s answers 400 instead of 500 for an id bigger than PostgreSQL integer',
+    async (_name, send, serviceMock) =>
+      expectBadRequest(send, serviceMock, 'Ідентифікатор товару занадто великий'),
+  );
+
+  it.each(bodiesWithId(Number(HUGE) * -1))(
+    '%s answers 400 instead of 500 for a negative id',
+    async (_name, send, serviceMock) => expectBadRequest(send, serviceMock, 'більшим за 0'),
+  );
+
+  it.each(bodiesWithId(1.5))(
+    '%s answers 400 instead of 500 for a fractional id',
+    async (_name, send, serviceMock) => expectBadRequest(send, serviceMock, 'цілим числом'),
   );
 
   it('GET /product/5 still reads the product', async () => {

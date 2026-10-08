@@ -36,4 +36,14 @@ describe('order status validation', () => {
       BadRequestException,
     );
   });
+
+  it('UpdateOrderDto rejects a negative id bigger than PostgreSQL integer', async () => {
+    await expect(validate(UpdateOrderDto, { id: -99999999999 })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('UpdateOrderDto rejects a zero id', async () => {
+    await expect(validate(UpdateOrderDto, { id: 0 })).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

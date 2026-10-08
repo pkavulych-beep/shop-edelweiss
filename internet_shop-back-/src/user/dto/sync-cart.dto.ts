@@ -1,10 +1,11 @@
-import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, Max, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { MAX_INT } from '../../common/constants';
 
 export class SyncCartItemDto {
   @IsNotEmpty({ message: 'Не вказано товар' })
-  @IsNumber({}, { message: 'Ідентифікатор товару має бути числом' })
+  @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Min(1, { message: 'Ідентифікатор товару має бути більшим за 0' })
   @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 

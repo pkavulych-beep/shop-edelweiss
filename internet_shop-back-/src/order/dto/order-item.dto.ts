@@ -4,6 +4,7 @@ import { MAX_INT } from '../../common/constants';
 
 export class OrderItemDto {
   @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Min(1, { message: 'Ідентифікатор товару має бути більшим за 0' })
   @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 
