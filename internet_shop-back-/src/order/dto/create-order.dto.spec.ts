@@ -18,6 +18,16 @@ describe('CreateOrderDto', () => {
     await expect(validate(valid)).resolves.toEqual(valid);
   });
 
+  it('accepts an order without size in an item', async () => {
+    const body = {
+      ...valid,
+      items: [{ productId: 1, quantity: 2 }],
+    };
+    const result = await validate(body);
+    expect(result.items[0].size).toBeUndefined();
+    expect(result.items[0].productId).toBe(1);
+    expect(result.items[0].quantity).toBe(2);
+  });
   it('accepts an order without comment', async () => {
     const { comment: _comment, ...body } = valid;
     await expect(validate(body)).resolves.toEqual(body);
@@ -36,8 +46,6 @@ describe('CreateOrderDto', () => {
     ['without items', { items: [] }],
     ['with items not as a list', { items: item }],
     ['with non-integer product id', { items: [{ ...item, productId: 'abc' }] }],
-    ['without size', { items: [{ ...item, size: undefined }] }],
-    ['with empty size', { items: [{ ...item, size: '' }] }],
     ['with zero quantity', { items: [{ ...item, quantity: 0 }] }],
     ['with fractional quantity', { items: [{ ...item, quantity: 1.5 }] }],
     ['with too big quantity', { items: [{ ...item, quantity: 101 }] }],

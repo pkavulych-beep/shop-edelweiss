@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import { useAppSelector } from '../../redux/hooks';
+import { categoryLabels } from '../../components/FilterSidebar/filterLabels';
 import s from './ProductsList.module.scss';
 import Link from 'next/link';
 
@@ -12,6 +13,7 @@ export const ProductsList: FC = () => {
     <div className={s.container}>
       {data.map((product) => {
         const { id, cover, name, salePrice, price, brand, category } = product;
+        const categoryLabel = category ? categoryLabels[category] || category : '';
         return (
           <Link key={id} href={'/product/' + id} className={s.card}>
             <div className={s.imageWrapper}>
@@ -22,9 +24,9 @@ export const ProductsList: FC = () => {
                 loading="lazy"
               />
             </div>
-            {(brand || category) && (
+            {(brand || categoryLabel) && (
               <p className={s.meta}>
-                {brand || category}
+                {brand || categoryLabel}
               </p>
             )}
             <p className={s.name}>{name}</p>
