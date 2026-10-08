@@ -1,6 +1,9 @@
 # Local PostgreSQL for development, tests and agents.
 # Start: docker compose up -d db
 # Credentials match internet_shop-back-/.env.example (development only).
+# One project for every worktree: agents share this one database container (each in a database of its own)
+# instead of each worktree starting its own container on the same port.
+name: shop-edelweiss
 services:
   db:
     image: postgres:16-alpine

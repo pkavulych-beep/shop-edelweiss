@@ -14,10 +14,11 @@
 // `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
 // `medium`, `easy`) which coder takes it. Each coder does one task at a time, alongside the others, on
 // ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
-// pauses only the agents on that plan.
+// pauses only the agents on that plan. Coders and QA run the shop on its database in Docker: when Docker
+// Desktop is closed the conveyor opens it, and hires none of them until the database is up.
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
 // removing the label hands it back to the conveyor, with its counts reset. A macOS notification says
-// when that happens, when a usage limit pauses the work, and what QA found.
+// when that happens, when a usage limit pauses the work, when Docker won't start, and what QA found.
 //
 // It spends no model tokens itself. Run it in a 🐚 shell at a desk, where `office-workers` works:
 //   node tools/conveyor/conveyor.mjs [--dry-run] [--once]
@@ -41,6 +42,12 @@ const SCROLLBACK = path.join(ROOT, '.agent-office', 'scrollback');
 const IN_OFFICE = Boolean(process.env.AGENT_OFFICE_WORKER_ID && process.env.AGENT_OFFICE_HOOK_URL);
 
 const REVIEW_MARK = /<!--\s*conveyor-review\s+sha=([0-9a-f]{7,40})\s+verdict=(approve|changes)\s*-->/i;
+// The title of a QA report that checked nothing, because QA couldn't start the shop.
+const QA_FAILED = /^QA не виконано/i;
+// What docker says when Docker itself isn't running (or isn't installed), rather than the database failing.
+const DOCKER_DOWN = /cannot connect to the docker daemon|failed to connect to the docker api|docker daemon running|ENOENT/i;
+// What it says when the database's port is taken: as a rule, by another PostgreSQL the agents can use just as well.
+const PORT_TAKEN = /port is already allocated|address already in use/i;
 const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 // A line like "Залежить від #12, #13" in an issue: it waits until those issues are closed.
 const DEPENDS = /^[\s*>-]*(?:залежить від|depends on|blocked by)[:\s](.*)$/gim;
@@ -81,10 +88,11 @@ function log(message) {
   if (!DRY) appendFileSync(LOG_PATH, line + '\n');
 }
 
-function run(command, args, { input, cwd = ROOT } = {}) {
+function run(command, args, { input, cwd = ROOT, timeout } = {}) {
   return execFileSync(command, args, {
     cwd,
     input,
+    timeout,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -94,6 +102,7 @@ function run(command, args, { input, cwd = ROOT } = {}) {
 const gh = (...args) => run('gh', args);
 const ghJson = (...args) => JSON.parse(gh(...args));
 const firstLine = (e) => String(e?.stderr || e?.message || e).trim().split('\n')[0];
+const lastLine = (e) => String(e?.stderr || e?.message || e).trim().split('\n').at(-1);
 
 /**
  * Every change to GitHub or the office goes through here, so that --dry-run only describes it.
@@ -241,6 +250,44 @@ function usageLimit(workerId, from) {
   return LIMIT_TEXT.test(text) ? { until: resetTime(text, Date.now()) } : null;
 }
 
+// ── Docker ───────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Whether the shop's database (the docker compose service `docker.service`) is up, bringing it up if need be. Coders
+ * and QA run the shop on it, and agents don't start Docker themselves (AGENTS.md). After a reboot Docker Desktop is
+ * often closed, so the conveyor opens it, once, and looks again on the next tick. If Docker isn't up after
+ * docker.waitMinutes, or the database fails on its own, the person hears about it, once.
+ */
+function databaseUp(now) {
+  const docker = config.docker;
+  if (!docker?.enabled || DRY) return true;
+  let output = '';
+  let why;
+  try {
+    run('docker', ['compose', 'up', '--detach', '--wait', docker.service], { timeout: 2 * MINUTE });
+  } catch (e) {
+    output = `${e.stderr ?? ''} ${e.message}`;
+    why = lastLine(e); // docker compose reports its progress first and the error last
+  }
+  // A taken port is a database too: say, one an agent started in its worktree before docker-compose.yml gave every
+  // worktree the same project.
+  if (!why || PORT_TAKEN.test(output)) {
+    if (state.docker) log('Docker і база знову працюють');
+    delete state.docker;
+    return true;
+  }
+  const down = (state.docker ??= { since: now });
+  if (DOCKER_DOWN.test(output) && down.opened === undefined && process.platform === 'darwin') {
+    down.opened = act(`запустити ${docker.app}: Docker не працює`, () => run('open', ['-g', '-a', docker.app])) !== undefined;
+  }
+  if (!down.told && (!down.opened || now - down.since >= docker.waitMinutes * MINUTE)) {
+    down.told = true;
+    log(`База не працює (${why}): кодерів і QA не наймаю, доки вона не запрацює`);
+    notify('Потрібна людина', `Docker або база не працює, тож кодерів і QA не наймаю: ${why}`);
+  }
+  return false;
+}
+
 // ── Coders ───────────────────────────────────────────────────────────────────────────────────
 
 /** An issue's difficulty: its label, or the default when it has none. */
@@ -298,7 +345,7 @@ function mergedSinceQa() {
 function issuesSince(label, time) {
   return ghJson(
     'issue', 'list', '--repo', REPO, '--state', 'all', '--label', label, '--search', `created:>=${new Date(time).toISOString().slice(0, 10)}`,
-    '--limit', '100', '--json', 'number,state,createdAt',
+    '--limit', '100', '--json', 'number,title,state,createdAt',
   ).filter((i) => Date.parse(i.createdAt) >= time);
 }
 
@@ -306,12 +353,15 @@ function issuesSince(label, time) {
 function finishQa(qa) {
   const job = qa.lastJob;
   job.checked = true;
+  const list = job.prs.map((n) => `#${n}`).join(', ');
   let found;
   let reported = true;
+  let failed = false;
   try {
     const bugs = issuesSince('qa', job.since).length;
     const reports = issuesSince('qa-report', job.since);
     reported = reports.length > 0;
+    failed = reports.some((r) => QA_FAILED.test(r.title ?? ''));
     // The report is a record, not a task, so it doesn't stay open.
     for (const r of reports.filter((x) => x.state === 'OPEN')) {
       act(`закрити звіт QA #${r.number}`, () => gh('issue', 'close', String(r.number), '--repo', REPO));
@@ -320,16 +370,25 @@ function finishQa(qa) {
   } catch (e) {
     found = `не вдалося порахувати знахідки (${firstLine(e)})`;
   }
-  // No report mostly means QA was cut short, by a usage limit or a restart: those merges get one more run.
-  if (reported || qa.retried) {
-    qa.since = job.until;
-    delete qa.retried;
-  } else {
+  // No report mostly means QA was cut short, by a usage limit or a restart, and a report that QA couldn't start
+  // the shop means it checked nothing: either way those merges get one more run.
+  const again = (!reported || failed) && !qa.retried;
+  if (again) {
     qa.retried = true;
     found += ', ці PR перевіримо ще раз';
+  } else {
+    qa.since = job.until;
+    delete qa.retried;
   }
-  log(`QA перевірив ${job.prs.map((n) => `#${n}`).join(', ')}: ${found}`);
-  notify('QA закінчив', `Перевірено PR: ${job.prs.length}, ${found}`);
+  if (!failed) {
+    log(`QA перевірив ${list}: ${found}`);
+    notify('QA закінчив', `Перевірено PR: ${job.prs.length}, ${found}`);
+  } else if (again) {
+    log(`QA не зміг запустити магазин і не перевірив ${list}: ${found}`);
+    notify('QA не виконано', `QA не зміг запустити магазин: ${found}`);
+  } else {
+    needsHuman('qa', 0, `QA вдруге не зміг запустити магазин, ${list} лишилися неперевіреними (${found})`);
+  }
 }
 
 /** passed, failed, pending, or none (CI never ran on this commit). */
@@ -481,6 +540,9 @@ function tick() {
     }
   }
   const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
+  // Coders and QA run the shop: before one of them is hired, its database must be up. Looked at once a tick, if needed.
+  let dbUp;
+  const databaseReady = () => (dbUp ??= databaseUp(now));
 
   /**
    * A job's agent ran into its plan's usage limit: no more agents on that plan until it lifts. The job waits for
@@ -620,6 +682,7 @@ function tick() {
     const coder = config.coders[s.coder];
     if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
+    if (!databaseReady()) return; // nowhere to try the fix
     if (again) reasons = [...reasons, 'минулого разу PR після доопрацювання не змінився: доведи його до кінця й запуш'];
     const text = prompt('fix', {
       pr: n, title: pr.title, url: pr.url, branch: pr.headRefName,
@@ -743,9 +806,11 @@ function tick() {
   }
 
   // QA after every qa.everyMerges merges that changed the shop, the oldest first and at most that many at a time.
+  // Fewer wait for more, since a run costs much the same however few it checks: only once the oldest has waited
+  // qa.maxWaitHours does QA check what there is, so the last merges before the work stops get checked too.
   const unchecked = config.qa?.enabled && !qa.job ? mergedSinceQa() : [];
   const startQa = () => {
-    if (pausedFor(config.qa.provider)) return;
+    if (pausedFor(config.qa.provider) || !databaseReady()) return;
     const batch = unchecked.slice(0, config.qa.everyMerges);
     const list = batch.map((p) => `#${p.number}`).join(', ');
     const prs = batch.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
@@ -754,7 +819,8 @@ function tick() {
     if (!worker) return;
     qa.job = { kind: 'qa', provider: config.qa.provider, worker: worker.name, workerId: worker.id, since: now, until: batch.at(-1).mergedAt, prs: batch.map((p) => p.number) };
   };
-  if (unchecked.length >= (config.qa?.everyMerges ?? Infinity)) startQa();
+  const waitedOut = unchecked.length > 0 && now - Date.parse(unchecked[0].mergedAt) >= (config.qa.maxWaitHours ?? Infinity) * 60 * MINUTE;
+  if (unchecked.length >= (config.qa?.everyMerges ?? Infinity) || waitedOut) startQa();
 
   // New work: the next issue for each free coder, while not too much waits for review. Higher priority goes
   // first; an issue whose difficulty no coder takes waits for one.
@@ -779,6 +845,7 @@ function tick() {
     // Several coders can take the same difficulty: each free one takes the most important issue it can.
     const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number));
     if (!next) continue;
+    if (!databaseReady()) break; // no coder starts without the shop's database
     claimed.add(next.number);
     const text = prompt('coder', { issue: next.number, title: next.title, ...portsOf(coder) });
     const worker = hire(coder, `кодера ${name}`, `issue #${next.number} «${next.title}»`, text, ['--issue', String(next.number)]);
@@ -789,8 +856,6 @@ function tick() {
     busyCoders.add(name);
     started++;
   }
-  // Nothing in the works and nothing about to merge: QA checks what's left rather than wait for more merges.
-  if (!qa.job && unchecked.length && !inFlight && !busyCoders.size) startQa();
 
   // Our agents with nothing left to do go home, taking their worktrees with them: those whose pull request
   // merged, and those with no job whose open pull request nobody knows of. The office doesn't always tell which
