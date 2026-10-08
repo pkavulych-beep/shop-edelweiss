@@ -4,16 +4,16 @@ import { CartItem } from '../redux/Types/ProductType';
 // Власника кошика бек бере з JWT-токена
 export type addToCartDto = {
   idProduct: number;
-  size: string;
+  size?: string;
 };
 
 export type removeFromCartDto = {
   idProduct: number;
-  size: string;
+  size?: string;
 };
 
 export type syncCartDto = {
-  items: { productId: number; size: string; quantity: number }[];
+  items: { productId: number; size?: string; quantity: number }[];
 };
 
 export const cartApi = (instance: AxiosInstance) => ({

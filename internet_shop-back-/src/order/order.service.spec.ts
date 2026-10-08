@@ -96,6 +96,39 @@ describe('OrderService', () => {
       expect(repository.save).not.toHaveBeenCalled();
     });
 
+
+    it('creates an order for a product without sizes with no size provided', async () => {
+      productService.findPurchasable.mockResolvedValueOnce([
+        { id: 2, sizes: [], price: 300, salePrice: null },
+      ]);
+      await service.create(3, {
+        ...delivery,
+        items: [{ productId: 2, quantity: 1 }],
+      });
+      expect(repository.save).toHaveBeenCalled();
+      const saved = repository.save.mock.calls[0][0];
+      expect(saved.items).toEqual([{ productId: 2, size: '', quantity: 1, price: 300 }]);
+    });
+
+    it('rejects order for product with sizes if size not provided', async () => {
+      await expect(
+        service.create(3, {
+          ...delivery,
+          items: [{ productId: 1, quantity: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects order with non-existent size', async () => {
+      await expect(
+        service.create(3, {
+          ...delivery,
+          items: [{ productId: 1, size: 'XXL', quantity: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
     it('does not create an order with a size the product does not have', async () => {
       await expect(
         service.create(3, {

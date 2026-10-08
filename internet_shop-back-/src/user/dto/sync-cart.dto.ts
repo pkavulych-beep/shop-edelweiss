@@ -1,14 +1,16 @@
-import { IsArray, IsNotEmpty, IsNumber, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class SyncCartItemDto {
   @IsNotEmpty({ message: 'Не вказано товар' })
   @IsNumber({}, { message: 'Ідентифікатор товару має бути числом' })
   productId: number;
 
-  @IsNotEmpty({ message: 'Оберіть розмір' })
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsOptional()
   @IsString({ message: 'Розмір має бути рядком' })
-  size: string;
+  @IsNotEmpty({ message: 'Розмір не може бути порожнім' })
+  size?: string;
 
   @IsNotEmpty({ message: 'Вкажіть кількість' })
   @IsNumber({}, { message: 'Кількість має бути числом' })
