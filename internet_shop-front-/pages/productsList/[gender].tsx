@@ -19,6 +19,7 @@ import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
 import TuneIcon from '@mui/icons-material/Tune';
+import { pluralizeProduct } from '../../utils/plural';
 
 const LIMIT = 20;
 
@@ -88,7 +89,7 @@ export default function Index() {
         </Typography>
         {total > 0 && (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            {total} товарів
+            {total} {pluralizeProduct(total)}
           </Typography>
         )}
       </Box>
@@ -179,14 +180,27 @@ export default function Index() {
             onRemove={handleRemoveFilter}
             onClearAll={handleClearAll}
           />
-          <ProductsList />
-          {totalPages > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 6 }}>
-              <Pagination
-                count={totalPages}
-                page={currentPage}
-                onChange={handlePageChange}
-              />
+          {total > 0 ? (
+            <>
+              <ProductsList />
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', my: 6 }}>
+                  <Pagination
+                    count={totalPages}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                  />
+                </Box>
+              )}
+            </>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography variant="h6" sx={{ color: 'text.secondary', mb: 2 }}>
+                Нічого не знайдено
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+                Спробуйте змінити параметри пошуку або скиньте фільтри
+              </Typography>
             </Box>
           )}
         </Box>
