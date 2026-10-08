@@ -1,5 +1,5 @@
 // Conveyor scenarios: each runs one tick of a copy of the conveyor, in a temporary folder, against fake
-// gh / office-workers / osascript (fake.mjs), and checks which calls it made: `want` must happen, `not` must not.
+// gh / office-workers / osascript / docker / open (fake.mjs), and checks which calls it made: `want` must happen, `not` must not.
 // Nothing touches GitHub, the office or the real state.json.  Run: node tools/conveyor/test/run.mjs
 import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ mkdirSync(`${T}/bin`);
 cpSync(path.join(HERE, '..', 'conveyor.mjs'), `${T}/root/tools/conveyor/conveyor.mjs`);
 cpSync(path.join(HERE, '..', 'config.json'), `${T}/root/tools/conveyor/config.json`);
 cpSync(path.join(HERE, '..', 'prompts'), `${T}/root/tools/conveyor/prompts`, { recursive: true });
-for (const tool of ['gh', 'office-workers', 'osascript']) {
+for (const tool of ['gh', 'office-workers', 'osascript', 'docker', 'open']) {
   writeFileSync(`${T}/bin/${tool}`, `#!/bin/sh\nexec node "${path.join(HERE, 'fake.mjs')}" ${tool} "$@"\n`);
   chmodSync(`${T}/bin/${tool}`, 0o755);
 }
@@ -43,6 +43,10 @@ const hitLimit = (t, limit = 'session') => `⎿  You've hit your ${limit} limit 
 const claudeLimit = (t, limit) => `${hitLimit(t, limit)}Usage limit reached again · continuing automatically in 2m · esc to cancel\n`;
 const cosmo = (status) => ({ name: 'Cosmo', id: 'w-c', kind: 'agent', provider: 'claude', status });
 const coding = (job = {}) => ({ issues: { 94: { job: { kind: 'code', coder: 'opus', provider: 'claude', worker: 'Cosmo', workerId: 'w-c', since: 0, ...job } } } });
+const recent = (number, minutesAgo) => ({ ...app(number, 0), mergedAt: new Date(NOW - minutesAgo * MIN).toISOString() });
+const quinn = { name: 'Quinn', id: 'w-q', kind: 'agent', provider: 'claude', status: 'idle', hiredBy: me.name };
+const qaJob = { kind: 'qa', provider: 'claude', worker: 'Quinn', workerId: 'w-q', since: Date.parse('2026-10-05T18:43:46Z'), until: '2026-10-05T18:30:00Z', prs: [41, 42] };
+const failedReport = { number: 60, state: 'OPEN', createdAt: '2026-10-05T18:51:42Z', title: 'QA не виконано: #41, #42' };
 
 const HIRE = (provider, model) => `^office-workers hire --provider ${provider} --model ${model.replace(/\//g, '\\/')} `;
 const scenarios = [
@@ -178,6 +182,49 @@ const scenarios = [
   { name: '10 мерджів коду → QA на Sonnet, порти 7779/3002',
     fx: { workers: [me], issues: [], merged: Array.from({ length: 10 }, (_, i) => app(100 + i, i)), state: st() },
     want: [`${HIRE('claude', 'sonnet')}--effort medium --json <<.*`] },
+  { name: '2 свіжі мерджі, а робити більше нічого → QA чекає, поки набереться 10',
+    fx: { workers: [me], issues: [], merged: [recent(110, 90), recent(111, 30)], state: st() },
+    not: ['^office-workers hire'] },
+  { name: 'найстаріший неперевірений мердж чекає понад добу → QA перевіряє ті 2, що є',
+    fx: { workers: [me], issues: [], merged: [recent(110, 25 * 60), recent(111, 30)], state: st() },
+    want: [`${HIRE('claude', 'sonnet')}--effort medium --json <<.*#110.*#111`] },
+  { name: 'QA не зміг запустити магазин (звіт «QA не виконано») → звіт закрити, ці PR перевірити ще раз',
+    fx: { workers: [me, quinn], issues: [], qaReports: [failedReport], state: st({ qa: { since: '2026-10-05T09:00:00Z', job: qaJob } }) },
+    want: ['^gh issue close 60 '], not: ['Потрібна людина'], state: (s) => s.qa.since === '2026-10-05T09:00:00Z' && s.qa.retried === true },
+  { name: 'і вдруге «QA не виконано» → PR лишаються неперевіреними, сповіщення для людини',
+    fx: { workers: [me, quinn], issues: [], qaReports: [failedReport], state: st({ qa: { since: '2026-10-05T09:00:00Z', retried: true, job: qaJob } }) },
+    want: ['^osascript .*Потрібна людина QA: QA вдруге не зміг запустити магазин'], state: (s) => s.qa.since === '2026-10-05T18:30:00Z' && !s.qa.retried },
+  // ── Docker ──
+  { name: 'Docker не працює, є задача → відкрити Docker Desktop, кодера не наймати, без сповіщення',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'down', state: st() },
+    want: ['^docker compose up --detach --wait db', '^open -g -a Docker'], not: ['^office-workers hire', '^osascript'],
+    state: (s) => s.docker?.opened === true && !s.docker.told },
+  { name: 'Docker відкрили 10 хв тому, а він не працює → одне сповіщення, Docker удруге не відкривати',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'down', state: st({ docker: { since: NOW - 10 * MIN, opened: true } }) },
+    want: ['^osascript .*Docker або база не працює'], not: ['^office-workers hire', '^open '], state: (s) => s.docker?.told === true },
+  { name: 'і далі не працює → без нових сповіщень',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'down', state: st({ docker: { since: NOW - 20 * MIN, opened: true, told: true } }) },
+    not: ['^office-workers hire', '^open ', '^osascript'] },
+  { name: 'Docker запрацював → кодера наймаємо, стан Docker забуто',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], state: st({ docker: { since: NOW - 20 * MIN, opened: true, told: true } }) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], state: (s) => !s.docker },
+  { name: 'Docker працює, а база не піднімається → одразу сповіщення з помилкою, Docker не відкривати',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'broken', state: st() },
+    want: ['^osascript .*is unhealthy'], not: ['^office-workers hire', '^open '] },
+  { name: 'порт бази зайняв контейнер з worktree агента → це теж база, кодера наймаємо',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'taken', state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['^osascript', '^open '], state: (s) => !s.docker },
+  { name: "Docker не працює, а треба лише рев'ю → рев'юер працює, Docker не чіпаємо",
+    fx: { workers: [me], pulls: [pr()], issues: [], docker: 'down', state: st() },
+    want: [`${HIRE('claude', 'opus')}--effort high --json --no-worktree`], not: ['^docker ', '^open '] },
+  { name: 'червоний CI, а Docker не працює → доопрацювання чекає на базу',
+    fx: { workers: [me, { name: 'Zed', id: 'w-z', kind: 'agent', provider: 'opencode', status: 'idle', pr: { number: 50 } }], pulls: [pr({ statusCheckRollup: red })], issues: [], docker: 'down', state: st() },
+    want: ['^open -g -a Docker'], not: ['^office-workers (tell|hire)'] },
+  { name: '10 мерджів, а Docker не працює → QA чекає на базу',
+    fx: { workers: [me], issues: [], merged: Array.from({ length: 10 }, (_, i) => app(100 + i, i)), docker: 'down', state: st() },
+    want: ['^open -g -a Docker'], not: ['^office-workers hire'] },
+  { name: 'наймати нікого → Docker не перевіряємо',
+    fx: { workers: [me], issues: [], state: st() }, not: ['^docker ', '^open '] },
 ];
 
 let failed = 0;
