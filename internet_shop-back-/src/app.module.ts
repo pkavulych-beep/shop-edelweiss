@@ -22,7 +22,6 @@ import { QuickOrderModule } from './quick-order/quick-order.module';
 import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
 import { RefreshTokenEntity } from './auth/entities/refresh-token.entity';
 import { ThrottlerModule } from '@nestjs/throttler';
-import './common/phone-validator';
 import {
   AUTH_ATTEMPTS_LIMIT,
   AUTH_ATTEMPTS_TTL,

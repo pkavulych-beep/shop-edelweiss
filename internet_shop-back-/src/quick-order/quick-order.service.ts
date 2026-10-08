@@ -28,7 +28,7 @@ export class QuickOrderService {
       }
     }
 
-    const normalizedPhone = normalizePhone(phoneNumber);
+    const normalizedPhone = normalizePhone(phoneNumber) as string;
     const { id, createdAt } = await this.repository.save({
       phoneNumber: normalizedPhone,
       product,

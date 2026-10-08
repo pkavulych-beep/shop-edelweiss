@@ -1,5 +1,5 @@
 import { ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
-import { normalizePhone, UA_PHONE_PATTERN } from './phone';
+import { normalizePhone, UA_PHONE_PATTERN, UA_PHONE_MESSAGE } from './phone';
 
 @ValidatorConstraint({ name: 'IsValidPhone', async: false })
 export class IsValidPhoneConstraint implements ValidatorConstraintInterface {
@@ -17,8 +17,6 @@ export class IsValidPhoneConstraint implements ValidatorConstraintInterface {
   }
 
   defaultMessage(_args: ValidationArguments) {
-    return 'Вкажіть український номер телефону у форматі +38 (0XX) XXX-XX-XX';
+    return UA_PHONE_MESSAGE;
   }
 }
-
-export { normalizePhone } from './phone';
