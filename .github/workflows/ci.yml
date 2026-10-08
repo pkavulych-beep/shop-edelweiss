@@ -71,6 +71,8 @@ jobs:
           curl -sf http://localhost:7777/auth/profile -H "Authorization: Bearer $token" > /dev/null \
             || { echo "::error::Profile request with the admin token failed"; exit 1; }
           echo "Smoke test passed"
+      - name: E2E tests (register → login → order)
+        run: npm run test:e2e
       - name: API log
         if: failure()
         run: cat api.log || true
