@@ -7,10 +7,8 @@ import { EmptyCart } from '../components/cartComponents/emptyCart/EmptyCart';
 
 export const News: NextPage = () => {
   const dispatch = useAppDispatch();
-  const { id, data } = useAppSelector(({ user, orders }) => ({
-    id: user?.userData?.id,
-    data: orders?.data
-  }));
+  const id = useAppSelector(({ user }) => user?.userData?.id);
+  const data = useAppSelector(({ orders }) => orders?.data);
 
   useEffect(() => {
     //??

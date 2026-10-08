@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -39,13 +39,16 @@ export default function ProfilePage() {
   const [snackMessage, setSnackMessage] = useState('');
   const [snackSeverity, setSnackSeverity] = useState<'success' | 'error'>('success');
 
-  useEffect(() => {
+  // Коли дані користувача змінилися (вхід, збереження), заповнюємо форму наново
+  const [prevUserData, setPrevUserData] = useState(userData);
+  if (userData !== prevUserData) {
+    setPrevUserData(userData);
     if (userData) {
       setFullName(userData.fullName || '');
       setPhone(userData.phoneNumber || '');
       setEmail(userData.email || '');
     }
-  }, [userData]);
+  }
 
   if (!userData) {
     return (

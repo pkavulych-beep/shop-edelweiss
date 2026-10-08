@@ -42,9 +42,12 @@ export default function Header() {
   // Сюди веде api/Api.ts, коли сесія завершилася і токен оновити не вдалося
   useEffect(() => {
     if (router.query.login !== '1') return;
-    if (userData === null) setDialogLogin(true);
     const { login, ...query } = router.query;
-    router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+    router
+      .replace({ pathname: router.pathname, query }, undefined, { shallow: true })
+      .then(() => {
+        if (userData === null) setDialogLogin(true);
+      });
   }, [router, userData]);
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {

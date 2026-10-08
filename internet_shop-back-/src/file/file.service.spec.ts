@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { baseUrl, FileService, FileType } from './file.service';
 import { getUploadsDir } from './uploads-dir';
 
@@ -37,6 +38,7 @@ describe('FileService', () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     fs.rmSync(uploadsDir, { recursive: true, force: true });
     if (original === undefined) delete process.env.UPLOADS_DIR;
     else process.env.UPLOADS_DIR = original;
@@ -63,5 +65,65 @@ describe('FileService', () => {
     await service.deleteFile(url);
 
     expect(fs.existsSync(path.join(uploadsDir, url.replace(baseUrl, '')))).toBe(false);
+  });
+
+  it('deleteFile returns 404 with generic message for non-existent file (no server paths)', async () => {
+    const promise = service.deleteFile(baseUrl + 'image/nonexistent.jpg');
+
+    await expect(promise).rejects.toThrow(HttpException);
+
+    const e = await promise.catch((err) => err);
+    expect(e).toBeInstanceOf(HttpException);
+    expect(e.getStatus()).toBe(HttpStatus.NOT_FOUND);
+    const response = e.getResponse();
+    expect(typeof response).toBe('string');
+    expect(response).toBe('Файл не знайдено');
+    expect(response).not.toContain('/');
+    expect(response).not.toMatch(/[A-Za-z]:\\/);
+  });
+
+  it('createFile returns 500 with generic message on error (no server paths)', () => {
+    const invalidFile = { originalname: 'test', buffer: null };
+
+    expect(() => service.createFile(FileType.IMAGE, invalidFile)).toThrow(HttpException);
+
+    let caught: HttpException | null = null;
+    try {
+      service.createFile(FileType.IMAGE, invalidFile);
+    } catch (e) {
+      caught = e as HttpException;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    const response = caught!.getResponse();
+    expect(typeof response).toBe('string');
+    expect(response).toBe('Не вдалося створити файл');
+    expect(response).not.toContain('/');
+    expect(response).not.toMatch(/[A-Za-z]:\\/);
+  });
+
+  it('deleteFile returns 500 with generic message on filesystem error (no server paths)', async () => {
+    const url = service.createFile(FileType.IMAGE, {
+      originalname: 'photo-perm.jpg',
+      buffer: Buffer.from('jpg-perm'),
+    });
+
+    const errorWithPath = new Error('EACCES: permission denied, unlink \'/srv/secret/path/image/photo-perm.jpg\'');
+    jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {
+      throw errorWithPath;
+    });
+
+    await expect(service.deleteFile(url)).rejects.toThrow(HttpException);
+
+    const e = await service.deleteFile(url).catch((err) => err);
+    expect(e).toBeInstanceOf(HttpException);
+    expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    const response = e.getResponse();
+    expect(typeof response).toBe('string');
+    expect(response).toBe('Не вдалося видалити файл');
+    expect(response).not.toContain('/');
+    expect(response).not.toMatch(/[A-Za-z]:\\/);
+    expect(response).not.toContain('secret');
+    expect(response).not.toContain('srv');
   });
 });

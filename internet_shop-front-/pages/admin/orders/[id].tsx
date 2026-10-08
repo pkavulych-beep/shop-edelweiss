@@ -50,9 +50,10 @@ export default function AdminOrderDetailsPage() {
   );
   const rawId = router.query.id;
   const id = typeof rawId === 'string' ? Number(rawId) : NaN;
+  const validId = Number.isInteger(id) && id >= 1;
 
-  const [order, setOrder] = useState<Order | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Результат прив'язаний до id, тож при зміні id старе замовлення не показуємо
+  const [loaded, setLoaded] = useState<{ id: number; order?: Order; error?: string } | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(
@@ -60,28 +61,33 @@ export default function AdminOrderDetailsPage() {
   );
 
   useEffect(() => {
-    if (!isAdmin || !router.isReady) return;
+    if (!isAdmin || !router.isReady || !validId) return;
     // Відповідь на попередній id може прийти пізніше за нову
     let cancelled = false;
-    setOrder(null);
-    setError(null);
-    setStatus(null);
-    if (!Number.isInteger(id) || id < 1) {
-      setError('Не знайдено такого замовлення');
-      return;
-    }
     Api()
       .orders.findById(id)
       .then(data => {
         if (cancelled) return;
-        setOrder(data);
+        setLoaded({ id, order: data });
         setStatus(data.status);
       })
-      .catch(err => !cancelled && setError(readApiError(err, 'Не вдалося завантажити замовлення')));
+      .catch(
+        err =>
+          !cancelled &&
+          setLoaded({ id, error: readApiError(err, 'Не вдалося завантажити замовлення') })
+      );
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, router.isReady, id]);
+  }, [isAdmin, router.isReady, validId, id]);
+
+  const current = loaded?.id === id ? loaded : null;
+  const order = current?.order ?? null;
+  const error = !router.isReady
+    ? null
+    : validId
+    ? current?.error ?? null
+    : 'Не знайдено такого замовлення';
 
   const saveStatus = async () => {
     if (!order || !status || status === order.status || saving) return;
@@ -89,7 +95,9 @@ export default function AdminOrderDetailsPage() {
     try {
       const updated = await Api().orders.updateStatus(order.id, status);
       // У відповіді PATCH лише саме замовлення, позиції й покупець — з поточного стану
-      setOrder(current => (current ? { ...current, status: updated.status } : current));
+      setLoaded(prev =>
+        prev?.order ? { ...prev, order: { ...prev.order, status: updated.status } } : prev
+      );
       setMessage({ severity: 'success', text: 'Статус замовлення оновлено' });
     } catch (err) {
       setMessage({ severity: 'error', text: readApiError(err, 'Не вдалося оновити статус') });

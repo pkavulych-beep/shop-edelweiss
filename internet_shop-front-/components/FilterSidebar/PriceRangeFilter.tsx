@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Typography from '@mui/material/Typography';
 import Slider from '@mui/material/Slider';
 import Box from '@mui/material/Box';
@@ -22,9 +22,12 @@ const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
     priceMax ?? MAX_PRICE,
   ]);
 
-  useEffect(() => {
+  // Коли фільтр змінили ззовні (скидання, URL), повзунок переходить на нові межі
+  const [prevRange, setPrevRange] = useState([priceMin, priceMax]);
+  if (prevRange[0] !== priceMin || prevRange[1] !== priceMax) {
+    setPrevRange([priceMin, priceMax]);
     setValue([priceMin ?? MIN_PRICE, priceMax ?? MAX_PRICE]);
-  }, [priceMin, priceMax]);
+  }
 
   const handleChange = (_: Event, newValue: number | number[]) => {
     setValue(newValue as number[]);
