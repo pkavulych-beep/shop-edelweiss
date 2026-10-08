@@ -94,8 +94,8 @@ describe('FileService', () => {
       caught = e as HttpException;
     }
     expect(caught).not.toBeNull();
-    expect(caught!.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-    const response = caught!.getResponse();
+    expect(caught.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    const response = caught.getResponse();
     expect(typeof response).toBe('string');
     expect(response).toBe('Не вдалося створити файл');
     expect(response).not.toContain('/');
