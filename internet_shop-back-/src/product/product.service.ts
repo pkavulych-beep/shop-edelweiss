@@ -26,7 +26,7 @@ export class ProductService {
     @InjectRepository(BasketItemEntity)
     private basketRepository: Repository<BasketItemEntity>,
     private fileService: FileService,
-    private PhotosService: PhotosService,
+    private photosService: PhotosService,
   ) {}
 
   async create(createProductDto: CreateProductDto, photos) {
@@ -39,7 +39,7 @@ export class ProductService {
     if (photos.length > 1) {
       for (let i = 1; i < photos.length; i++) {
         const photoUrl = createFile(photos[i]);
-        const res = await this.PhotosService.create({ url: photoUrl });
+        const res = await this.photosService.create({ url: photoUrl });
         picturePathArr.push(res);
       }
     }
@@ -330,7 +330,7 @@ export class ProductService {
         } catch (e) {
           console.warn('Photo file not found, skipping:', e.message);
         }
-        await this.PhotosService.remove(photo.id);
+        await this.photosService.remove(photo.id);
       }
     }
 
