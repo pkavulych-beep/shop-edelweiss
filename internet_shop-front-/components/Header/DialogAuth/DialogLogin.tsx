@@ -5,9 +5,7 @@ import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import Divider from '@mui/material/Divider';
 import * as React from 'react';
-import GoogleIcon from '@mui/icons-material/Google';
 import { Form, Formik } from 'formik';
 import CustomizedInputBase from '../../CustomizedInputBase/CustomizedInputBase';
 import { LoginFormValidation } from './FormsValidation';
@@ -62,7 +60,7 @@ export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) =
             >
               Акаунт Edelweiss
             </Typography>
-<CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
+            <CustomizedInputBase type="string" name="phoneNumber" placeholder="Номер телефону" phoneMask />
             <CustomizedInputBase
               type="password"
               name="password"
@@ -82,21 +80,6 @@ export const DialogLogin: FC<IDialogLogin> = ({ open, setRegister, setLogin }) =
                 {error}
               </Typography>
             )}
-
-            <Divider sx={{ my: 3 }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-                або
-              </Typography>
-            </Divider>
-
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<GoogleIcon />}
-              sx={{ mb: 1 }}
-            >
-              Увійти через Google
-            </Button>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button

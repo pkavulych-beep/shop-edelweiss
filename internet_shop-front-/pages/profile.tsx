@@ -12,18 +12,15 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
-import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
-import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { MainLayout } from '../layouts/MainLayout';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { toLogOut, updateUserData } from '../redux/slices/auth-reducer';
 import { useRouter } from 'next/router';
-import Link from 'next/link';
 import { MyOrders } from '../components/MyOrders/MyOrders';
 import { maskPhoneInput } from '../utils/phone';
 
-type Tab = 'info' | 'orders' | 'addresses' | 'wishlist';
+type Tab = 'info' | 'orders';
 
 export default function ProfilePage() {
   const dispatch = useAppDispatch();
@@ -101,8 +98,6 @@ export default function ProfilePage() {
   const menuItems = [
     { key: 'orders' as Tab, label: 'Мої замовлення', icon: <ShoppingBagOutlinedIcon /> },
     { key: 'info' as Tab, label: 'Особисті дані', icon: <PersonOutlineOutlinedIcon /> },
-    { key: 'addresses' as Tab, label: 'Адреси', icon: <LocationOnOutlinedIcon /> },
-    { key: 'wishlist' as Tab, label: 'Вподобане', icon: <FavoriteBorderIcon /> },
   ];
 
   return (
@@ -290,71 +285,6 @@ export default function ProfilePage() {
               Історія замовлень
             </Typography>
             <MyOrders />
-          </Box>
-        )}
-
-        {activeTab === 'addresses' && (
-          <Box>
-            <Typography
-              sx={{
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'text.secondary',
-                mb: 3,
-              }}
-            >
-              Збережені адреси
-            </Typography>
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: 6,
-                bgcolor: '#f2f4f4',
-                borderRadius: 3,
-              }}
-            >
-              <LocationOnOutlinedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-                У вас ще немає збережених адрес
-              </Typography>
-            </Box>
-          </Box>
-        )}
-
-        {activeTab === 'wishlist' && (
-          <Box>
-            <Typography
-              sx={{
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'text.secondary',
-                mb: 3,
-              }}
-            >
-              Вподобане
-            </Typography>
-            <Box
-              sx={{
-                textAlign: 'center',
-                py: 6,
-                bgcolor: '#f2f4f4',
-                borderRadius: 3,
-              }}
-            >
-              <FavoriteBorderIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-                У вас ще немає вподобаних товарів
-              </Typography>
-              <Link href={`/productsList/woman`} style={{ textDecoration: 'none' }}>
-                <Button variant="text" sx={{ mt: 2, color: 'primary.main' }}>
-                  Перейти до каталогу
-                </Button>
-              </Link>
-            </Box>
           </Box>
         )}
       </Box>
