@@ -11,7 +11,6 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
-  ParseIntPipe,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -21,6 +20,9 @@ import { Roles } from 'src/auth/roles-auth.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { FindByIdsDto } from './dto/find-by-ids.dto';
+import { ParseIdPipe } from '../common/parse-id.pipe';
+
+const PRODUCT_NOT_FOUND = new ParseIdPipe('Товар не знайдено');
 
 @Controller('product')
 export class ProductController {
@@ -55,12 +57,12 @@ export class ProductController {
   }
 
   @Get('/photos/:id')
-  findOnlyPhotos(@Param('id') id: string) {
+  findOnlyPhotos(@Param('id', PRODUCT_NOT_FOUND) id: number) {
     return this.productService.findOnlyPhotos(id);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(@Param('id', PRODUCT_NOT_FOUND) id: number) {
     return this.productService.findOne(id);
   }
 
@@ -68,7 +70,7 @@ export class ProductController {
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', PRODUCT_NOT_FOUND) id: number,
     @Body() updateProductDto: UpdateProductDto,
   ) {
     return this.productService.update(id, updateProductDto);
@@ -77,7 +79,7 @@ export class ProductController {
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', PRODUCT_NOT_FOUND) id: number) {
     return this.productService.remove(id);
   }
 }

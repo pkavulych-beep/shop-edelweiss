@@ -31,6 +31,8 @@ describe('CreateQuickOrderDto', () => {
     ['without product', { productId: undefined }],
     ['with a non-integer product', { productId: 'abc' }],
     ['with too large productId', { productId: 99999999999 }],
+    ['with a negative productId bigger than PostgreSQL integer', { productId: -99999999999 }],
+    ['with zero productId', { productId: 0 }],
     ['with empty size', { size: '' }],
     ['with a non-string size', { size: 42 }],
   ])('rejects a request %s', async (_name, patch) => {

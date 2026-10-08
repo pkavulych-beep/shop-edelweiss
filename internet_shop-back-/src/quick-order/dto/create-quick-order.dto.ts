@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Validate } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, Validate } from 'class-validator';
 import { IsValidPhoneConstraint } from '../../common/phone-validator';
 import { MAX_INT } from '../../common/constants';
 
@@ -7,6 +7,7 @@ export class CreateQuickOrderDto {
   phoneNumber: string;
 
   @IsInt({ message: 'Ідентифікатор товару має бути цілим числом' })
+  @Min(1, { message: 'Ідентифікатор товару має бути більшим за 0' })
   @Max(MAX_INT, { message: 'Ідентифікатор товару занадто великий' })
   productId: number;
 

@@ -5,7 +5,6 @@ import {
   Body,
   Patch,
   Param,
-  ParseIntPipe,
   Query,
   Delete,
   UseGuards,
@@ -19,6 +18,9 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ParseIdPipe } from '../common/parse-id.pipe';
+
+const ORDER_NOT_FOUND = new ParseIdPipe('Не знайдено такого замовлення');
 
 @Controller('order')
 export class OrderController {
@@ -46,14 +48,14 @@ export class OrderController {
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+  findOne(@Request() req, @Param('id', ORDER_NOT_FOUND) id: number) {
     return this.orderService.findOneForUser(id, req.user);
   }
 
   @Patch(':id/status')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  updateStatus(@Param('id', ParseIntPipe) id: number, @Body() { status }: UpdateOrderStatusDto) {
+  updateStatus(@Param('id', ORDER_NOT_FOUND) id: number, @Body() { status }: UpdateOrderStatusDto) {
     return this.orderService.updateStatus(id, status);
   }
 
@@ -67,7 +69,7 @@ export class OrderController {
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', ORDER_NOT_FOUND) id: number) {
     return this.orderService.remove(id);
   }
 }
