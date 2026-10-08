@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run lint && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@emotion/react": "^11.6.0",
@@ -13,24 +13,24 @@
     "@mui/icons-material": "^5.18.0",
     "@mui/lab": "^5.0.0-alpha.177",
     "@mui/material": "^5.18.0",
-    "@reduxjs/toolkit": "^1.9.7",
+    "@reduxjs/toolkit": "^2.13.0",
     "axios": "^1.20.0",
     "formik": "^2.4.9",
-    "next": "^14.2.35",
+    "next": "^16.4.0",
     "next-redux-wrapper": "^7.0.5",
     "nookies": "^2.5.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-redux": "^7.2.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-redux": "^9.3.0",
     "sass": "^1.43.5",
     "yup": "^0.32.11"
   },
   "devDependencies": {
     "@types/node": "^16.11.7",
-    "@types/react": "^18.3.12",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "^14.2.35",
+    "@types/react": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.0",
     "prettier": "^2.5.1",
-    "typescript": "^4.9.5"
+    "typescript": "^5.9.3"
   }
 }

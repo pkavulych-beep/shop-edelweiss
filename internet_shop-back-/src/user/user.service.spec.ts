@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { verifyPassword } from '../auth/password';
 
@@ -17,6 +17,7 @@ describe('UsersService cart', () => {
     productService = {
       assertPurchasable: jest.fn(),
       findPurchasableIds: jest.fn(),
+      findProductsMain: jest.fn().mockResolvedValue([{ id: 5, sizes: ['M'] }]),
     };
     service = new UsersService({} as any, basketRepository, {} as any, productService);
   });
@@ -42,6 +43,44 @@ describe('UsersService cart', () => {
     });
   });
 
+
+  it('adds a product without sizes to basket even if size not provided', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([{ id: 5, sizes: [] }]);
+    await service.addProductToBasket(1, { idProduct: 5 });
+    expect(basketRepository.save).toHaveBeenCalledWith({
+      userId: 1,
+      productId: 5,
+      size: '',
+      quantity: 1,
+    });
+  });
+
+  it('adds a product without sizes to basket if empty string size provided', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([{ id: 5, sizes: [] }]);
+    await service.addProductToBasket(1, { idProduct: 5, size: '' as any });
+    expect(basketRepository.save).toHaveBeenCalledWith({
+      userId: 1,
+      productId: 5,
+      size: '',
+      quantity: 1,
+    });
+  });
+
+  it('throws BadRequest if product has sizes but size not provided', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([{ id: 5, sizes: ['M'] }]);
+    await expect(
+      service.addProductToBasket(1, { idProduct: 5 } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('throws BadRequest if product has sizes but size is invalid', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([{ id: 5, sizes: ['M'] }]);
+    await expect(
+      service.addProductToBasket(1, { idProduct: 5, size: 'XXL' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
   it('skips hidden products when syncing a guest cart', async () => {
     productService.findPurchasableIds.mockResolvedValue([1]);
 

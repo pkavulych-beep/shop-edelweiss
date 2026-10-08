@@ -1,4 +1,9 @@
-import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { ROLES_KEY } from './roles-auth.decorator';
@@ -26,7 +31,12 @@ export class RolesGuard extends AuthGuard('jwt') {
     await super.canActivate(context);
 
     const { user } = context.switchToHttp().getRequest();
-    const hasRole = user?.roles?.some(role => requiredRoles.includes(role.value));
+    // Ніколи не відповідаємо 403 без автентифікованого користувача:
+    // 403 — лише коли токен дійсний, а ролі не вистачає.
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    const hasRole = user.roles?.some(role => requiredRoles.includes(role.value));
     if (!hasRole) {
       throw new ForbiddenException('Немає доступу');
     }

@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { IProduct, IProductFilters, ICategory, Gender, currentProduct, photo } from '../Types/ProductType';
-import { HYDRATE } from 'next-redux-wrapper';
+import { hydrate } from '../hydrate';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
 
@@ -46,13 +46,13 @@ export const productSlice = createSlice({
       state.currentProduct = null;
     },
   },
-  extraReducers: {
-    [HYDRATE]: (state, action) => {
+  extraReducers: (builder) => {
+    builder.addCase(hydrate, (state, action) => {
       state.data = action.payload.product.data;
       state.total = action.payload.product.total ?? 0;
       state.currentProduct = action.payload.product.currentProduct ?? null;
       state.category.gender = action.payload.product.category.gender;
-    },
+    });
   },
 });
 
