@@ -7,9 +7,43 @@ import {
   IsInt,
   Min,
   Max,
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { Gender } from '../entities/product.entity';
+import { Gender, Category, Season } from '../entities/product.entity';
+
+// Фільтри можуть прийти списком через кому (category=dress,hoodies), тому для
+// enum-колонок перевіряємо кожен елемент списку, а не весь рядок.
+function IsEnumEach(
+  entity: object,
+  validationOptions?: ValidationOptions,
+) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isEnumEach',
+      target: object.constructor,
+      propertyName,
+      constraints: [entity],
+      options: validationOptions,
+      validator: {
+        validate(value: unknown, args: ValidationArguments) {
+          if (value === undefined || value === '') {
+            return true;
+          }
+          if (typeof value !== 'string') {
+            return false;
+          }
+          const allowed = Object.values(args.constraints[0] as object);
+          return value
+            .split(',')
+            .every((item) => allowed.includes(item.trim()));
+        },
+      },
+    });
+  };
+}
 
 // Порожній параметр у query означає, що його немає. @Transform виконується після
 // @Type, а Number('') === 0, тому конвертація робиться тут, а не через @Type.
@@ -22,7 +56,7 @@ export class FilterProductDto {
   gender?: Gender;
 
   @IsOptional()
-  @IsString({ message: 'Категорія має бути рядком' })
+  @IsEnumEach(Category, { message: 'Неправильна категорія' })
   category?: string;
 
   @IsOptional()
@@ -46,7 +80,7 @@ export class FilterProductDto {
   material?: string;
 
   @IsOptional()
-  @IsString({ message: 'Сезон має бути рядком' })
+  @IsEnumEach(Season, { message: 'Неправильний сезон' })
   season?: string;
 
   @IsOptional()

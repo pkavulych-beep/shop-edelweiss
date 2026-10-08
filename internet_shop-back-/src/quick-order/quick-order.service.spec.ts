@@ -33,6 +33,22 @@ describe('QuickOrderService', () => {
       });
     });
 
+    it('normalizes phone before saving (raw formats → 380XXXXXXXXX)', async () => {
+      const rawDtos = [
+        { phoneNumber: '+38 (099) 123-45-67', expected: '380991234567' },
+        { phoneNumber: '+380991234567', expected: '380991234567' },
+        { phoneNumber: '099 123 45 67', expected: '380991234567' },
+        { phoneNumber: '991234567', expected: '380991234567' },
+      ];
+      for (const { phoneNumber, expected } of rawDtos) {
+        jest.clearAllMocks();
+        await service.create({ ...dto, phoneNumber });
+        expect(repository.save).toHaveBeenCalledWith(
+          expect.objectContaining({ phoneNumber: expected }),
+        );
+      }
+    });
+
     it('does not save a request for a hidden or missing product', async () => {
       productService.assertPurchasable.mockRejectedValue(new NotFoundException());
 
