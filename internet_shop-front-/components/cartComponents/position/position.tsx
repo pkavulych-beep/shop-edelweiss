@@ -19,6 +19,8 @@ export interface IPositionProps {
   quantity: number;
 }
 
+const shouldShowSize = (size: string) => size && size.trim() !== '';
+
 export const Position: FC<IPositionProps> = ({
   id,
   price,
@@ -83,9 +85,11 @@ export const Position: FC<IPositionProps> = ({
               {name}
             </Typography>
           </Link>
-          <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
-            Розмір: {size}
-          </Typography>
+          {shouldShowSize(size) && (
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
+              Розмір: {size}
+            </Typography>
+          )}
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography sx={{ fontSize: '0.75rem', color: '#777b7c' }}>

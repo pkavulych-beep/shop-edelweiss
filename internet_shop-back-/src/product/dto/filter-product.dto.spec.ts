@@ -10,7 +10,7 @@ describe('FilterProductDto', () => {
     await expect(
       validate({
         gender: 'woman',
-        category: 'dress',
+        category: 'dresses',
         priceMin: '100',
         priceMax: '500',
         search: 'літня',
@@ -20,7 +20,7 @@ describe('FilterProductDto', () => {
       }),
     ).resolves.toEqual({
       gender: 'woman',
-      category: 'dress',
+      category: 'dresses',
       priceMin: 100,
       priceMax: 500,
       search: 'літня',
@@ -32,6 +32,67 @@ describe('FilterProductDto', () => {
 
   it('drops an unknown filter', async () => {
     await expect(validate({ hacker: 'true' })).resolves.toEqual({});
+  });
+
+  describe('category', () => {
+    it.each([['dresses'], ['hoodies'], ['dresses,hoodies']])(
+      'accepts %s',
+      async value => {
+        await expect(validate({ category: value })).resolves.toEqual({
+          category: value,
+        });
+      },
+    );
+
+    it('accepts an empty category', async () => {
+      await expect(validate({ category: '' })).resolves.toEqual({
+        category: '',
+      });
+    });
+
+    it.each([['bogus'], ['dress,bogus']])(
+      'rejects %s',
+      async value => {
+        await expect(validate({ category: value })).rejects.toBeInstanceOf(
+          BadRequestException,
+        );
+      },
+    );
+
+    it('rejects a repeated category param', async () => {
+      await expect(
+        validate({ category: ['dresses', 'hoodies'] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('season', () => {
+    it.each([['all-season'], ['autumn-winter'], ['spring-summer,autumn-winter']])(
+      'accepts %s',
+      async value => {
+        await expect(validate({ season: value })).resolves.toEqual({
+          season: value,
+        });
+      },
+    );
+
+    it('accepts an empty season', async () => {
+      await expect(validate({ season: '' })).resolves.toEqual({
+        season: '',
+      });
+    });
+
+    it.each([['zzz'], ['spring-summer,zzz']])('rejects %s', async value => {
+      await expect(validate({ season: value })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('rejects a repeated season param', async () => {
+      await expect(
+        validate({ season: ['spring-summer', 'autumn-winter'] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 
   describe('onSale', () => {

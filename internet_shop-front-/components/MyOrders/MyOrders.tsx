@@ -99,7 +99,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
               </Typography>
             </Link>
             <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-              Розмір: {size} · {quantity} шт.
+              {size ? `Розмір: ${size} · ` : ''}{quantity} шт.
             </Typography>
           </Box>
           {/* Ціна за одиницю на момент покупки */}
