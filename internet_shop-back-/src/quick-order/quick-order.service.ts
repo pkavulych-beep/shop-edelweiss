@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ProductService } from '../product/product.service';
 import { CreateQuickOrderDto } from './dto/create-quick-order.dto';
 import { QuickOrderEntity } from './entities/quick-order.entity';
+import { normalizePhone } from '../common/phone';
 
 @Injectable()
 export class QuickOrderService {
@@ -27,8 +28,9 @@ export class QuickOrderService {
       }
     }
 
+    const normalizedPhone = normalizePhone(phoneNumber) as string;
     const { id, createdAt } = await this.repository.save({
-      phoneNumber,
+      phoneNumber: normalizedPhone,
       product,
       size: size ?? null,
     });
