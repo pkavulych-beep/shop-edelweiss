@@ -16,6 +16,7 @@ const productService = {
   findOne: jest.fn(),
   update: jest.fn(),
   remove: jest.fn(),
+  findFiltered: jest.fn(),
 };
 
 // Той самий склад, що й у робочому застосунку: контролер, глобальна валідація
@@ -63,6 +64,10 @@ describe('ProductController over HTTP', () => {
     productService.update.mockReset().mockResolvedValue({ id: 1 });
     productService.remove.mockReset().mockResolvedValue('ok');
     productService.create.mockReset().mockResolvedValue({ id: 1 });
+    productService.findFiltered.mockReset().mockResolvedValue({
+      data: [],
+      total: 0,
+    });
   });
 
   afterAll(async () => {
@@ -156,6 +161,30 @@ describe('ProductController over HTTP', () => {
         .expect(400);
 
       expect(productService.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('an unknown filter enum value', () => {
+    it.each(['category=bogus', 'season=zzz', 'category=dresses,bogus'])(
+      'GET /product/filter?%s answers 400 instead of 500',
+      async query => {
+        await request(app.getHttpServer())
+          .get(`/product/filter?${query}`)
+          .expect(400)
+          .expect(res => {
+            expect(res.body.message).toEqual(expect.arrayContaining([expect.any(String)]));
+          });
+        expect(productService.findFiltered).not.toHaveBeenCalled();
+      },
+    );
+
+    it('GET /product/filter passes a known category to the service', async () => {
+      await request(app.getHttpServer())
+        .get('/product/filter?category=dresses')
+        .expect(200);
+      expect(productService.findFiltered).toHaveBeenCalledWith({
+        category: 'dresses',
+      });
     });
   });
 
