@@ -129,7 +129,12 @@ describe('UsersService passwords', () => {
   });
   it('rejects registration if email differs only by case', async () => {
     const repository = {
-      findOne: jest.fn().mockResolvedValue({ id: 1, phoneNumber: 'other', email: 'test@example.com' }),
+      findOne: jest.fn((options: any) => {
+        if (options?.where?.some((w: any) => w.email === 'test@example.com')) {
+          return { id: 1, phoneNumber: 'other', email: 'test@example.com' };
+        }
+        return null;
+      }),
       create: jest.fn((user) => user),
       save: jest.fn((user) => Promise.resolve(user)),
     };
@@ -146,8 +151,11 @@ describe('UsersService passwords', () => {
         email: 'TEST@example.com',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(repository.findOne).toHaveBeenCalledWith({
+      where: [{ phoneNumber: '380991112233' }, { email: 'test@example.com' }],
+    });
+    expect(repository.create).not.toHaveBeenCalled();
   });
-
 
   it('hashes a new password on update', async () => {
     await service.update(3, {
@@ -172,6 +180,49 @@ describe('UsersService passwords', () => {
 
     expect(repository.update.mock.calls[0][1].password).toBeUndefined();
   });
+
+  it('normalizes email on update and does not pass empty email to changes', async () => {
+    const repository = {
+      findOne: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    };
+    const service = new UsersService(repository as any, {} as any, {} as any, {} as any);
+    (service as any).findById = jest.fn().mockResolvedValue({ id: 3 });
+
+    await service.update(3, {
+      fullName: 'Тест Тестович',
+      phoneNumber: '380991112233',
+      email: ' Test@Example.com ',
+      password: undefined,
+    } as any);
+
+    expect(repository.findOne).toHaveBeenCalledWith({ where: { phoneNumber: '380991112233' } });
+    expect(repository.findOne).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+    const [id, changes] = repository.update.mock.calls[0];
+    expect(id).toBe(3);
+    expect(changes.email).toBe('test@example.com');
+  });
+
+  it('does not include email in changes when normalized to undefined', async () => {
+    const repository = {
+      findOne: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    };
+    const service = new UsersService(repository as any, {} as any, {} as any, {} as any);
+    (service as any).findById = jest.fn().mockResolvedValue({ id: 3 });
+
+    await service.update(3, {
+      fullName: 'Тест Тестович',
+      phoneNumber: '380991112233',
+      email: '   ',
+      password: undefined,
+    } as any);
+
+    const [id, changes] = repository.update.mock.calls[0];
+    expect(id).toBe(3);
+    expect(changes.email).toBeUndefined();
+  });
+
 
   it('rejects an update that uses another user’s phone number', async () => {
     repository.findOne.mockResolvedValueOnce({ id: 4 });
