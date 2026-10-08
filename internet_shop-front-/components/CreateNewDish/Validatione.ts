@@ -17,7 +17,7 @@ export const Validatione = yup.object().shape({
   count: yup.number().typeError('Має бути числом').transform(emptyToNull).max(10000, 'Забагато').nullable(),
   description: yupStringStandard(10, 900),
   gender: yup.string().typeError('Оберіть стать').required('Оберіть стать'),
-  sizes: yup.string().typeError('Вкажіть розміри через кому').min(1, 'Обов\'язкове поле').required('Обов\'язкове поле'),
+  sizes: yup.string().typeError('Вкажіть розміри через кому').nullable(),
   weight: yup.string().nullable(),
   colors: yup.string().typeError('Вкажіть кольори через кому').nullable(),
   material: yup.string().nullable(),
