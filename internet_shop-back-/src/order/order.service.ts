@@ -40,6 +40,13 @@ export class OrderService {
       (await this.productService.findPurchasable(ids)).map(product => [product.id, product]),
     );
 
+    // Sum quantities by productId (across all sizes) for stock validation
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of merged.values()) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
     return [...merged.values()].map(({ productId, size, quantity }) => {
       const product = products.get(productId);
       if (!product) {
@@ -51,7 +58,8 @@ export class OrderService {
           throw new BadRequestException(effectiveSize ? `Розміру ${effectiveSize} немає в наявності` : 'Оберіть розмір товару');
         }
       }
-      if (product.count !== null && product.count !== undefined && quantity > product.count) {
+      const totalQuantity = quantitiesByProduct.get(productId) ?? quantity;
+      if (product.count !== null && product.count !== undefined && totalQuantity > product.count) {
         throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
@@ -89,6 +97,13 @@ export class OrderService {
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
+    // Sum quantities by productId for stock decrement
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of orderItems) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
     // Use transaction to ensure order creation and stock decrement are atomic
     return this.repository.manager.transaction(async (manager: EntityManager) => {
       // Save the order
@@ -100,16 +115,24 @@ export class OrderService {
         total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });
 
-      // Decrement product count for each item
-      for (const item of orderItems) {
-        const product = await manager.findOne(ProductEntity, { where: { id: item.productId } });
-        if (product && product.count !== null && product.count !== undefined) {
-          product.count -= item.quantity;
-          // Update status to out-of-stock if count reaches 0
-          if (product.count <= 0) {
-            product.count = 0;
-            product.status = ProductStatus.OutOfStock;
+      // Decrement product count atomically with pessimistic locking
+      for (const [productId, quantity] of quantitiesByProduct.entries()) {
+        // Lock the product row and check stock
+        const product = await manager.findOne(ProductEntity, {
+          where: { id: productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!product) {
+          throw new NotFoundException(null, 'Товар не знайдено');
+        }
+
+        // Only decrement if count is tracked (not null)
+        if (product.count !== null && product.count !== undefined) {
+          if (product.count < quantity) {
+            throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
           }
+          product.count -= quantity;
           await manager.save(ProductEntity, product);
         }
       }

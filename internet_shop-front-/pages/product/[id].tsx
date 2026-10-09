@@ -58,7 +58,7 @@ export default function Product() {
   const photosArr = [{ id: 0, url: cover }, ...photos];
 
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
-  const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count !== undefined && currentProduct.count <= 0);
+  const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count != null && currentProduct.count <= 0);
 
   const putInTheCart = () => {
     if (isOutOfStock) {

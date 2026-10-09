@@ -14,7 +14,7 @@ export const ProductsList: FC = () => {
       {data.map((product) => {
         const { id, cover, name, salePrice, price, brand, category, count, status } = product;
         const categoryLabel = category ? categoryLabels[category] || category : '';
-        const isOutOfStock = status === 'out-of-stock' || (count !== undefined && count <= 0);
+        const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
         return (
           <Link key={id} href={'/product/' + id} className={s.card}>
             <div className={s.imageWrapper}>

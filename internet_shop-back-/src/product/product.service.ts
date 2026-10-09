@@ -210,13 +210,14 @@ export class ProductService {
   }
 
   // Товари, які існують і не приховані, з даними для розрахунку замовлення
+  // count = NULL означає "без обліку залишку" — товар завжди доступний
   async findPurchasable(ids: number[]): Promise<ProductEntity[]> {
     if (!ids || ids.length === 0) return [];
     return this.repository.find({
       where: {
         id: In(ids),
         status: Or(Not(ProductStatus.Hidden), IsNull()),
-        count: MoreThan(0),
+        count: Or(MoreThan(0), IsNull()),
       },
       select: ['id', 'sizes', 'price', 'salePrice', 'count', 'status'],
     });

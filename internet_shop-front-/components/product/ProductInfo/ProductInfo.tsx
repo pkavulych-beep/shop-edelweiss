@@ -38,7 +38,7 @@ const ProductInfo: FC<IProductInfo> = (props) => {
     : [];
 
   const hasSizes = sizes.length > 0;
-  const isOutOfStock = status === 'out-of-stock' || (count !== undefined && count <= 0);
+  const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
 
   return (
     <div className={style.info}>
