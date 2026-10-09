@@ -40,7 +40,9 @@ const CustomizedInputBase: FC<Props> = ({
             maskPhoneInput(event.target.value, field.value ?? ''),
           ),
       }
-    : field;
+    : // null/undefined у formik-значенні робить input неконтрольованим і дає
+      // попередження React, тож зводимо їх до порожнього рядка
+      { ...field, value: field.value ?? '' };
 
   return (
     <>
