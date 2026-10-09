@@ -24,7 +24,7 @@ export const productSlice = createSlice({
       if (state.data) {
         state.data.push(action.payload);
       }
-      state.total = state.total + 1;
+      state.total += 1;
     },
     setErrorMessage: (state, action: PayloadAction<string>) => {
       state.error = action.payload;
