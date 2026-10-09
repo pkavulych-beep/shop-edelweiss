@@ -149,7 +149,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     reason: string
   ) => {
     setCityQuery(value);
-    if (reason === "input" && value !== cityName) {
+    if ((reason === "reset" || reason === "clear") && value === "") {
       setCity("");
       resetDepartment();
     }
