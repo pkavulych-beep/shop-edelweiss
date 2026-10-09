@@ -15,20 +15,7 @@ export const AdminWrapper: FC<IAdmin> = ({ children }) => {
 
   if (!isAdmin) {
     return null;
-  } else {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: 250,
-          justifyContent: 'space-around',
-          border: '3px solid blue',
-          padding: 14,
-        }}
-      >
-        {children}
-      </div>
-    );
   }
+
+  return <>{children}</>;
 };
