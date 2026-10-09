@@ -20,9 +20,13 @@ describe('OrderService', () => {
     beforeEach(() => {
       mockManager = {
         save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ id: 10, ...data })),
-        findOne: jest.fn().mockImplementation((entity, options) => 
-          Promise.resolve({ id: options.where.id, count: 10, status: 'active' })
-        ),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          // Return order for OrderEntity, product for ProductEntity
+          if (entity.name === 'OrderEntity' || (entity && entity.name === 'order')) {
+            return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+          }
+          return Promise.resolve({ id: options.where.id, count: 10, status: 'active' });
+        }),
         transaction: jest.fn().mockImplementation(async (callback) => {
           return callback(mockManager);
         }),
@@ -89,10 +93,11 @@ describe('OrderService', () => {
           ...delivery,
           items: [{ productId: 1, size: 'M', quantity: 1 }],
         }),
-      ).resolves.toEqual({ id: 10, items: [] });
-      expect(repository.findOne.mock.calls[0][0]).toMatchObject({
-        where: { id: 10 },
-      });
+      ).resolves.toMatchObject({ id: 10, items: [] });
+      expect(mockManager.findOne).toHaveBeenCalledWith(
+        expect.any(Function), // OrderEntity
+        expect.objectContaining({ where: { id: 10 } })
+      );
     });
 
     it('does not create an order with a hidden or missing product', async () => {

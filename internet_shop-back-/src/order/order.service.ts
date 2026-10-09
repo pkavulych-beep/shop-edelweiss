@@ -114,8 +114,12 @@ export class OrderService {
         }
       }
 
-      // Return the order with items
-      return this.findOneWithItems(order.id);
+      // Return the order with items using the transaction manager
+      return manager.findOne(OrderEntity, {
+        where: { id: order.id },
+        relations: { items: { product: true }, user: true },
+        order: { items: { id: 'ASC' } },
+      });
     });
   }
 
