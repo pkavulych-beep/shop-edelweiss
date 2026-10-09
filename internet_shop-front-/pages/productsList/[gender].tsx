@@ -87,9 +87,13 @@ export default function Index() {
         >
           {genderTitle}
         </Typography>
-        {total > 0 && (
+        {total > 0 ? (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             {total} {pluralizeProduct(total)}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+            Нічого не знайдено
           </Typography>
         )}
       </Box>
