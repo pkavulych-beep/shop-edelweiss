@@ -15,6 +15,7 @@ import { ProductService } from '../product/product.service';
 import { productToBasketDto } from './dto/productToBasket.dto';
 import { SyncCartItemDto } from './dto/sync-cart.dto';
 import { hashPassword } from '../auth/password';
+import { normalizeEmail } from '../common/email';
 
 @Injectable()
 export class UsersService {
@@ -28,8 +29,12 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto) {
+    const email = normalizeEmail(dto.email) as string | undefined;
+
     const existing = await this.repository.findOne({
-      where: [{ phoneNumber: dto.phoneNumber }, { email: dto.email }],
+      where: email
+        ? [{ phoneNumber: dto.phoneNumber }, { email }]
+        : [{ phoneNumber: dto.phoneNumber }],
     });
 
     if (existing) {
@@ -42,6 +47,7 @@ export class UsersService {
 
     const user = this.repository.create({
       ...dto,
+      email,
       password: await hashPassword(dto.password),
     });
     const role = await this.roleRepository.getRoleByValue('USER');
@@ -93,13 +99,19 @@ export class UsersService {
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const changes = { ...updateUserDto };
+    const email = normalizeEmail(changes.email) as string | undefined;
+    if (email === undefined) {
+      delete changes.email;
+    } else {
+      changes.email = email;
+    }
 
     const [phoneOwner, emailOwner] = await Promise.all([
       this.repository.findOne({
         where: { phoneNumber: changes.phoneNumber },
       }),
-      changes.email
-        ? this.repository.findOne({ where: { email: changes.email } })
+      email
+        ? this.repository.findOne({ where: { email } })
         : undefined,
     ]);
 

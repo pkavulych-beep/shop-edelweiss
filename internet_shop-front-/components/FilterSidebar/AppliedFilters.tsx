@@ -24,9 +24,13 @@ const AppliedFilters: React.FC<AppliedFiltersProps> = ({
   onRemove,
   onClearAll,
 }) => {
-  const activeKeys = Object.keys(filters).filter(
-    (k) => !['gender', 'sort', 'page', 'limit'].includes(k) && filters[k],
-  );
+  const activeKeys = Object.keys(filters).filter((k) => {
+    if (['gender', 'sort', 'page', 'limit'].includes(k)) return false;
+    const v = filters[k];
+    if (!v) return false;
+    if (v === 'false') return false;
+    return true;
+  });
 
   if (activeKeys.length === 0) return null;
 
