@@ -1,24 +1,36 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { Status } from './statusEnum';
+import { ProductEntity } from '../product/entities/product.entity';
 
 describe('OrderService', () => {
   describe('create', () => {
     const user = { id: 3 };
     const products = [
-      { id: 1, sizes: ['S', 'M'], price: 500, salePrice: null },
-      { id: 5, sizes: ['L'], price: 1000, salePrice: 800 },
+      { id: 1, sizes: ['S', 'M'], price: 500, salePrice: null, count: 10, status: 'active' },
+      { id: 5, sizes: ['L'], price: 1000, salePrice: 800, count: 10, status: 'active' },
     ];
     const delivery = { comment: '', cityName: 'Київ', department: '1' };
     let repository;
     let productService;
     let userService;
     let service: OrderService;
+    let mockManager;
 
     beforeEach(() => {
+      mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ id: 10, ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => 
+          Promise.resolve({ id: options.where.id, count: 10, status: 'active' })
+        ),
+        transaction: jest.fn().mockImplementation(async (callback) => {
+          return callback(mockManager);
+        }),
+      };
       repository = {
         save: jest.fn().mockResolvedValue({ id: 10 }),
         findOne: jest.fn().mockResolvedValue({ id: 10, items: [] }),
+        manager: mockManager,
       };
       productService = {
         findPurchasable: jest.fn((ids: number[]) =>
@@ -39,8 +51,8 @@ describe('OrderService', () => {
       });
 
       expect(userService.findOne).toHaveBeenCalledWith(3);
-      expect(repository.save).toHaveBeenCalledTimes(1);
-      expect(repository.save.mock.calls[0][0]).toMatchObject({
+      expect(mockManager.save).toHaveBeenCalledTimes(3); // OrderEntity + 2 ProductEntity
+      expect(mockManager.save.mock.calls[0][1]).toMatchObject({
         user,
         ...delivery,
         items: [
@@ -62,7 +74,7 @@ describe('OrderService', () => {
       });
 
       expect(productService.findPurchasable).toHaveBeenCalledWith([1]);
-      expect(repository.save.mock.calls[0][0]).toMatchObject({
+      expect(mockManager.save.mock.calls[0][1]).toMatchObject({
         items: [
           { productId: 1, size: 'S', quantity: 3, price: 500 },
           { productId: 1, size: 'M', quantity: 1, price: 500 },
@@ -93,20 +105,20 @@ describe('OrderService', () => {
           ],
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(repository.save).not.toHaveBeenCalled();
+      expect(mockManager.transaction).not.toHaveBeenCalled();
     });
 
 
     it('creates an order for a product without sizes with no size provided', async () => {
       productService.findPurchasable.mockResolvedValueOnce([
-        { id: 2, sizes: [], price: 300, salePrice: null },
+        { id: 2, sizes: [], price: 300, salePrice: null, count: 10, status: 'active' },
       ]);
       await service.create(3, {
         ...delivery,
         items: [{ productId: 2, quantity: 1 }],
       });
-      expect(repository.save).toHaveBeenCalled();
-      const saved = repository.save.mock.calls[0][0];
+      expect(mockManager.save).toHaveBeenCalled();
+      const saved = mockManager.save.mock.calls[0][1];
       expect(saved.items).toEqual([{ productId: 2, size: '', quantity: 1, price: 300 }]);
     });
 

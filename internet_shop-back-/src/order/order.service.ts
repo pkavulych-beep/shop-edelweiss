@@ -9,11 +9,12 @@ import { OrderItemDto } from './dto/order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { FindOrdersDto } from './dto/find-orders.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { OrderEntity } from './entities/order.entity';
 import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
+import { ProductEntity, ProductStatus } from '../product/entities/product.entity';
 
 @Injectable()
 export class OrderService {
@@ -42,13 +43,16 @@ export class OrderService {
     return [...merged.values()].map(({ productId, size, quantity }) => {
       const product = products.get(productId);
       if (!product) {
-        throw new NotFoundException(null, 'Товар не знайдено');
+        throw new NotFoundException(null, 'Товар не знайдено або недоступний для замовлення');
       }
       const effectiveSize = size ?? '';
       if (product.sizes?.length) {
         if (!effectiveSize || !product.sizes.includes(effectiveSize)) {
           throw new BadRequestException(effectiveSize ? `Розміру ${effectiveSize} немає в наявності` : 'Оберіть розмір товару');
         }
+      }
+      if (product.count !== null && product.count !== undefined && quantity > product.count) {
+        throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
       return { productId, size: effectiveSize, quantity, price };
@@ -85,17 +89,34 @@ export class OrderService {
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
-    // Каскадний save пише замовлення й позиції в одній транзакції,
-    // тож замовлення без позицій не залишиться
-    const order = await this.repository.save({
-      user,
-      status: Status.Processed,
-      ...restDto,
-      items: orderItems,
-      total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    });
+    // Use transaction to ensure order creation and stock decrement are atomic
+    return this.repository.manager.transaction(async (manager: EntityManager) => {
+      // Save the order
+      const order = await manager.save(OrderEntity, {
+        user,
+        status: Status.Processed,
+        ...restDto,
+        items: orderItems,
+        total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+      });
 
-    return this.findOneWithItems(order.id);
+      // Decrement product count for each item
+      for (const item of orderItems) {
+        const product = await manager.findOne(ProductEntity, { where: { id: item.productId } });
+        if (product && product.count !== null && product.count !== undefined) {
+          product.count -= item.quantity;
+          // Update status to out-of-stock if count reaches 0
+          if (product.count <= 0) {
+            product.count = 0;
+            product.status = ProductStatus.OutOfStock;
+          }
+          await manager.save(ProductEntity, product);
+        }
+      }
+
+      // Return the order with items
+      return this.findOneWithItems(order.id);
+    });
   }
 
   async findOneById(id: number) {

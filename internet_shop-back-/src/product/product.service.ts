@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
@@ -216,8 +216,9 @@ export class ProductService {
       where: {
         id: In(ids),
         status: Or(Not(ProductStatus.Hidden), IsNull()),
+        count: MoreThan(0),
       },
-      select: ['id', 'sizes', 'price', 'salePrice'],
+      select: ['id', 'sizes', 'price', 'salePrice', 'count', 'status'],
     });
   }
 
