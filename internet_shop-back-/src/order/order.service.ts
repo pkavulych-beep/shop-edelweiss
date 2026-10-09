@@ -9,11 +9,12 @@ import { OrderItemDto } from './dto/order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { FindOrdersDto } from './dto/find-orders.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { OrderEntity } from './entities/order.entity';
 import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
+import { ProductEntity, ProductStatus } from '../product/entities/product.entity';
 
 @Injectable()
 export class OrderService {
@@ -39,16 +40,27 @@ export class OrderService {
       (await this.productService.findPurchasable(ids)).map(product => [product.id, product]),
     );
 
+    // Sum quantities by productId (across all sizes) for stock validation
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of merged.values()) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
     return [...merged.values()].map(({ productId, size, quantity }) => {
       const product = products.get(productId);
       if (!product) {
-        throw new NotFoundException(null, 'Товар не знайдено');
+        throw new NotFoundException(null, 'Товар не знайдено або недоступний для замовлення');
       }
       const effectiveSize = size ?? '';
       if (product.sizes?.length) {
         if (!effectiveSize || !product.sizes.includes(effectiveSize)) {
           throw new BadRequestException(effectiveSize ? `Розміру ${effectiveSize} немає в наявності` : 'Оберіть розмір товару');
         }
+      }
+      const totalQuantity = quantitiesByProduct.get(productId) ?? quantity;
+      if (product.count !== null && product.count !== undefined && totalQuantity > product.count) {
+        throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
       return { productId, size: effectiveSize, quantity, price };
@@ -85,17 +97,53 @@ export class OrderService {
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
-    // Каскадний save пише замовлення й позиції в одній транзакції,
-    // тож замовлення без позицій не залишиться
-    const order = await this.repository.save({
-      user,
-      status: Status.Processed,
-      ...restDto,
-      items: orderItems,
-      total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    });
+    // Sum quantities by productId for stock decrement
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of orderItems) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
 
-    return this.findOneWithItems(order.id);
+    // Use transaction to ensure order creation and stock decrement are atomic
+    return this.repository.manager.transaction(async (manager: EntityManager) => {
+      // Save the order
+      const order = await manager.save(OrderEntity, {
+        user,
+        status: Status.Processed,
+        ...restDto,
+        items: orderItems,
+        total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+      });
+
+      // Decrement product count atomically with pessimistic locking
+      for (const [productId, quantity] of quantitiesByProduct.entries()) {
+        // Lock the product row and check stock
+        const product = await manager.findOne(ProductEntity, {
+          where: { id: productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!product) {
+          throw new NotFoundException(null, 'Товар не знайдено');
+        }
+
+        // Only decrement if count is tracked (not null)
+        if (product.count !== null && product.count !== undefined) {
+          if (product.count < quantity) {
+            throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
+          }
+          product.count -= quantity;
+          await manager.save(ProductEntity, product);
+        }
+      }
+
+      // Return the order with items using the transaction manager
+      return manager.findOne(OrderEntity, {
+        where: { id: order.id },
+        relations: { items: { product: true }, user: true },
+        order: { items: { id: 'ASC' } },
+      });
+    });
   }
 
   async findOneById(id: number) {

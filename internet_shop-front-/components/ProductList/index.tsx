@@ -12,8 +12,9 @@ export const ProductsList: FC = () => {
   return (
     <div className={s.container}>
       {data.map((product) => {
-        const { id, cover, name, salePrice, price, brand, category } = product;
+        const { id, cover, name, salePrice, price, brand, category, count, status } = product;
         const categoryLabel = category ? categoryLabels[category] || category : '';
+        const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
         return (
           <Link key={id} href={'/product/' + id} className={s.card}>
             <div className={s.imageWrapper}>
@@ -23,6 +24,11 @@ export const ProductsList: FC = () => {
                 alt={name}
                 loading="lazy"
               />
+              {isOutOfStock && (
+                <div className={s.outOfStockOverlay}>
+                  <span className={s.outOfStockText}>Немає в наявності</span>
+                </div>
+              )}
             </div>
             {(brand || categoryLabel) && (
               <p className={s.meta}>
