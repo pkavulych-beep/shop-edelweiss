@@ -149,7 +149,12 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     reason: string
   ) => {
     setCityQuery(value);
-    if ((reason === "reset" || reason === "clear") && value === "") {
+    // Під час набору тексту вибір міста скидається, якщо він більше не
+    // збігається з поточним містом. Інакше у замовлення пішло б старе місто.
+    const cleared =
+      (reason === "reset" || reason === "clear") && value === "";
+    const edited = reason === "input" && value !== cityName;
+    if (cleared || edited) {
       setCity("");
       resetDepartment();
     }
