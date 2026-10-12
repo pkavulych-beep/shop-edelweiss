@@ -274,13 +274,7 @@ describe('OrderService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      // Order save should not be called because transaction rolls back
-      const orderSaves = mockManager.save.mock.calls.filter(
-        call => call[0]?.name === 'OrderEntity' || call[0] === 'OrderEntity'
-      );
-      // In our implementation, order is saved first, then stock is checked
-      // The exception is thrown after order save, so we verify the error is thrown
-      // The important thing is that the exception is thrown and no product save happens
+      // The order is saved before the stock is checked: what matters is that no product is saved
       const productSaves = mockManager.save.mock.calls.filter(
         call => call[0]?.name === 'ProductEntity' || call[0] === ProductEntity
       );

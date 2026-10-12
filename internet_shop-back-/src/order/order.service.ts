@@ -15,7 +15,7 @@ import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
-import { ProductEntity, ProductStatus } from '../product/entities/product.entity';
+import { ProductEntity } from '../product/entities/product.entity';
 
 @Injectable()
 export class OrderService {
