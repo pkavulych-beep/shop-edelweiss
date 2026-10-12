@@ -219,6 +219,7 @@ export const getServerSideProps = wrapper.getServerSideProps((store) =>
     try {
       const filters = {
         gender: gender as string,
+        sort: 'newest',
         ...query,
         limit: LIMIT,
       };
