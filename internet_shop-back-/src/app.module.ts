@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -21,6 +22,8 @@ import { getUploadsDir } from './file/uploads-dir';
 import { QuickOrderModule } from './quick-order/quick-order.module';
 import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
 import { RefreshTokenEntity } from './auth/entities/refresh-token.entity';
+import { PaymentModule } from './payment/payment.module';
+import { PaymentEntity } from './payment/entities/payment.entity';
 import { ThrottlerModule } from '@nestjs/throttler';
 import {
   AUTH_ATTEMPTS_LIMIT,
@@ -30,6 +33,7 @@ import {
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot({
       throttlers: [
         {
@@ -59,6 +63,7 @@ import {
         BasketItemEntity,
         QuickOrderEntity,
         RefreshTokenEntity,
+        PaymentEntity,
       ],
       synchronize: true,
     }),
@@ -70,6 +75,7 @@ import {
     PhotosModule,
     OrderModule,
     QuickOrderModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
