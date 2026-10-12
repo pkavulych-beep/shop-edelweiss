@@ -1,5 +1,5 @@
 import { ProductsList } from '../components/ProductList';
-import { addDataProducts, setTotal, setErrorMessage } from '../redux/slices/product-reducer';
+import { addDataProducts, setTotal, setErrorMessage, setFilters } from '../redux/slices/product-reducer';
 import { wrapper } from '../redux/redux-store';
 import { MainLayout } from '../layouts/MainLayout';
 import { Api } from '../api/Api';
@@ -63,7 +63,9 @@ export default function Home() {
 
 export const getServerSideProps = wrapper.getServerSideProps(store => async cnx => {
   try {
-    const result = await Api(cnx).product.findFiltered({ limit: 12 });
+    const filters = { limit: 12 };
+    const result = await Api(cnx).product.findFiltered(filters);
+    store.dispatch(setFilters(filters));
     store.dispatch(addDataProducts(result.data));
     store.dispatch(setTotal(result.total));
   } catch (e) {

@@ -1,6 +1,6 @@
 import { MainLayout } from '../../layouts/MainLayout';
 import { wrapper } from '../../redux/redux-store';
-import { addDataProducts, setTotal, setErrorMessage, setGender } from '../../redux/slices/product-reducer';
+import { addDataProducts, setTotal, setErrorMessage, setGender, setFilters } from '../../redux/slices/product-reducer';
 import { AdminWrapper } from '../../components/adminWrapper/AdminWrapper';
 import CreateNewDish from '../../components/CreateNewDish/CreateNewDish';
 import { ProductsList } from '../../components/ProductList';
@@ -223,6 +223,7 @@ export const getServerSideProps = wrapper.getServerSideProps((store) =>
         limit: LIMIT,
       };
       const result = await Api().product.findFiltered(filters);
+      store.dispatch(setFilters(filters));
       store.dispatch(addDataProducts(result.data));
       store.dispatch(setTotal(result.total));
       // @ts-ignore

@@ -5,7 +5,7 @@ import CreateNewDish from '../../components/CreateNewDish/CreateNewDish';
 import { ProductsList } from '../../components/ProductList';
 import { MainLayout } from '../../layouts/MainLayout';
 import { wrapper } from '../../redux/redux-store';
-import { addDataProducts, setTotal, setErrorMessage } from '../../redux/slices/product-reducer';
+import { addDataProducts, setTotal, setErrorMessage, setFilters } from '../../redux/slices/product-reducer';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 
@@ -34,10 +34,12 @@ export const getServerSideProps = wrapper.getServerSideProps((store) =>
   // @ts-ignore
   async (ctx) => {
     try {
-      const result = await Api().product.findFiltered({
+      const filters = {
         sort: 'newest',
         limit: 20,
-      });
+      };
+      const result = await Api().product.findFiltered(filters);
+      store.dispatch(setFilters(filters));
       store.dispatch(addDataProducts(result.data));
       store.dispatch(setTotal(result.total));
     } catch (e) {
