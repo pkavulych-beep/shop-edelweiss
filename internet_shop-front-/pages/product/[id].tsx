@@ -58,8 +58,12 @@ export default function Product() {
   const photosArr = [{ id: 0, url: cover }, ...photos];
 
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
+  const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count != null && currentProduct.count <= 0);
 
   const putInTheCart = () => {
+    if (isOutOfStock) {
+      return;
+    }
     if (hasSizes && !selectedSize) {
       setIsOpenSizeReminder(true);
       return;
@@ -75,6 +79,9 @@ export default function Product() {
   };
 
   const openQuickOrder = () => {
+    if (isOutOfStock) {
+      return;
+    }
     if (hasSizes && !selectedSize) {
       setIsOpenSizeReminder(true);
       return;
@@ -149,14 +156,16 @@ export default function Product() {
             onClick={putInTheCart}
             variant="contained"
             fullWidth
+            disabled={isOutOfStock}
             sx={{ py: 1.5 }}
           >
-            Додати в кошик
+            {isOutOfStock ? 'Немає в наявності' : 'Додати в кошик'}
           </Button>
           <Button
             onClick={openQuickOrder}
             variant="text"
             fullWidth
+            disabled={isOutOfStock}
             sx={{
               py: 1,
               fontSize: '0.8rem',
@@ -165,7 +174,7 @@ export default function Product() {
               '&:hover': { color: 'primary.main' },
             }}
           >
-            Замовити в 1 клік
+            {isOutOfStock ? 'Немає в наявності' : 'Замовити в 1 клік'}
           </Button>
         </Box>
 

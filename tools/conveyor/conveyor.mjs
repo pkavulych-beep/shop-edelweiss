@@ -10,7 +10,7 @@
 //   verdict "changes"         → hand it back for fixes, then review again (a limited number of rounds)
 //   verdict "approve"         → merge, unless it touches protected paths or is too big
 //   every few merges          → hire QA, who tries them in a browser          → bug issues and a report
-// The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P2);
+// The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P3);
 // `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
 // `medium`, `easy`) which coder takes it. Each coder does one task at a time, alongside the others, on
 // ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
@@ -620,7 +620,19 @@ function tick() {
     }
     if (s.lastJob && !s.checked) {
       s.checked = true;
-      const opened = pulls.some((p) => [...(p.body ?? '').matchAll(CLOSES)].some((m) => m[1] === n));
+      let opened = pulls.some((p) => [...(p.body ?? '').matchAll(CLOSES)].some((m) => m[1] === n));
+      // An agent can leave out the `Closes #N` line (a model wrote it in Ukrainian, say). Its branch tells which pull
+      // request is its, and the line is added: GitHub then closes the issue on merge, and nobody else is hired for it.
+      const branch = !opened && workers ? branchOf(workers.find((w) => w.name === s.lastJob.worker) ?? {}) : undefined;
+      const own = branch && pulls.find((p) => p.headRefName === branch);
+      if (own) {
+        const body = `${(own.body ?? '').trimEnd()}\n\nCloses #${n}\n`;
+        const what = `PR #${own.number}: дописати «Closes #${n}», бо ${s.lastJob.worker} не вказав, яке issue він закриває`;
+        if (act(what, () => run('gh', ['pr', 'edit', String(own.number), '--repo', REPO, '--body-file', '-'], { input: body })) !== undefined) {
+          own.body = body;
+          opened = true;
+        }
+      }
       if (!opened) {
         s.failures = (s.failures ?? 0) + 1;
         log(`issue #${n}: ${s.lastJob.worker} закінчив, але PR не відкрив (спроба ${s.failures})`);

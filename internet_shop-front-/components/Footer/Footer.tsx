@@ -74,8 +74,8 @@ const Footer: React.FC = () => {
             >
               {title}
             </Typography>
-            {links.map((link) => (
-              <Link key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
+            {links.map((link) => {
+              const content = (
                 <Typography
                   variant="body2"
                   sx={{
@@ -88,8 +88,19 @@ const Footer: React.FC = () => {
                 >
                   {link.label}
                 </Typography>
-              </Link>
-            ))}
+              );
+              // Next Link рахує відносні href від поточного маршруту, тож '#' на 404
+              // на сервері стає '/404#', а на клієнті — '/doesnotexist#' (hydration).
+              return link.href.startsWith('/') ? (
+                <Link key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
+                  {content}
+                </Link>
+              ) : (
+                <a key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
+                  {content}
+                </a>
+              );
+            })}
           </Box>
         ))}
       </Box>

@@ -1,6 +1,6 @@
 import { MainLayout } from '../../layouts/MainLayout';
 import { wrapper } from '../../redux/redux-store';
-import { addDataProducts, setTotal, setErrorMessage, setGender } from '../../redux/slices/product-reducer';
+import { addDataProducts, setTotal, setErrorMessage, setGender, setFilters } from '../../redux/slices/product-reducer';
 import { AdminWrapper } from '../../components/adminWrapper/AdminWrapper';
 import CreateNewDish from '../../components/CreateNewDish/CreateNewDish';
 import { ProductsList } from '../../components/ProductList';
@@ -87,9 +87,13 @@ export default function Index() {
         >
           {genderTitle}
         </Typography>
-        {total > 0 && (
+        {total > 0 ? (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             {total} {pluralizeProduct(total)}
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+            Нічого не знайдено
           </Typography>
         )}
       </Box>
@@ -215,10 +219,12 @@ export const getServerSideProps = wrapper.getServerSideProps((store) =>
     try {
       const filters = {
         gender: gender as string,
+        sort: 'newest',
         ...query,
         limit: LIMIT,
       };
       const result = await Api().product.findFiltered(filters);
+      store.dispatch(setFilters(filters));
       store.dispatch(addDataProducts(result.data));
       store.dispatch(setTotal(result.total));
       // @ts-ignore

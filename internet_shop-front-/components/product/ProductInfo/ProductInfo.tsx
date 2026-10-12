@@ -23,12 +23,13 @@ interface IProductInfo {
   brand?: string;
   category?: string;
   season?: string;
+  status?: string;
   selectedSize: number | string;
   setSelectedSize: Dispatch<SetStateAction<null | string>>;
 }
 
 const ProductInfo: FC<IProductInfo> = (props) => {
-  const { name, price, salePrice, id, brand, ...infoDataProduct } = props;
+  const { name, price, salePrice, id, brand, count, status, ...infoDataProduct } = props;
 
   const sizes = Array.isArray(infoDataProduct.sizes)
     ? infoDataProduct.sizes
@@ -37,6 +38,7 @@ const ProductInfo: FC<IProductInfo> = (props) => {
     : [];
 
   const hasSizes = sizes.length > 0;
+  const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
 
   return (
     <div className={style.info}>
@@ -72,6 +74,23 @@ const ProductInfo: FC<IProductInfo> = (props) => {
       </Typography>
 
       <PriceBox price={price} salePrice={salePrice} />
+
+      {/* Out of stock indicator */}
+      {isOutOfStock && (
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Typography
+            variant="h6"
+            sx={{
+              color: 'error.main',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+            }}
+          >
+            Немає в наявності
+          </Typography>
+        </Box>
+      )}
 
       {/* Size selector */}
       {hasSizes && (

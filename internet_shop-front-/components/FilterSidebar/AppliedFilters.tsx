@@ -10,9 +10,20 @@ interface AppliedFiltersProps {
   onClearAll: () => void;
 }
 
-const getFilterLabel = (key: string, value: string): string => {
-  if (key === 'category') return categoryLabels[value] || value;
-  if (key === 'season') return seasonLabels[value] || value;
+const translateSlugs = (
+  value: string,
+  labels: Record<string, string>,
+): string | null => {
+  const translated = value
+    .split(',')
+    .map((slug) => labels[slug.trim()])
+    .filter(Boolean);
+  return translated.length > 0 ? translated.join(', ') : null;
+};
+
+const getFilterLabel = (key: string, value: string): string | null => {
+  if (key === 'category') return translateSlugs(value, categoryLabels);
+  if (key === 'season') return translateSlugs(value, seasonLabels);
   if (key === 'onSale') return 'Зі знижкою';
   if (key === 'priceMin') return `Від ${value} грн`;
   if (key === 'priceMax') return `До ${value} грн`;
@@ -24,18 +35,26 @@ const AppliedFilters: React.FC<AppliedFiltersProps> = ({
   onRemove,
   onClearAll,
 }) => {
-  const activeKeys = Object.keys(filters).filter(
-    (k) => !['gender', 'sort', 'page', 'limit'].includes(k) && filters[k],
-  );
+  const activeKeys = Object.keys(filters).filter((k) => {
+    if (['gender', 'sort', 'page', 'limit'].includes(k)) return false;
+    const v = filters[k];
+    if (!v) return false;
+    if (v === 'false') return false;
+    return true;
+  });
 
   if (activeKeys.length === 0) return null;
 
+  const labeledFilters = activeKeys
+    .map((key) => ({ key, label: getFilterLabel(key, filters[key]) }))
+    .filter((filter): filter is { key: string; label: string } => filter.label !== null);
+
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3, alignItems: 'center' }}>
-      {activeKeys.map((key) => (
+      {labeledFilters.map(({ key, label }) => (
         <Chip
           key={key}
-          label={getFilterLabel(key, filters[key])}
+          label={label}
           onDelete={() => onRemove(key)}
           size="small"
           sx={{

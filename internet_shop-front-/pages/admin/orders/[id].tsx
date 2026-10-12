@@ -185,7 +185,7 @@ export default function AdminOrderDetailsPage() {
         <Box sx={{ ...sectionSx }}>
           <Typography sx={{ fontWeight: 700, mb: 1 }}>Доставка</Typography>
           <Typography sx={{ fontSize: '0.9rem' }}>
-            Нова пошта, {order.cityName}, відділення {order.department}
+            Нова пошта, {order.cityName}, {order.department}
           </Typography>
           {order.comment && (
             <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', mt: 0.5 }}>

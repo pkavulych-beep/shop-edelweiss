@@ -42,6 +42,10 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
   const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cityRequestIdRef = useRef(0);
   const departmentRequestIdRef = useRef(0);
+  // MUI Autocomplete скидає поле (reason "reset") на порожній рядок, коли
+  // вибране місто стає null. Під час набору тексту це стирало б те, що ввів
+  // користувач, тому такий reset після нашої ж правки ігноруємо.
+  const keepInputOnResetRef = useRef(false);
 
   const resetDepartment = () => {
     setDepartment("");
@@ -130,7 +134,10 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     searchingCities && citiesResult?.query !== trimmedCityQuery;
   const citiesError =
     searchingCities && !citiesLoading ? citiesResult?.error ?? null : null;
-  const cities = trimmedCityQuery ? citiesResult?.cities ?? [] : [];
+  const cities =
+    trimmedCityQuery && citiesResult?.query === trimmedCityQuery
+      ? citiesResult.cities
+      : [];
 
   const currentDepartments =
     cityName && departmentsResult?.city === cityName ? departmentsResult : null;
@@ -148,8 +155,24 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     value: string,
     reason: string
   ) => {
+    // Скидання, яке MUI робить після того, як ми очистили вибране місто під
+    // час набору, не повинно стирати введений текст.
+    if (reason === "reset" && value === "" && keepInputOnResetRef.current) {
+      keepInputOnResetRef.current = false;
+      return;
+    }
+
     setCityQuery(value);
-    if (reason === "input" && value !== cityName) {
+    // Під час набору тексту вибір міста скидається, якщо він більше не
+    // збігається з поточним містом. Інакше у замовлення пішло б старе місто.
+    const cleared =
+      (reason === "reset" || reason === "clear") && value === "";
+    const edited = reason === "input" && value !== cityName;
+    if (cleared || edited) {
+      // Наступний reset від MUI (value стане null) не має стерти текст.
+      if (edited && cityName) {
+        keepInputOnResetRef.current = true;
+      }
       setCity("");
       resetDepartment();
     }
