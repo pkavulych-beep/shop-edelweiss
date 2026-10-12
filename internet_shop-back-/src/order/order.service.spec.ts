@@ -351,6 +351,38 @@ describe('OrderService', () => {
 
       expect(mockManager.transaction).toHaveBeenCalled();
     });
+
+    it('saves both status change and other fields when status changes', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Processed, comment: 'Old comment', cityName: 'Kyiv' });
+          }
+          return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          comment: 'Old comment',
+          cityName: 'Kyiv',
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      const result = await service.update({ id: 10, status: Status.Sent, comment: 'New comment' });
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      expect(result.status).toBe(Status.Sent);
+      expect(result.comment).toBe('New comment');
+      expect(result.cityName).toBe('Kyiv');
+    });
   });
 
   describe('findAll', () => {

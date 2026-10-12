@@ -186,21 +186,19 @@ export class OrderService {
 
   async update(updateOrderDto: UpdateOrderDto) {
     const { id, status, ...changes } = updateOrderDto;
+    // If status is being changed, delegate to updateStatus for proper stock handling
+    if (status !== undefined) {
+      return this.updateStatus(id, status, changes);
+    }
+    // No status change - just update other fields
     const order = await this.findOneById(id);
-    // Поля, яких немає в запиті, не чіпаємо
     for (const [key, value] of Object.entries(changes)) {
       if (value !== undefined) order[key] = value;
     }
-
-    // If status is being changed, delegate to updateStatus for proper stock handling
-    if (status !== undefined && status !== order.status) {
-      return this.updateStatus(id, status);
-    }
-
     return this.repository.save(order);
   }
 
-  async updateStatus(id: number, status: Status) {
+  async updateStatus(id: number, status: Status, changes: Record<string, unknown> = {}) {
     // Use transaction with pessimistic locking on order row to prevent race conditions
     return this.repository.manager.transaction(async (manager: EntityManager) => {
       // First, lock the order row
@@ -219,6 +217,13 @@ export class OrderService {
         relations: { items: { product: true } },
         order: { items: { id: 'ASC' } },
       });
+
+      // Apply non-status changes from the request
+      for (const [key, value] of Object.entries(changes)) {
+        if (value !== undefined) {
+          orderWithItems[key] = value;
+        }
+      }
 
       // If trying to cancel an already cancelled order, just update status (no stock change)
       if (status === Status.Canceled && orderWithItems.status === Status.Canceled) {
