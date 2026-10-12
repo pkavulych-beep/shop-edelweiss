@@ -15,6 +15,7 @@ import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
 import { ProductEntity, ProductStatus } from '../product/entities/product.entity';
+import { OrderItemEntity } from './entities/order-item.entity';
 
 @Injectable()
 export class OrderService {
@@ -196,16 +197,65 @@ export class OrderService {
   }
 
   async updateStatus(id: number, status: Status) {
-    const order = await this.findOneById(id);
+    const order = await this.findOneWithItems(id);
+    if (!order) {
+      throw new NotFoundException(null, 'Не знайдено такого замовлення');
+    }
+
+    // If cancelling an order that wasn't already cancelled, restore stock
+    if (status === Status.Canceled && order.status !== Status.Canceled) {
+      return this.repository.manager.transaction(async (manager: EntityManager) => {
+        await this.restoreProductCounts(manager, order.items);
+        order.status = status;
+        return manager.save(OrderEntity, order);
+      });
+    }
+
     order.status = status;
     return this.repository.save(order);
   }
 
+  private async restoreProductCounts(manager: EntityManager, items: OrderItemEntity[]) {
+    // Sum quantities by productId for stock increment
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of items) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
+    // Increment product count atomically with pessimistic locking
+    for (const [productId, quantity] of quantitiesByProduct.entries()) {
+      const product = await manager.findOne(ProductEntity, {
+        where: { id: productId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!product) {
+        continue; // Product might have been deleted, skip
+      }
+
+      // Only increment if count is tracked (not null)
+      if (product.count !== null && product.count !== undefined) {
+        product.count += quantity;
+        await manager.save(ProductEntity, product);
+      }
+    }
+  }
+
   async remove(id: number) {
-    const { affected } = await this.repository.delete(id);
-    if (!affected) {
+    const order = await this.findOneWithItems(id);
+    if (!order) {
       throw new NotFoundException(null, 'Не знайдено такого замовлення');
     }
-    return 'Замовлення було успішно видалено';
+
+    // Restore stock before deleting the order
+    return this.repository.manager.transaction(async (manager: EntityManager) => {
+      await this.restoreProductCounts(manager, order.items);
+      const { affected } = await manager.delete(OrderEntity, id);
+      if (!affected) {
+        throw new NotFoundException(null, 'Не знайдено такого замовлення');
+      }
+      return 'Замовлення було успішно видалено';
+    });
   }
 }
