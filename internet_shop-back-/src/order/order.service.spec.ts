@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { Status } from './statusEnum';
+import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 
 describe('OrderService', () => {
@@ -85,6 +86,43 @@ describe('OrderService', () => {
         ],
         total: 2000,
       });
+    });
+
+    it('defaults a new order to cash on delivery and unpaid', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+      });
+
+      expect(mockManager.save.mock.calls[0][1]).toMatchObject({
+        paymentMethod: PaymentMethod.Cod,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+    });
+
+    it('keeps the card payment method chosen by the client', async () => {
+      await service.create(3, {
+        ...delivery,
+        paymentMethod: PaymentMethod.Card,
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+      });
+
+      expect(mockManager.save.mock.calls[0][1]).toMatchObject({
+        paymentMethod: PaymentMethod.Card,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+    });
+
+    it('ignores the payment status from the body', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+        paymentStatus: PaymentStatus.Paid,
+      } as any);
+
+      expect(mockManager.save.mock.calls[0][1].paymentStatus).toBe(
+        PaymentStatus.NotRequired,
+      );
     });
 
     it('returns the saved order with its items', async () => {
