@@ -13,7 +13,7 @@
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
   "limitPauseMinutes": { "claude": 60, "codex": 360, "opencode": 60 },
-  "releaseAfterHours": 12,
+  "releaseAfterHours": { "claude": 12, "codex": 12, "opencode": 1 },
   "coders": {
     "opus": {
       "provider": "claude",

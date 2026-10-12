@@ -32,6 +32,9 @@ const verdict = (v, sha = HEAD) => ({ 50: [{ author: { login: 'pkavulych-beep' }
 const later = Date.now() + 3600_000;
 const app = (number, i) => ({ number, title: `PR ${number}`, url: `u${number}`, mergedAt: `2026-10-05T1${Math.floor(i / 6)}:${String((i % 6) * 10).padStart(2, '0')}:00Z`, files: [{ path: 'internet_shop-front-/pages/x.tsx' }] });
 const CODEX_LIMIT = '■ You’ve hit your usage limit. To continue using Codex ... or try again at Nov 3rd, 2026 8:00 PM.\n› 1. Switch to gpt-6-luna\n';
+const freeLimit = (wait) => `   ⬝⬝⬝■■■■■ Free usage exceeded, subscribe to Go [retrying in ${wait} attempt #1]  esc interrupt\n`;
+const zenJob = (job = {}) => ({ issues: { 191: { job: { kind: 'code', coder: 'zen', provider: 'opencode', worker: 'Byte', workerId: 'w-z', since: 0, ...job } } } });
+const byte = (status) => ({ name: 'Byte', id: 'w-z', kind: 'agent', provider: 'opencode', status });
 // Claude Code's limit message, with the reset time as it prints it ("1:50am"); `minute` is that time as a timestamp.
 const NOW = Date.now();
 const MIN = 60_000;
@@ -190,6 +193,16 @@ const scenarios = [
   { name: 'після цього знову стоїть на тому ж старому повідомленні → без паузи й без другого прохання, задача закінчена',
     fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN) }, state: st(coding({ nudgedFor: minute(NOW - 5 * MIN) })) },
     not: ['^office-workers tell'], state: (s) => !s.paused.claude && !s.issues[94]?.job },
+  { name: 'Zen: «Free usage exceeded … retrying in 2h 36m» → пауза лише для big-pickle, агент додому, issue бере Nemotron',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], scrollback: { 'w-z': freeLimit('2h 36m') }, state: st({ paused: { codex: later }, ...zenJob() }) },
+    want: ['^office-workers home Byte ', `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 191`], not: ['--model opencode/big-pickle'],
+    state: (s) => Math.abs(s.paused['opencode/big-pickle'] - (NOW + 156 * MIN)) < 5 * MIN && !s.paused.opencode && s.issues[191]?.job?.coder === 'nemotron' },
+  { name: 'Zen: безкоштовний ліміт скинеться за 20 хв → чекає того ж агента, нічого йому не друкувати',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], scrollback: { 'w-z': freeLimit('20m') }, state: st({ paused: { codex: later }, ...zenJob() }) },
+    not: ['^office-workers (home|tell|hire)'], state: (s) => s.issues[191]?.job?.limited && s.issues[191].job.selfResumes && s.paused['opencode/big-pickle'] > NOW },
+  { name: 'пауза big-pickle скінчилась → агентові не друкувати (OpenCode продовжить сам), лише зняти паузу',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], state: st({ paused: { codex: later, 'opencode/big-pickle': minute(NOW - MIN) }, ...zenJob({ limited: true, selfResumes: true }) }) },
+    not: ['^office-workers (tell|home)'], state: (s) => !s.paused['opencode/big-pickle'] && s.issues[191]?.job && !s.issues[191].job.limited },
   // ── QA ──
   { name: '10 мерджів коду → QA на Sonnet, порти 7779/3002',
     fx: { workers: [me], issues: [], merged: Array.from({ length: 10 }, (_, i) => app(100 + i, i)), state: st() },
