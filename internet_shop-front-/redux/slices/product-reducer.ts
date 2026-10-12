@@ -1,7 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { Action, createSlice, PayloadAction, ThunkDispatch } from '@reduxjs/toolkit';
 import { IProduct, IProductFilters, ICategory, Gender, currentProduct, photo } from '../Types/ProductType';
 import { hydrate } from '../hydrate';
-import { AppThunk } from '../redux-store';
+import { AppThunk, AppState } from '../redux-store';
 import { Api } from '../../api/Api';
 
 export const productSlice = createSlice({
@@ -63,12 +63,19 @@ export const {
 export default productSlice.reducer;
 
 // Thunks
+const reloadCurrentProducts = async (
+  dispatch: ThunkDispatch<AppState, unknown, Action>,
+  getState: () => AppState,
+) => {
+  await dispatch(fetchFilteredProducts(getState().product.filters));
+};
+
 export const saveNewProduct =
   (newProductData): AppThunk<Promise<{ error: string | null }>> =>
   async (dispatch, getState) => {
     try {
       await Api().product.create(newProductData);
-      await dispatch(fetchFilteredProducts(getState().product.filters));
+      await reloadCurrentProducts(dispatch, getState);
       return { error: null };
     } catch (e) {
       const message = e?.response?.data?.message;
@@ -84,7 +91,7 @@ export const deleteProduct =
     try {
       await Api().product.deleteById(id);
       dispatch(setCurrentProduct(null));
-      await dispatch(fetchFilteredProducts(getState().product.filters));
+      await reloadCurrentProducts(dispatch, getState);
       return { error: null };
     } catch (e) {
       const message = e?.response?.data?.message;
