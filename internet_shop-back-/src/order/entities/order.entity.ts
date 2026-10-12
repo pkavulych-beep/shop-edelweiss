@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Status } from '../statusEnum';
+import { PaymentMethod, PaymentStatus } from '../paymentEnum';
 import { OrderItemEntity } from './order-item.entity';
 
 @Entity('order')
@@ -27,6 +28,21 @@ export class OrderEntity {
 
   @Column()
   status: Status;
+
+  // Оплата має власну вісь станів, окрему від статусу виконання (status)
+  @Column({ type: 'enum', enum: PaymentMethod, default: PaymentMethod.Cod })
+  paymentMethod: PaymentMethod;
+
+  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.NotRequired })
+  paymentStatus: PaymentStatus;
+
+  // id інвойсу провайдера, nullable: заповнюється лише для онлайн-оплати
+  @Column({ nullable: true })
+  paymentInvoiceId: string;
+
+  // timestamptz: база в UTC, як і createdAt
+  @Column({ type: 'timestamptz', nullable: true })
+  paidAt: Date;
 
   @Column({ nullable: true })
   comment: string;

@@ -1,5 +1,6 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { CreateOrderDto } from './create-order.dto';
+import { PaymentMethod } from '../paymentEnum';
 
 describe('CreateOrderDto', () => {
   const pipe = new ValidationPipe({ transform: true, whitelist: true });
@@ -42,6 +43,29 @@ describe('CreateOrderDto', () => {
     expect(result).toEqual({ ...valid, items: [item] });
   });
 
+  it.each([PaymentMethod.Cod, PaymentMethod.Card])(
+    'accepts payment method %s',
+    async method => {
+      const result = await validate({ ...valid, paymentMethod: method });
+      expect(result.paymentMethod).toBe(method);
+    },
+  );
+
+  it('leaves the default payment method to the backend', async () => {
+    const result = await validate(valid);
+    expect(result.paymentMethod).toBeUndefined();
+  });
+
+  it('drops payment status fields a client must not set', async () => {
+    const result = await validate({
+      ...valid,
+      paymentStatus: 'PAID',
+      paymentInvoiceId: 'inv-1',
+      paidAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(result).toEqual(valid);
+  });
+
   it.each([
     ['without items', { items: [] }],
     ['with items not as a list', { items: item }],
@@ -56,6 +80,7 @@ describe('CreateOrderDto', () => {
     ['with empty city', { cityName: '' }],
     ['without department', { department: undefined }],
     ['with empty department', { department: '' }],
+    ['with an unknown payment method', { paymentMethod: 'CASH' }],
   ])('rejects an order %s', async (_name, patch) => {
     await expect(validate({ ...valid, ...patch })).rejects.toBeInstanceOf(
       BadRequestException,

@@ -620,7 +620,19 @@ function tick() {
     }
     if (s.lastJob && !s.checked) {
       s.checked = true;
-      const opened = pulls.some((p) => [...(p.body ?? '').matchAll(CLOSES)].some((m) => m[1] === n));
+      let opened = pulls.some((p) => [...(p.body ?? '').matchAll(CLOSES)].some((m) => m[1] === n));
+      // An agent can leave out the `Closes #N` line (a model wrote it in Ukrainian, say). Its branch tells which pull
+      // request is its, and the line is added: GitHub then closes the issue on merge, and nobody else is hired for it.
+      const branch = !opened && workers ? branchOf(workers.find((w) => w.name === s.lastJob.worker) ?? {}) : undefined;
+      const own = branch && pulls.find((p) => p.headRefName === branch);
+      if (own) {
+        const body = `${(own.body ?? '').trimEnd()}\n\nCloses #${n}\n`;
+        const what = `PR #${own.number}: дописати «Closes #${n}», бо ${s.lastJob.worker} не вказав, яке issue він закриває`;
+        if (act(what, () => run('gh', ['pr', 'edit', String(own.number), '--repo', REPO, '--body-file', '-'], { input: body })) !== undefined) {
+          own.body = body;
+          opened = true;
+        }
+      }
       if (!opened) {
         s.failures = (s.failures ?? 0) + 1;
         log(`issue #${n}: ${s.lastJob.worker} закінчив, але PR не відкрив (спроба ${s.failures})`);

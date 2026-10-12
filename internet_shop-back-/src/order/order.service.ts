@@ -14,6 +14,7 @@ import { OrderEntity } from './entities/order.entity';
 import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
+import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { ProductEntity, ProductStatus } from '../product/entities/product.entity';
 
 @Injectable()
@@ -111,6 +112,10 @@ export class OrderService {
         user,
         status: Status.Processed,
         ...restDto,
+        // Оплата: спосіб беремо з запиту (за замовчуванням — при отриманні), а
+        // стан оплати нове замовлення завжди має NOT_REQUIRED
+        paymentMethod: restDto.paymentMethod ?? PaymentMethod.Cod,
+        paymentStatus: PaymentStatus.NotRequired,
         items: orderItems,
         total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });
