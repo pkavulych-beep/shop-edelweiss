@@ -24,12 +24,13 @@ CI зелений, вердикту нема ──► рев'юер (по од�
 |---|---|---|
 | Opus | `hard` | 7777, 3000, `Edelweiss` |
 | Codex (`gpt-5.6-terra`) | `medium` | 7778, 3001, `Edelweiss_codex` |
+| LongCat: OpenCode з безкоштовною моделлю `opencode/longcat-2.5-preview-free` (випробовуємо) | `easy` | 7782, 3006, `Edelweiss_longcat` |
 | Zen: OpenCode з безкоштовною моделлю `opencode/big-pickle` | `easy`, `medium` | 7780, 3003, `Edelweiss_zen` |
 | Nemotron: OpenCode з безкоштовною моделлю `opencode/nemotron-3-ultra-free` | `easy`, `medium` | 7781, 3005, `Edelweiss_nemotron` |
 
 Якщо агент відкрив PR без рядка `Closes #N` (буває, що модель пише його українською), конвеєр знаходить PR за гілкою агента й дописує цей рядок сам. Інакше він вирішив би, що PR немає, і віддав би задачу ще одному кодеру.
 
-Issue без мітки складності вважається `medium` (`defaultDifficulty`). Кодери працюють одночасно, кожен над однією задачею, на своїх портах і зі своєю базою; задачу `medium` бере той із Codex, Zen і Nemotron, хто вільний. Доопрацювання PR бере той кодер, який його написав: конвеєр пам'ятає, хто робив issue, тож Zen і Nemotron не плутаються, хоч обидва працюють через OpenCode.
+Issue без мітки складності вважається `medium` (`defaultDifficulty`). Кодери працюють одночасно, кожен над однією задачею, на своїх портах і зі своєю базою. Вільні кодери беруть задачі в тому порядку, в якому стоять у `config.json`: задачу `easy` першим бере LongCat, а Zen і Nemotron — коли він зайнятий; задачу `medium` бере той із Codex, Zen і Nemotron, хто вільний. Доопрацювання PR бере той кодер, який його написав: конвеєр пам'ятає, хто робив issue, тож LongCat, Zen і Nemotron не плутаються, хоч усі працюють через OpenCode.
 
 Рев'ю PR робить Opus, а PR задач `easy` — Sonnet (`reviewerFor`): так рев'ю простих змін витрачає менше ліміту Claude.
 
