@@ -3,21 +3,15 @@ import { InternalServerErrorException } from '@nestjs/common';
 
 describe('MonoPaymentProvider', () => {
   let provider: MonoPaymentProvider;
-  let configService: { get: jest.Mock };
 
   beforeEach(() => {
-    configService = {
-      get: jest.fn((key: string) => {
-        if (key === 'MONO_ACQUIRING_TOKEN') return 'test-token';
-        return undefined;
-      }),
-    };
-    provider = new MonoPaymentProvider(configService as any);
+    process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+    provider = new MonoPaymentProvider();
   });
 
   describe('createInvoice', () => {
     it('throws when token is not configured', async () => {
-      configService.get.mockReturnValueOnce(undefined);
+      delete process.env.MONO_ACQUIRING_TOKEN;
       global.fetch = jest.fn();
 
       await expect(

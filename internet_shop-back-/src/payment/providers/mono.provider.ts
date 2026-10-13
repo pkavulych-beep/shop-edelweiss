@@ -1,5 +1,4 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   CreateInvoiceInput,
   CreateInvoiceOutput,
@@ -13,10 +12,8 @@ const MONO_API_BASE = 'https://api.monobank.ua/api/merchant/invoice';
 
 @Injectable()
 export class MonoPaymentProvider implements PaymentProvider {
-  constructor(private configService: ConfigService) {}
-
   private get token(): string {
-    const token = this.configService.get<string>('MONO_ACQUIRING_TOKEN');
+    const token = process.env.MONO_ACQUIRING_TOKEN;
     if (!token) {
       throw new InternalServerErrorException('MONO_ACQUIRING_TOKEN is not configured');
     }

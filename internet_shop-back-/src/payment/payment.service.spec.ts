@@ -13,7 +13,6 @@ describe('PaymentService', () => {
   let paymentRepository: any;
   let orderRepository: any;
   let orderService: any;
-  let configService: any;
   let paymentProvider: any;
 
   const mockOrder = {
@@ -41,13 +40,8 @@ describe('PaymentService', () => {
     orderService = {
       findOneForUser: jest.fn().mockResolvedValue({ ...mockOrder }),
     };
-    configService = {
-      get: jest.fn((key: string) => {
-        if (key === 'BASE_URL') return 'http://localhost:7777/';
-        if (key === 'FRONTEND_URL') return 'http://localhost:3000/';
-        return undefined;
-      }),
-    };
+    process.env.BASE_URL = 'http://localhost:7777/';
+    process.env.FRONTEND_URL = 'http://localhost:3000';
     paymentProvider = {
       createInvoice: jest.fn().mockResolvedValue({
         invoiceId: 'mono-invoice-123',
@@ -66,7 +60,6 @@ describe('PaymentService', () => {
       paymentRepository,
       orderRepository,
       orderService,
-      configService,
       paymentProvider,
     );
   });
@@ -148,11 +141,7 @@ describe('PaymentService', () => {
     });
 
     it('throws InternalServerErrorException when BASE_URL is not configured', async () => {
-      configService.get.mockImplementation((key: string) => {
-        if (key === 'BASE_URL') return undefined;
-        if (key === 'FRONTEND_URL') return 'http://localhost:3000/';
-        return undefined;
-      });
+      delete process.env.BASE_URL;
 
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
         InternalServerErrorException,
@@ -160,11 +149,7 @@ describe('PaymentService', () => {
     });
 
     it('throws InternalServerErrorException when FRONTEND_URL is not configured', async () => {
-      configService.get.mockImplementation((key: string) => {
-        if (key === 'BASE_URL') return 'http://localhost:7777/';
-        if (key === 'FRONTEND_URL') return undefined;
-        return undefined;
-      });
+      delete process.env.FRONTEND_URL;
 
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
         InternalServerErrorException,

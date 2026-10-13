@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentStatus } from 'src/order/paymentEnum';
@@ -26,7 +25,6 @@ export class PaymentService {
     @InjectRepository(OrderEntity)
     private orderRepository: Repository<OrderEntity>,
     private orderService: OrderService,
-    private configService: ConfigService,
     @Inject('PAYMENT_PROVIDER')
     private paymentProvider: PaymentProvider,
   ) {}
@@ -50,8 +48,8 @@ export class PaymentService {
     }
 
     const amount = Math.round(order.total * 100);
-    const baseUrl = this.configService.get<string>('BASE_URL');
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const baseUrl = process.env.BASE_URL;
+    const frontendUrl = process.env.FRONTEND_URL;
 
     if (!baseUrl || !frontendUrl) {
       throw new InternalServerErrorException('BASE_URL or FRONTEND_URL not configured');
