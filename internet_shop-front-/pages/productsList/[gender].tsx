@@ -137,12 +137,21 @@ export default function Index() {
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
             maxHeight: '85vh',
-            px: 3,
-            py: 2,
+            display: 'flex',
+            flexDirection: 'column',
           },
         }}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            px: 3,
+            pt: 2,
+            pb: 2,
+          }}
+        >
           <Typography variant="h5" sx={{ fontSize: '1rem' }}>
             Фільтри
           </Typography>
@@ -150,15 +159,19 @@ export default function Index() {
             <CloseIcon />
           </IconButton>
         </Box>
-        <FilterSidebar gender={gender} />
-        <Button
-          variant="contained"
-          fullWidth
-          onClick={() => setMobileFiltersOpen(false)}
-          sx={{ mt: 3, mb: 2, py: 1.5, borderRadius: 2 }}
-        >
-          Показати результати
-        </Button>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 3 }}>
+          <FilterSidebar gender={gender} />
+        </Box>
+        <Box sx={{ px: 3, pt: 2, pb: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={() => setMobileFiltersOpen(false)}
+            sx={{ py: 1.5, borderRadius: 2 }}
+          >
+            Показати результати
+          </Button>
+        </Box>
       </Drawer>
 
       {/* Content */}

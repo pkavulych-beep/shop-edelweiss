@@ -28,7 +28,22 @@ export const DeleteProduct: NextPage<IDeleteProductProps> = ({ id }) => {
 
   return (
     <>
-      <Button variant='outlined' color='error' onClick={() => setIsConfirmOpen(true)}>
+      <Button
+        variant='outlined'
+        color='error'
+        onClick={() => setIsConfirmOpen(true)}
+        sx={{
+          whiteSpace: 'nowrap',
+          height: 48,
+          width: { xs: '100%', sm: 'auto' },
+          color: 'error.main',
+          borderColor: 'error.main',
+          '&:hover': {
+            backgroundColor: 'rgba(167, 59, 33, 0.08)',
+            borderColor: 'error.main',
+          },
+        }}
+      >
         Видалити товар
       </Button>
 
