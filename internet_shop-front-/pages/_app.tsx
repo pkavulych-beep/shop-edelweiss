@@ -1,6 +1,7 @@
 import "../styles/globals.css";
 import * as React from "react";
 import { useEffect } from "react";
+import { Provider } from "react-redux";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { wrapper } from "../redux/redux-store";
@@ -36,7 +37,20 @@ const WrappedApp = ({ Component, pageProps }: AppProps) => {
   );
 };
 
-WrappedApp.getInitialProps = wrapper.getInitialAppProps((store) =>
+// useWrappedStore гідрує store один раз на перехід. withRedux із
+// next-redux-wrapper 7 диспатчив HYDRATE просто під час рендеру переходу,
+// і React перезапускав цей рендер, поки transition не протухав (~5 с).
+const App = ({ Component, ...rest }: AppProps) => {
+  const { store, props } = wrapper.useWrappedStore(rest);
+
+  return (
+    <Provider store={store}>
+      <WrappedApp {...props} Component={Component} />
+    </Provider>
+  );
+};
+
+App.getInitialProps = wrapper.getInitialAppProps((store) =>
   // @ts-ignore
   async ({ ctx, Component }) => {
     const pageProps = Component.getInitialProps
@@ -88,4 +102,4 @@ WrappedApp.getInitialProps = wrapper.getInitialAppProps((store) =>
   }
 );
 
-export default wrapper.withRedux(WrappedApp);
+export default App;
