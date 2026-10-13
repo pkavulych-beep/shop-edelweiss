@@ -1,5 +1,4 @@
 import React from 'react';
-import { useRouter } from 'next/router';
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
@@ -8,6 +7,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Typography from '@mui/material/Typography';
 import FilterGroup from './FilterGroup';
 import PriceRangeFilter from './PriceRangeFilter';
+import { useCatalogFilters } from './useCatalogFilters';
 import {
   categoryLabels,
   seasonLabels,
@@ -22,30 +22,16 @@ interface FilterSidebarProps {
 }
 
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
-  const router = useRouter();
-  const query = router.query as Record<string, string>;
-
-  const updateQuery = (updates: Record<string, string | undefined>) => {
-    const newQuery = { ...query };
-    Object.entries(updates).forEach(([key, val]) => {
-      if (val === undefined || val === '') {
-        delete newQuery[key];
-      } else {
-        newQuery[key] = val;
-      }
-    });
-    delete newQuery.page;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: false });
-  };
+  const { filters, setFilter } = useCatalogFilters();
 
   const getSelected = (key: string): string[] => {
-    const val = query[key];
+    const val = filters[key];
     if (!val) return [];
     return val.split(',');
   };
 
   const setMultiFilter = (key: string, values: string[]) => {
-    updateQuery({ [key]: values.length > 0 ? values.join(',') : undefined });
+    setFilter(key, values.length > 0 ? values.join(',') : undefined);
   };
 
   // Filter out women-only categories for men
@@ -85,8 +71,8 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
           Сортувати
         </Typography>
         <Select
-          value={query.sort || 'newest'}
-          onChange={(e) => updateQuery({ sort: e.target.value })}
+          value={filters.sort || 'newest'}
+          onChange={(e) => setFilter('sort', e.target.value)}
           size="small"
           fullWidth
           sx={{
@@ -109,9 +95,9 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
       <FormControlLabel
         control={
           <Switch
-            checked={query.onSale === 'true'}
+            checked={filters.onSale === 'true'}
             onChange={(e) =>
-              updateQuery({ onSale: e.target.checked ? 'true' : undefined })
+              setFilter('onSale', e.target.checked ? 'true' : undefined)
             }
             size="small"
           />
@@ -133,14 +119,12 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
       />
 
       <PriceRangeFilter
-        priceMin={query.priceMin ? Number(query.priceMin) : undefined}
-        priceMax={query.priceMax ? Number(query.priceMax) : undefined}
-        onChange={(min, max) =>
-          updateQuery({
-            priceMin: min?.toString(),
-            priceMax: max?.toString(),
-          })
-        }
+        priceMin={filters.priceMin ? Number(filters.priceMin) : undefined}
+        priceMax={filters.priceMax ? Number(filters.priceMax) : undefined}
+        onChange={(min, max) => {
+          setFilter('priceMin', min?.toString());
+          setFilter('priceMax', max?.toString());
+        }}
       />
 
       <FilterGroup
