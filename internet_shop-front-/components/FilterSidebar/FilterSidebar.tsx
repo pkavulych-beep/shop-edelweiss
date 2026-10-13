@@ -107,7 +107,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
             Тільки зі знижкою
           </Typography>
         }
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, width: '100%', display: 'block' }}
       />
 
       <FilterGroup
