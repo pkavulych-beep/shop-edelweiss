@@ -3,19 +3,35 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
 import { Status } from 'src/order/statusEnum';
-import { PaymentEntity } from './entities/payment.entity';
-import { CreateInvoiceInput, PaymentProvider } from './providers/payment-provider.interface';
+import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
+import {
+  CreateInvoiceInput,
+  PaymentProvider,
+  VerifyWebhookInput,
+  WebhookEvent,
+} from './providers/payment-provider.interface';
+
+// Куди вебхук може перевести оплату з поточного стану. Чого тут немає —
+// не змінює нічого: PAID → PAID, повернення в PENDING, «провал» уже оплаченого.
+const ALLOWED_TRANSITIONS: Partial<Record<PaymentStatus, PaymentStatus[]>> = {
+  [PaymentStatus.Pending]: [PaymentStatus.Paid, PaymentStatus.Failed],
+  [PaymentStatus.Failed]: [PaymentStatus.Paid],
+  [PaymentStatus.Paid]: [PaymentStatus.Refunded],
+};
 
 @Injectable()
 export class PaymentService {
+  private readonly logger = new Logger(PaymentService.name);
+
   constructor(
     @InjectRepository(PaymentEntity)
     private paymentRepository: Repository<PaymentEntity>,
@@ -44,12 +60,14 @@ export class PaymentService {
       throw new BadRequestException('Замовлення вже оплачене');
     }
 
-    if (order.paymentInvoiceId) {
+    // Після FAILED (відмова чи прострочений інвойс) покупець може спробувати
+    // ще раз: створюється новий інвойс, і замовлення переходить на нього.
+    if (order.paymentInvoiceId && order.paymentStatus !== PaymentStatus.Failed) {
       // Повторний запит, поки інвойс ще PENDING, не створює новий, а повертає
       // той самий pageUrl: покупець, який закрив сторінку оплати, може
-      // спробувати ще раз. Новий інвойс після FAILED/строку — у #192.
+      // спробувати ще раз.
       const existingLog = await this.paymentRepository.findOne({
-        where: { invoiceId: order.paymentInvoiceId },
+        where: { invoiceId: order.paymentInvoiceId, kind: PaymentLogKind.Invoice },
       });
       const existingPageUrl = existingLog?.rawPayload?.pageUrl;
 
@@ -74,7 +92,7 @@ export class PaymentService {
     const input: CreateInvoiceInput = {
       amount,
       ccy: 980,
-      webHookUrl: `${baseUrl}payment/webhook`,
+      webHookUrl: `${baseUrl}payment/webhook/mono`,
       // FRONTEND_URL, як і BASE_URL, закінчується слешем: без подвійного слеша
       // ведемо на наявну сторінку зі списком замовлень.
       redirectUrl: `${frontendUrl}orders`,
@@ -91,6 +109,7 @@ export class PaymentService {
       orderId,
       provider: 'mono',
       invoiceId,
+      kind: PaymentLogKind.Invoice,
       amount,
       status: PaymentStatus.Pending,
       rawPayload: { amount, ccy: 980, orderId: String(orderId), pageUrl },
@@ -102,7 +121,7 @@ export class PaymentService {
 
   async refund(invoiceId: string, amount?: number): Promise<void> {
     const paymentLog = await this.paymentRepository.findOne({
-      where: { invoiceId },
+      where: { invoiceId, kind: PaymentLogKind.Invoice },
     });
 
     if (!paymentLog) {
@@ -151,5 +170,103 @@ export class PaymentService {
         await this.orderRepository.save(order);
       }
     }
+  }
+
+  // Єдиний шлях, яким замовлення стає оплаченим. Підпис перевіряє провайдер
+  // (400 без змін у базі), далі все — в одній транзакції з блокуванням
+  // інвойсу, щоб паралельні повтори одного вебхука не застосувались двічі.
+  async handleWebhook(input: VerifyWebhookInput): Promise<void> {
+    const event = await this.paymentProvider.verifyWebhook(input);
+
+    await this.paymentRepository.manager.transaction((manager) =>
+      this.applyWebhook(manager, event),
+    );
+  }
+
+  private async applyWebhook(manager: EntityManager, event: WebhookEvent): Promise<void> {
+    const invoiceLog = await manager.findOne(PaymentEntity, {
+      where: { invoiceId: event.invoiceId, kind: PaymentLogKind.Invoice },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!invoiceLog) {
+      // Підпис справжній, але інвойс не наш (інше середовище з тим самим
+      // токеном): прив'язати запис до замовлення нема до чого.
+      this.logger.warn(`Вебхук для невідомого інвойсу ${event.invoiceId}`);
+      return;
+    }
+
+    // Журнал: кожен перевірений вебхук разом із payload, навіть повтор.
+    await manager.save(
+      PaymentEntity,
+      manager.create(PaymentEntity, {
+        orderId: invoiceLog.orderId,
+        provider: invoiceLog.provider,
+        invoiceId: event.invoiceId,
+        kind: PaymentLogKind.Webhook,
+        amount: event.amount,
+        status: event.status,
+        providerModifiedAt: event.modifiedDate,
+        rawPayload: event.payload,
+      }),
+    );
+
+    // Ключ ідемпотентності — (invoiceId, modifiedDate): повтор або вебхук, що
+    // прийшов не в тому порядку, вже нічого не змінює.
+    if (
+      invoiceLog.providerModifiedAt &&
+      event.modifiedDate.getTime() <= new Date(invoiceLog.providerModifiedAt).getTime()
+    ) {
+      return;
+    }
+    invoiceLog.providerModifiedAt = event.modifiedDate;
+
+    const current = invoiceLog.status as PaymentStatus;
+    let next: PaymentStatus | null = ALLOWED_TRANSITIONS[current]?.includes(event.status)
+      ? event.status
+      : null;
+
+    if (
+      next === PaymentStatus.Paid &&
+      (event.amount !== invoiceLog.amount || event.ccy !== 980)
+    ) {
+      this.logger.error(
+        `Сума оплати інвойсу ${event.invoiceId} (${event.amount}/${event.ccy}) ` +
+          `не збігається з інвойсом (${invoiceLog.amount}/980)`,
+      );
+      next = null;
+    }
+
+    if (next) {
+      invoiceLog.status = next;
+    }
+    await manager.save(PaymentEntity, invoiceLog);
+
+    if (!next) {
+      return;
+    }
+
+    const order = await manager.findOne(OrderEntity, {
+      where: { id: invoiceLog.orderId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!order) {
+      this.logger.warn(`Замовлення ${invoiceLog.orderId} для інвойсу ${event.invoiceId} не знайдено`);
+      return;
+    }
+    // Старий інвойс (замовлення вже перейшло на новий після FAILED) змінює
+    // лише свій запис, але не стан замовлення.
+    if (order.paymentInvoiceId !== event.invoiceId) {
+      this.logger.warn(
+        `Вебхук інвойсу ${event.invoiceId}, а замовлення ${order.id} вже на ${order.paymentInvoiceId}`,
+      );
+      return;
+    }
+
+    order.paymentStatus = next;
+    if (next === PaymentStatus.Paid) {
+      order.paidAt = event.modifiedDate;
+    }
+    await manager.save(OrderEntity, order);
   }
 }

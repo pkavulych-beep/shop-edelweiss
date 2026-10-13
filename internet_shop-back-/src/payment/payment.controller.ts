@@ -1,4 +1,16 @@
-import { Controller, Post, Param, Body, UseGuards, Request } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Param,
+  Post,
+  RawBodyRequest,
+  Req,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
 import { PaymentService } from './payment.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/roles-auth.decorator';
@@ -14,6 +26,19 @@ const ORDER_NOT_FOUND = new ParseIdPipe('Замовлення не знайде�
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
+
+  // Без guard'ів: справжність перевіряється підписом X-Sign над сирим тілом
+  // (rawBody у main.ts), а не розпарсеним @Body(), який ValidationPipe ще й
+  // обрізав би. Не 200 — mono повторить вебхук.
+  @Post('webhook/mono')
+  @HttpCode(200)
+  async monoWebhook(
+    @Req() req: RawBodyRequest<ExpressRequest>,
+    @Headers('x-sign') signature: string | undefined,
+  ) {
+    await this.paymentService.handleWebhook({ rawBody: req.rawBody, signature });
+    return { success: true };
+  }
 
   @Post(':orderId/invoice')
   @UseGuards(JwtAuthGuard)

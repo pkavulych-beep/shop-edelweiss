@@ -4,7 +4,8 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: підпис вебхука mono перевіряється над сирими байтами тіла
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: '*',

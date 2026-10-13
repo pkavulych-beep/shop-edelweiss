@@ -1,3 +1,5 @@
+import { PaymentStatus } from '../../order/paymentEnum';
+
 export interface CreateInvoiceInput {
   amount: number;
   ccy: number;
@@ -11,16 +13,21 @@ export interface CreateInvoiceOutput {
   pageUrl: string;
 }
 
+// Підпис рахується над сирими байтами тіла, тож сюди передається саме
+// req.rawBody, а не розпарсений і заново зсеріалізований JSON.
 export interface VerifyWebhookInput {
-  body: Record<string, unknown>;
-  signature: string;
+  rawBody: Buffer | undefined;
+  signature: string | undefined;
 }
 
-export interface VerifyWebhookOutput {
-  orderId: string;
+// Перевірений вебхук, уже переведений у наші статуси оплати.
+export interface WebhookEvent {
   invoiceId: string;
-  status: string;
+  status: PaymentStatus;
   amount: number;
+  ccy: number;
+  modifiedDate: Date;
+  payload: Record<string, unknown>;
 }
 
 export interface RefundInput {
@@ -30,6 +37,8 @@ export interface RefundInput {
 
 export interface PaymentProvider {
   createInvoice(input: CreateInvoiceInput): Promise<CreateInvoiceOutput>;
-  verifyWebhook(input: VerifyWebhookInput): VerifyWebhookOutput;
+  // Кидає BadRequestException, якщо підпису немає, він не збігається або тіло
+  // не схоже на вебхук провайдера.
+  verifyWebhook(input: VerifyWebhookInput): Promise<WebhookEvent>;
   refund(input: RefundInput): Promise<void>;
 }
