@@ -44,7 +44,7 @@ const FilterGroup: React.FC<FilterGroupProps> = ({
         </Typography>
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0 }}>
-        <FormGroup>
+        <FormGroup sx={{ rowGap: 1.5 }}>
           {options.map((opt) => (
             <FormControlLabel
               key={opt.value}
@@ -56,7 +56,7 @@ const FilterGroup: React.FC<FilterGroupProps> = ({
                   sx={{
                     color: '#afb3b3',
                     '&.Mui-checked': { color: '#745c00' },
-                    py: 0.3,
+                    py: 0.75,
                   }}
                 />
               }
