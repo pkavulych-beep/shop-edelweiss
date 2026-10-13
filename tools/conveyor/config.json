@@ -8,7 +8,8 @@
   "difficultyLabels": ["hard", "medium", "easy"],
   "defaultDifficulty": "medium",
   "maxOpenPullRequests": 4,
-  "maxReviewRounds": 2,
+  "maxReviewRounds": 3,
+  "escalateTo": "opus",
   "maxFixRounds": 4,
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
@@ -29,12 +30,6 @@
       "takes": ["medium"],
       "ports": { "back": 7778, "front": 3001, "db": "Edelweiss_codex" }
     },
-    "longcat": {
-      "provider": "opencode",
-      "model": "opencode/longcat-2.5-preview-free",
-      "takes": ["easy"],
-      "ports": { "back": 7782, "front": 3006, "db": "Edelweiss_longcat" }
-    },
     "zen": {
       "provider": "opencode",
       "model": "opencode/big-pickle",
@@ -46,6 +41,12 @@
       "model": "opencode/nemotron-3-ultra-free",
       "takes": ["easy", "medium"],
       "ports": { "back": 7781, "front": 3005, "db": "Edelweiss_nemotron" }
+    },
+    "longcat": {
+      "provider": "opencode",
+      "model": "opencode/longcat-2.5-preview-free",
+      "takes": ["easy"],
+      "ports": { "back": 7782, "front": 3006, "db": "Edelweiss_longcat" }
     }
   },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },
@@ -69,6 +70,7 @@
     "enabled": true,
     "method": "squash",
     "maxChangedLines": 600,
+    "okLabel": "merge-ok",
     "protectedPaths": [
       ".github/",
       ".claude/",
@@ -78,7 +80,9 @@
       "CLAUDE.md",
       "tools/conveyor/",
       "docker-compose.yml",
-      "internet_shop-back-/.npmrc"
+      "internet_shop-back-/.npmrc",
+      "internet_shop-back-/src/payment/",
+      "internet_shop-back-/src/auth/"
     ]
   }
 }
