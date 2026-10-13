@@ -31,6 +31,19 @@ const pickFilters = (query: Record<string, unknown>): CatalogFilters => {
 const sameFilters = (a: CatalogFilters, b: CatalogFilters) =>
   JSON.stringify(a) === JSON.stringify(b);
 
+// Фільтри з URL, на який починається перехід (аргумент router.events).
+const filtersKeyFromUrl = (url: string): string => {
+  const queryStart = url.indexOf('?');
+  const search = queryStart >= 0 ? url.slice(queryStart + 1) : '';
+  const params = new URLSearchParams(search.split('#')[0]);
+  const filters: CatalogFilters = {};
+  FILTER_QUERY_KEYS.forEach((key) => {
+    const value = params.get(key);
+    if (value) filters[key] = value;
+  });
+  return JSON.stringify(filters);
+};
+
 // Тримає вибрані фільтри в локальному стані, щоб галочки ставились одразу,
 // і застосовує кілька швидких кліків одним переходом. URL лишається джерелом
 // істини: коли він змінюється ззовні (Назад/Вперед, «Очистити все», хрестик
@@ -48,6 +61,35 @@ export const useCatalogFilters = () => {
   // JSON фільтрів останнього власного переходу. Поки він не збігся з URL,
   // наш перехід ще в дорозі, і синхронізація з URL не потрібна.
   const pendingRef = useRef<string | null>(null);
+
+  // Чужий перехід (не наш push) означає, що наш перехід скасовано: знімаємо
+  // невідкладений debounce і чекаємо, доки router.query підтягне новий стан.
+  const cancelPending = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    pendingRef.current = null;
+  }, []);
+
+  const isOwnNavigation = useCallback((url: string) => {
+    if (pendingRef.current === null) return false;
+    return filtersKeyFromUrl(url) === pendingRef.current;
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChangeStart = (url: string) => {
+      if (!isOwnNavigation(url)) cancelPending();
+    };
+    const handleRouteChangeError = () => cancelPending();
+
+    router.events.on('routeChangeStart', handleRouteChangeStart);
+    router.events.on('routeChangeError', handleRouteChangeError);
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChangeStart);
+      router.events.off('routeChangeError', handleRouteChangeError);
+    };
+  }, [router.events, isOwnNavigation, cancelPending]);
 
   useEffect(() => {
     const urlFilters = pickFilters(router.query);
@@ -100,7 +142,8 @@ export const useCatalogFilters = () => {
   );
 
   // Шухляда фільтрів на мобільному розмонтовується після закриття, тож
-  // невідкладений перехід треба застосувати, а не скасувати.
+  // невідкладений перехід треба застосувати, а не скасувати. Якщо ж панель
+  // зникає через чужий перехід, таймер уже скасовано в cancelPending.
   useEffect(
     () => () => {
       if (timerRef.current) {
