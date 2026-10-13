@@ -3,6 +3,7 @@ import { OrderService } from './order.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { ProductEntity } from '../product/entities/product.entity';
+import { OrderEntity } from './entities/order.entity';
 
 describe('OrderService', () => {
   describe('create', () => {
@@ -322,25 +323,97 @@ describe('OrderService', () => {
 
   describe('update', () => {
     it('changes only the fields from the request', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [], status: Status.Processed, comment: 'Подзвоніть', total: 1800 });
+          }
+          return Promise.resolve({ id: options.where.id, count: 10, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
       const repository = {
         findOne: jest.fn().mockResolvedValue({
           id: 10,
           status: Status.Processed,
           comment: 'Подзвоніть',
           total: 1800,
+          items: [],
         }),
         save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
       };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await expect(
-        service.update({ id: 10, status: Status.Sent, comment: undefined }),
+        service.update({ id: 10, comment: 'New comment' }),
       ).resolves.toEqual({
         id: 10,
-        status: Status.Sent,
-        comment: 'Подзвоніть',
+        status: Status.Processed,
+        comment: 'New comment',
         total: 1800,
+        items: [],
       });
+    });
+
+    it('delegates to updateStatus when status changes', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Processed });
+          }
+          return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.update({ id: 10, status: Status.Sent });
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+    });
+
+    it('saves both status change and other fields when status changes', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Processed, comment: 'Old comment', cityName: 'Kyiv' });
+          }
+          return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          comment: 'Old comment',
+          cityName: 'Kyiv',
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      const result = await service.update({ id: 10, status: Status.Sent, comment: 'New comment' });
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      expect(result.status).toBe(Status.Sent);
+      expect(result.comment).toBe('New comment');
+      expect(result.cityName).toBe('Kyiv');
     });
   });
 
@@ -397,13 +470,25 @@ describe('OrderService', () => {
 
   describe('updateStatus', () => {
     it('saves the new status and keeps the other fields', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [], status: Status.Processed, comment: 'c' });
+          }
+          return Promise.resolve({ id: options.where.id, count: 10, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
       const repository = {
         findOne: jest.fn().mockResolvedValue({
           id: 10,
           status: Status.Processed,
           comment: 'c',
+          items: [],
         }),
         save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
       };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
@@ -411,33 +496,381 @@ describe('OrderService', () => {
         id: 10,
         status: Status.Sent,
         comment: 'c',
+        items: [],
       });
-      expect(repository.findOne).toHaveBeenCalledWith({ where: { id: 10 } });
+      expect(mockManager.transaction).toHaveBeenCalled();
     });
 
     it('throws NotFound for a missing order', async () => {
+      const mockManager = {
+        save: jest.fn(),
+        findOne: jest.fn().mockResolvedValue(null),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
       const repository = {
         findOne: jest.fn().mockResolvedValue(null),
         save: jest.fn(),
+        manager: mockManager,
       };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await expect(service.updateStatus(99, Status.Sent)).rejects.toBeInstanceOf(NotFoundException);
-      expect(repository.save).not.toHaveBeenCalled();
+      expect(mockManager.transaction).toHaveBeenCalled();
+    });
+
+    it('restores stock when cancelling an order', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }, { productId: 2, quantity: 1 }], status: Status.Processed });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [
+            { productId: 1, quantity: 2 },
+            { productId: 2, quantity: 1 },
+          ],
+        }),
+        save: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.updateStatus(10, Status.Canceled);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      // Check that product counts were incremented
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(2);
+      // Product 1: count was 5, ordered 2 -> should be 7
+      const product1Save = productSaves.find(call => call[1].id === 1);
+      expect(product1Save).toBeDefined();
+      expect(product1Save[1].count).toBe(7);
+      // Product 2: count was 5, ordered 1 -> should be 6
+      const product2Save = productSaves.find(call => call[1].id === 2);
+      expect(product2Save).toBeDefined();
+      expect(product2Save[1].count).toBe(6);
+    });
+
+    it('does not restore stock when cancelling an already cancelled order', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Canceled });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Canceled,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.updateStatus(10, Status.Canceled);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(0);
+    });
+
+    it('decrements stock when transitioning from Canceled to another status', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Canceled });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Canceled,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.updateStatus(10, Status.Processed);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      // Check that product count was decremented
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(1);
+      const product1Save = productSaves.find(call => call[1].id === 1);
+      expect(product1Save).toBeDefined();
+      // count was 5, ordered 2 -> should be 3 after decrement
+      expect(product1Save[1].count).toBe(3);
+    });
+
+    it('throws BadRequestException when transitioning from Canceled but insufficient stock', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 5 }], status: Status.Canceled });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 3, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Canceled,
+          items: [{ productId: 1, quantity: 5 }],
+        }),
+        save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.updateStatus(10, Status.Processed)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('does not restore stock when changing to non-cancelled status', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Processed });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(order => Promise.resolve(order)),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.updateStatus(10, Status.Sent);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(0);
+    });
+
+    it('skips product count restoration for products with count = null', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Processed });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: null, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        save: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.updateStatus(10, Status.Canceled);
+
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(0);
     });
   });
 
   describe('remove', () => {
     it('deletes an existing order', async () => {
-      const repository = { delete: jest.fn().mockResolvedValue({ affected: 1 }) };
+      const mockManager = {
+        save: jest.fn(),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [], status: Status.Processed });
+          }
+          return Promise.resolve({ id: options.where.id, count: 10, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [],
+        }),
+        delete: jest.fn(),
+        manager: mockManager,
+      };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await expect(service.remove(10)).resolves.toBe('Замовлення було успішно видалено');
-      expect(repository.delete).toHaveBeenCalledWith(10);
+      expect(mockManager.delete).toHaveBeenCalledWith(OrderEntity, 10);
     });
 
     it('throws NotFound for a missing order', async () => {
-      const repository = { delete: jest.fn().mockResolvedValue({ affected: 0 }) };
+      const mockManager = {
+        save: jest.fn(),
+        findOne: jest.fn().mockResolvedValue(null),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue(null),
+        delete: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await expect(service.remove(99)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('restores stock before deleting the order', async () => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }, { productId: 2, quantity: 3 }], status: Status.Processed });
+          }
+          if (entity === ProductEntity || (entity && entity.name === 'ProductEntity')) {
+            return Promise.resolve({ id: options.where.id, count: 3, status: 'active' });
+          }
+          return Promise.resolve({ id: options.where.id, items: [], user: { id: 3 } });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Processed,
+          items: [
+            { productId: 1, quantity: 2 },
+            { productId: 2, quantity: 3 },
+          ],
+        }),
+        delete: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.remove(10);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      expect(mockManager.delete).toHaveBeenCalledWith(OrderEntity, 10);
+      // Check that product counts were incremented
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(2);
+      // Product 1: count was 3, ordered 2 -> should be 5
+      const product1Save = productSaves.find(call => call[1].id === 1);
+      expect(product1Save).toBeDefined();
+      expect(product1Save[1].count).toBe(5);
+      // Product 2: count was 3, ordered 3 -> should be 6
+      const product2Save = productSaves.find(call => call[1].id === 2);
+      expect(product2Save).toBeDefined();
+      expect(product2Save[1].count).toBe(6);
+    });
+
+    it('does not restore stock when removing an already cancelled order', async () => {
+      const mockManager = {
+        save: jest.fn(),
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve({ id: options.where.id, items: [{ productId: 1, quantity: 2 }], status: Status.Canceled });
+          }
+          return Promise.resolve({ id: options.where.id, count: 3, status: 'active' });
+        }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 10,
+          status: Status.Canceled,
+          items: [{ productId: 1, quantity: 2 }],
+        }),
+        delete: jest.fn(),
+        manager: mockManager,
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+
+      await service.remove(10);
+
+      expect(mockManager.transaction).toHaveBeenCalled();
+      const productSaves = mockManager.save.mock.calls.filter(
+        call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
+      );
+      expect(productSaves.length).toBe(0);
+    });
+
+    it('throws NotFound when order not found during remove', async () => {
+      const mockManager = {
+        save: jest.fn(),
+        findOne: jest.fn(),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+        delete: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue(null),
+        delete: jest.fn(),
+        manager: mockManager,
+      };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await expect(service.remove(99)).rejects.toBeInstanceOf(NotFoundException);
