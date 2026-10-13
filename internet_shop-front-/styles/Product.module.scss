@@ -61,6 +61,7 @@
     max-height: 500px;
     padding: 0;
     width: 100%;
+    margin: 0;
 
     .picture {
       margin: 0;
@@ -68,6 +69,8 @@
       height: 500px;
       max-width: 400px;
       max-height: 500px;
+      flex: 0 0 400px;
+      object-fit: cover;
     }
   }
 
@@ -83,11 +86,16 @@
   }
 
   .wrapper_picture {
+    margin: 0;
+
     .picture {
       width: 100%;
       height: auto;
       max-width: 100%;
       max-height: none;
+      flex: 0 0 100%;
+      object-fit: cover;
+      aspect-ratio: 4/5;
     }
   }
 }
