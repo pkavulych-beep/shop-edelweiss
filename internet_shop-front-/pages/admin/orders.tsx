@@ -16,11 +16,11 @@ import TableRow from '@mui/material/TableRow';
 import { MainLayout } from '../../layouts/MainLayout';
 import { useAppSelector } from '../../redux/hooks';
 import { Role } from '../../redux/Types/ProductType';
-import { Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
+import { Status } from '../../redux/Types/orderType';
 import { Api } from '../../api/Api';
 import { OrdersPage } from '../../api/OrderApi';
 import { formatPhone } from '../../utils/phone';
-import { statusColor, paymentStatusColor, paymentStatusLabel, getPaymentChipLabel, getPaymentChipColor, isCardUnpaid } from '../../components/MyOrders/MyOrders';
+import { statusColor, getPaymentChipLabel, getPaymentChipColor, isCardUnpaid } from '../../components/MyOrders/MyOrders';
 
 const LIMIT = 20;
 

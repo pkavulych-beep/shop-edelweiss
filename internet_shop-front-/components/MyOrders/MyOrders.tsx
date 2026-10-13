@@ -38,14 +38,19 @@ export const paymentStatusLabel: Record<PaymentStatus, string> = {
 // Допоміжні функції для відображення статусу оплати
 export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): string => {
   if (paymentMethod === PaymentMethod.Card) {
-    return paymentStatusLabel[paymentStatus];
+    // CARD-замовлення лишається NOT_REQUIRED, якщо інвойс не створився: оплати ще не було
+    return paymentStatus === PaymentStatus.NotRequired
+      ? paymentStatusLabel[PaymentStatus.Pending]
+      : paymentStatusLabel[paymentStatus];
   }
   return paymentStatusLabel[PaymentStatus.NotRequired];
 };
 
 export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): ChipProps['color'] => {
   if (paymentMethod === PaymentMethod.Card) {
-    return paymentStatusColor[paymentStatus];
+    return paymentStatus === PaymentStatus.NotRequired
+      ? paymentStatusColor[PaymentStatus.Pending]
+      : paymentStatusColor[paymentStatus];
   }
   return paymentStatusColor[PaymentStatus.NotRequired];
 };

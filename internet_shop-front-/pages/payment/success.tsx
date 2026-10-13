@@ -10,8 +10,8 @@ import Link from 'next/link';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import { MainLayout } from '../../layouts/MainLayout';
 import { Api } from '../../api/Api';
-import { PaymentStatus, PaymentMethod } from '../../redux/Types/orderType';
-import { paymentStatusLabel, getPaymentChipLabel, getPaymentChipColor, isCardUnpaid } from '../../components/MyOrders/MyOrders';
+import { PaymentStatus, PaymentMethod, Status } from '../../redux/Types/orderType';
+import { getPaymentChipLabel, isCardUnpaid } from '../../components/MyOrders/MyOrders';
 
 export const PaymentSuccess: NextPage = () => {
   const router = useRouter();
@@ -21,7 +21,12 @@ export const PaymentSuccess: NextPage = () => {
 
   const [loading, setLoading] = useState(validId);
   const [error, setError] = useState<string | null>(validId ? null : 'Не знайдено або невірний ідентифікатор замовлення');
-  const [order, setOrder] = useState<{ id: number; paymentStatus: PaymentStatus; paymentMethod: PaymentMethod } | null>(null);
+  const [order, setOrder] = useState<{
+    id: number;
+    status: Status;
+    paymentStatus: PaymentStatus;
+    paymentMethod: PaymentMethod;
+  } | null>(null);
 
   useEffect(() => {
     if (!validId) return;
@@ -30,7 +35,12 @@ export const PaymentSuccess: NextPage = () => {
       .orders.findById(id)
       .then((data) => {
         if (!cancelled) {
-          setOrder({ id: data.id, paymentStatus: data.paymentStatus, paymentMethod: data.paymentMethod });
+          setOrder({
+            id: data.id,
+            status: data.status,
+            paymentStatus: data.paymentStatus,
+            paymentMethod: data.paymentMethod,
+          });
         }
       })
       .catch(() => {
@@ -77,8 +87,11 @@ export const PaymentSuccess: NextPage = () => {
   }
 
   const isPaid = order?.paymentStatus === PaymentStatus.Paid;
-  const isCard = order?.paymentMethod === PaymentMethod.Card;
-  const showRetry = isCard && order?.paymentStatus !== PaymentStatus.Paid && order?.paymentStatus !== PaymentStatus.Refunded;
+  // Скасоване замовлення бек оплатити не дасть
+  const showRetry =
+    !!order &&
+    order.status !== Status.Canceled &&
+    isCardUnpaid(order.paymentMethod, order.paymentStatus);
 
   const handleRetryPayment = async () => {
     if (!order) return;
@@ -91,7 +104,7 @@ export const PaymentSuccess: NextPage = () => {
         .trim()
         .replace(/\.$/, '');
       setError(
-        `Замовлення №${order.id} створено, але не вдалося перейти до оплати.` +
+        'Не вдалося перейти до оплати.' +
           (details ? ` ${details}.` : '') +
           ' Спробуйте пізніше.'
       );
@@ -116,7 +129,7 @@ export const PaymentSuccess: NextPage = () => {
         ) : (
           <>
             <Alert severity="warning" sx={{ mb: 3 }}>
-              Оплата ще не підтверджена. Статус: {order ? paymentStatusLabel[order.paymentStatus] : 'невідомо'}.
+              Оплата ще не підтверджена. Статус: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus) : 'невідомо'}.
             </Alert>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
               Якщо ви оплатили замовлення, статус оновиться протягом декілька хвилин.
@@ -129,7 +142,7 @@ export const PaymentSuccess: NextPage = () => {
               Мої замовлення
             </Button>
           </Link>
-          {showRetry && order && (
+          {showRetry && (
             <Button variant="outlined" size="large" onClick={handleRetryPayment}>
               Повторити оплату
             </Button>

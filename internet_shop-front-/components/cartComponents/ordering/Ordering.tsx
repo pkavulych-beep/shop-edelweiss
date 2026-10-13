@@ -54,18 +54,12 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
 
   const [cityName, setCity] = useState('');
   const [department, setDepartment] = useState('');
-  const [paymentMethod, setPaymentMethodState] = useState<'COD' | 'CARD'>('COD');
-  const paymentMethodRef = useRef<'COD' | 'CARD'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'CARD'>('COD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const orderIdRef = useRef<number | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
-
-  const setPaymentMethod = (value: 'COD' | 'CARD') => {
-    setPaymentMethodState(value);
-    paymentMethodRef.current = value;
-  };
 
   useEffect(() => {
     return () => {
@@ -93,7 +87,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
         comment: '',
       }}
       validationSchema={ValidateOrder}
-      onSubmit={async (values, { setSubmitting }) => {
+      onSubmit={async (values) => {
         changeLoading(true);
         changeError(null);
         let redirecting = false;
@@ -104,7 +98,6 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               saved?.message ||
                 'Не вдалося зберегти контактні дані. Спробуйте ще раз.'
             );
-            setSubmitting(false);
             return;
           }
 
@@ -117,7 +110,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               items,
               cityName,
               department,
-              paymentMethod: paymentMethodRef.current,
+              paymentMethod,
             });
             orderId = order.id;
             orderIdRef.current = orderId;
@@ -126,7 +119,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             }
           }
 
-          if (paymentMethodRef.current === 'COD') {
+          if (paymentMethod === 'COD') {
             await dispatch(cleanTheBasket(id));
             router.push('/orders');
             return;
@@ -165,7 +158,6 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
           if (!redirecting) {
             changeLoading(false);
           }
-          // Formik сам викликає setSubmitting(false) після завершення async onSubmit
         }
       }}
     >

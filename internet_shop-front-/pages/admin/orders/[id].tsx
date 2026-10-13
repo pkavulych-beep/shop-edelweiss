@@ -19,10 +19,10 @@ import TableRow from '@mui/material/TableRow';
 import { MainLayout } from '../../../layouts/MainLayout';
 import { useAppSelector } from '../../../redux/hooks';
 import { Role } from '../../../redux/Types/ProductType';
-import { Order, Status, PaymentMethod, PaymentStatus } from '../../../redux/Types/orderType';
+import { Order, Status } from '../../../redux/Types/orderType';
 import { Api } from '../../../api/Api';
 import { formatPhone } from '../../../utils/phone';
-import { statusColor, paymentStatusColor, paymentStatusLabel, getPaymentChipLabel, getPaymentChipColor } from '../../../components/MyOrders/MyOrders';
+import { statusColor, getPaymentChipLabel, getPaymentChipColor } from '../../../components/MyOrders/MyOrders';
 
 const sectionSx = {
   border: '1px solid',
