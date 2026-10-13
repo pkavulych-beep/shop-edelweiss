@@ -39,7 +39,9 @@ const BottomNav: React.FC = () => {
         const isActive =
           item.href === '/'
             ? router.pathname === '/'
-            : router.pathname.startsWith(item.href.replace(/\/[^/]+$/, ''));
+            : item.href === '/profile'
+              ? router.pathname === '/profile' || router.pathname === '/orders'
+              : router.pathname.startsWith('/productsList');
         const Icon = item.icon;
 
         return (
