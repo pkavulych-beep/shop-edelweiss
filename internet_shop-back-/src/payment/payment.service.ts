@@ -55,7 +55,9 @@ export class PaymentService {
       amount,
       ccy: 980,
       webHookUrl: `${baseUrl}payment/webhook`,
-      redirectUrl: `${frontendUrl}/order/${orderId}`,
+      // FRONTEND_URL, як і BASE_URL, закінчується слешем: без подвійного слеша
+      // ведемо на наявну сторінку зі списком замовлень.
+      redirectUrl: `${frontendUrl}orders`,
       reference: String(orderId),
     };
 
@@ -87,38 +89,47 @@ export class PaymentService {
       throw new NotFoundException('Платіж не знайдено');
     }
 
+    if (paymentLog.status === PaymentStatus.Refunded) {
+      throw new BadRequestException('Платіж уже повністю повернуто');
+    }
+
     if (paymentLog.status !== PaymentStatus.Paid) {
       throw new BadRequestException('Повернути кошти можна лише для оплаченого платежу');
     }
 
-    const refundAmount = amount ?? paymentLog.amount;
-    if (refundAmount > paymentLog.amount) {
-      throw new BadRequestException('Сума повернення перевищує суму платежу');
+    // Повернення враховують те, що вже повернуто: два часткові по 50% разом
+    // дають повне повернення, а не тихо «з'їдають» більше за оплату.
+    const alreadyRefunded = Number(paymentLog.rawPayload?.refundedAmount) || 0;
+    const remaining = paymentLog.amount - alreadyRefunded;
+    // Повне повернення (amount не задано) повертає лише залишок, а не всю суму.
+    const refundAmount = amount ?? remaining;
+
+    if (refundAmount > remaining) {
+      throw new BadRequestException('Сума повернення перевищує залишок платежу');
     }
 
-    await this.paymentProvider.refund({ invoiceId, amount });
+    await this.paymentProvider.refund({ invoiceId, amount: refundAmount });
 
-    // Часткове повернення не робить платіж повністю поверненим: статус
-    // лишається PAID, а повернута сума накопичується в журналі.
-    if (refundAmount < paymentLog.amount) {
-      const alreadyRefunded = Number(paymentLog.rawPayload?.refundedAmount) || 0;
-      paymentLog.rawPayload = {
-        ...paymentLog.rawPayload,
-        refundedAmount: alreadyRefunded + refundAmount,
-      };
-      await this.paymentRepository.save(paymentLog);
-      return;
+    const totalRefunded = alreadyRefunded + refundAmount;
+    const fullyRefunded = totalRefunded >= paymentLog.amount;
+
+    paymentLog.rawPayload = {
+      ...paymentLog.rawPayload,
+      refundedAmount: totalRefunded,
+    };
+    if (fullyRefunded) {
+      paymentLog.status = PaymentStatus.Refunded;
     }
-
-    paymentLog.status = PaymentStatus.Refunded;
     await this.paymentRepository.save(paymentLog);
 
-    const order = await this.orderRepository.findOne({
-      where: { id: paymentLog.orderId },
-    });
-    if (order) {
-      order.paymentStatus = PaymentStatus.Refunded;
-      await this.orderRepository.save(order);
+    if (fullyRefunded) {
+      const order = await this.orderRepository.findOne({
+        where: { id: paymentLog.orderId },
+      });
+      if (order) {
+        order.paymentStatus = PaymentStatus.Refunded;
+        await this.orderRepository.save(order);
+      }
     }
   }
 }

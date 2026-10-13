@@ -41,7 +41,7 @@ describe('PaymentService', () => {
       findOneForUser: jest.fn().mockResolvedValue({ ...mockOrder }),
     };
     process.env.BASE_URL = 'http://localhost:7777/';
-    process.env.FRONTEND_URL = 'http://localhost:3000';
+    process.env.FRONTEND_URL = 'http://localhost:3000/';
     paymentProvider = {
       createInvoice: jest.fn().mockResolvedValue({
         invoiceId: 'mono-invoice-123',
@@ -94,6 +94,14 @@ describe('PaymentService', () => {
       const createInvoiceCall = paymentProvider.createInvoice.mock.calls[0][0] as CreateInvoiceInput;
       expect(createInvoiceCall.amount).toBe(150000);
       expect(createInvoiceCall.ccy).toBe(980);
+    });
+
+    it('redirects to the existing orders page without a double slash', async () => {
+      await service.createInvoice(3, 10);
+
+      const createInvoiceCall = paymentProvider.createInvoice.mock.calls[0][0] as CreateInvoiceInput;
+      expect(createInvoiceCall.redirectUrl).toBe('http://localhost:3000/orders');
+      expect(createInvoiceCall.webHookUrl).toBe('http://localhost:7777/payment/webhook');
     });
 
     it('throws ForbiddenException when another user tries to create invoice', async () => {
@@ -169,12 +177,16 @@ describe('PaymentService', () => {
 
       await service.refund('mono-invoice-123');
 
+      // Для повного повернення провайдеру передається залишок (тут — уся сума).
       expect(paymentProvider.refund).toHaveBeenCalledWith({
         invoiceId: 'mono-invoice-123',
-        amount: undefined,
+        amount: 150000,
       });
       expect(paymentRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: PaymentStatus.Refunded }),
+        expect.objectContaining({
+          status: PaymentStatus.Refunded,
+          rawPayload: expect.objectContaining({ refundedAmount: 150000 }),
+        }),
       );
       expect(orderRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ paymentStatus: PaymentStatus.Refunded }),
@@ -199,10 +211,22 @@ describe('PaymentService', () => {
       expect(paymentProvider.refund).not.toHaveBeenCalled();
     });
 
-    it('rejects a refund larger than the payment amount', async () => {
+    it('rejects a refund larger than the remaining amount', async () => {
       paymentRepository.findOne.mockResolvedValueOnce(paidLog());
 
       await expect(service.refund('mono-invoice-123', 200000)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(paymentProvider.refund).not.toHaveBeenCalled();
+    });
+
+    it('rejects a partial refund that exceeds what is left after earlier refunds', async () => {
+      paymentRepository.findOne.mockResolvedValueOnce({
+        ...paidLog(),
+        rawPayload: { amount: 150000, ccy: 980, refundedAmount: 100000 },
+      });
+
+      await expect(service.refund('mono-invoice-123', 100000)).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(paymentProvider.refund).not.toHaveBeenCalled();
@@ -228,6 +252,48 @@ describe('PaymentService', () => {
         }),
       );
       expect(orderRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('marks the payment REFUNDED once two partial refunds add up to the full amount', async () => {
+      paymentRepository.findOne.mockResolvedValueOnce(paidLog());
+      orderRepository.findOne.mockResolvedValueOnce({
+        ...mockOrder,
+        paymentStatus: PaymentStatus.Paid,
+      });
+      await service.refund('mono-invoice-123', 75000);
+
+      expect(paymentRepository.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: PaymentStatus.Paid,
+          rawPayload: expect.objectContaining({ refundedAmount: 75000 }),
+        }),
+      );
+      expect(orderRepository.save).not.toHaveBeenCalled();
+
+      // Друге повернення бачить уже повернуті 75000 і повертає лише залишок.
+      paymentRepository.findOne.mockResolvedValueOnce({
+        ...paidLog(),
+        rawPayload: { amount: 150000, ccy: 980, refundedAmount: 75000 },
+      });
+      orderRepository.findOne.mockResolvedValueOnce({
+        ...mockOrder,
+        paymentStatus: PaymentStatus.Paid,
+      });
+      await service.refund('mono-invoice-123');
+
+      expect(paymentProvider.refund).toHaveBeenLastCalledWith({
+        invoiceId: 'mono-invoice-123',
+        amount: 75000,
+      });
+      expect(paymentRepository.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: PaymentStatus.Refunded,
+          rawPayload: expect.objectContaining({ refundedAmount: 150000 }),
+        }),
+      );
+      expect(orderRepository.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({ paymentStatus: PaymentStatus.Refunded }),
+      );
     });
   });
 });
