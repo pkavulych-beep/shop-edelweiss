@@ -7,8 +7,8 @@
 //   PR behind main / no CI    → update its branch from main                   → CI runs
 //   PR conflicts / CI red     → hand it back to its author, or hire a fixer   → new commits
 //   PR green, no verdict      → hire the reviewer (one at a time)             → verdict comment
-//   verdict "changes"         → hand it back for fixes, then review again (a limited number of rounds)
-//   verdict "approve"         → merge, unless it touches protected paths or is too big
+//   verdict "changes"         → hand it back for fixes, then review again; the last round's fixes are escalateTo's
+//   verdict "approve"         → merge, unless it touches protected paths or is too big: then a person's `merge-ok`
 //   every few merges          → hire QA, who tries them in a browser          → bug issues and a report
 // The queue is issues labelled `agent`, plus our own issues with a priority it takes on its own (P0–P3);
 // `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
@@ -60,8 +60,10 @@ const FREE_LIMIT_RETRY = /free usage exceeded[^\n]*retrying in/i;
 // Claude Code's limits counted over a week: their reset can be up to a day away even when it shows only the time.
 const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-// Generated files: their lines don't count towards a pull request's size.
+// Generated files and tests: their lines don't count towards a pull request's size. Tests only make a change safer,
+// so they shouldn't be what sends it to a person; risky code goes to one by merge.protectedPaths instead.
 const LOCK_FILE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml)$/;
+const TEST_FILE = /\.(?:spec|test|e2e-spec)\.[cm]?[jt]sx?$|(?:^|\/)(?:test|tests|__tests__)\//;
 const FINISHED = new Set(['idle', 'done', 'exited', 'offline']);
 const MINUTE = 60_000;
 
@@ -465,13 +467,13 @@ function mergeBlockers(pr) {
   if (touched.length) why.push(`змінює захищені файли (${touched.join(', ')})`);
   const files = pr.files ?? [];
   const size = files.length
-    ? files.filter((f) => !LOCK_FILE.test(f.path)).reduce((n, f) => n + (f.additions ?? 0) + (f.deletions ?? 0), 0)
+    ? files.filter((f) => !LOCK_FILE.test(f.path) && !TEST_FILE.test(f.path)).reduce((n, f) => n + (f.additions ?? 0) + (f.deletions ?? 0), 0)
     : pr.additions + pr.deletions;
-  if (size > config.merge.maxChangedLines) why.push(`завеликий: ${size} змінених рядків (без lock-файлів) при ліміті ${config.merge.maxChangedLines}`);
+  if (size > config.merge.maxChangedLines) why.push(`завеликий: ${size} змінених рядків (без lock-файлів і тестів) при ліміті ${config.merge.maxChangedLines}`);
   return why;
 }
 
-function needsHuman(kind, n, reason) {
+function needsHuman(kind, n, reason, next = 'Щоб повернути це в конвеєр, зніміть мітку `needs-human`.') {
   if (kind === 'qa') {
     // QA has no pull request or issue to put the label on: the notification is all there is.
     log(`QA → потрібна людина: ${reason}`);
@@ -483,7 +485,7 @@ function needsHuman(kind, n, reason) {
   const done = act(`${what} → needs-human: ${reason}`, () => {
     gh(cmd, 'edit', String(n), '--repo', REPO, '--add-label', 'needs-human');
     gh(cmd, 'comment', String(n), '--repo', REPO, '--body',
-      `🤖 Конвеєр зупинився: ${reason}.\n\nПотрібне рішення людини. Щоб повернути це в конвеєр, зніміть мітку \`needs-human\`.`);
+      `🤖 Конвеєр зупинився: ${reason}.\n\nПотрібне рішення людини. ${next}`);
   });
   if (done !== undefined) notify('Потрібна людина', `${what}: ${reason}`);
   const s = (kind === 'pr' ? state.prs : state.issues)[n];
@@ -699,7 +701,8 @@ function tick() {
     return (issue && config.reviewerFor?.[difficultyOf(issue)]) ?? config.reviewer;
   };
 
-  const requestFix = (pr, s, reasons, key) => {
+  /** Hands a PR back for fixes: to its author, or to a new agent of its coder, or of `escalateTo` (the last round). */
+  const requestFix = (pr, s, reasons, key, escalateTo) => {
     const n = pr.number;
     // The same request as last time: nothing was pushed since. The work may have been cut short (the office
     // restarted, the agent crashed), so it gets one more go, not counted as a round, before a person is asked.
@@ -713,11 +716,14 @@ function tick() {
       return;
     }
     // The office doesn't always know which pull request an OpenCode or Codex agent opened: its branch tells. The
-    // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog).
-    const author = again ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
+    // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog). So is a
+    // fix that goes to another coder.
+    const other = config.coders[escalateTo] && escalateTo !== s.coder ? escalateTo : undefined;
+    const author = again || other ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
-    const coder = config.coders[s.coder];
-    if (busyCoders.has(s.coder) || pausedFor(coder)) return; // waits for its coder
+    const name = other ?? s.coder;
+    const coder = config.coders[name];
+    if (busyCoders.has(name) || pausedFor(coder)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
     if (!databaseReady()) return; // nowhere to try the fix
     if (again) reasons = [...reasons, 'минулого разу PR після доопрацювання не змінився: доведи його до кінця й запуш'];
@@ -732,14 +738,14 @@ function tick() {
         worker = { name: author.name, id: author.id, scrollFrom: terminalSize(author.id) };
       }
     } else {
-      worker = hire(coder, `кодера ${s.coder}`, `доопрацювати PR #${n} (${reasons.join(', ')})`, text);
+      worker = hire(coder, `кодера ${name}`, `доопрацювати PR #${n}${other ? " замість автора: останнє коло рев'ю" : ''} (${reasons.join(', ')})`, text);
     }
     if (!worker) return;
     if (again) s.fixRetried = key;
     else s.fixRounds = (s.fixRounds ?? 0) + 1;
     s.fixFor = key;
-    s.job = { kind: 'fix', coder: s.coder, provider: coder.provider, worker: worker.name, workerId: worker.id, scrollFrom: worker.scrollFrom, since: now };
-    busyCoders.add(s.coder);
+    s.job = { kind: 'fix', coder: name, provider: coder.provider, worker: worker.name, workerId: worker.id, scrollFrom: worker.scrollFrom, since: now };
+    busyCoders.add(name);
   };
 
   /** Hires the reviewer for a PR; true if it was hired. */
@@ -758,32 +764,69 @@ function tick() {
     return true;
   };
 
-  // Pull requests, oldest first. One merge a tick: it moves main, and branch protection then wants every other PR
-  // brought up to date before it merges, which the next tick sees and does.
+  // One merge a tick: it moves main, and branch protection then wants every other PR brought up to date before it
+  // merges, which the next tick sees and does.
   let mergedNow = false;
+
+  /** Brings a PR's branch up to date with main, which also starts CI on it. */
+  const updateBranch = (pr, s) => {
+    const why = pr.mergeStateStatus === 'BEHIND' ? 'відстає від main' : 'CI на ньому ще не запускався';
+    if (act(`PR #${pr.number}: підтягнути main у гілку (${why})`, () => gh('pr', 'update-branch', String(pr.number), '--repo', REPO)) !== undefined) {
+      s.updatedFor = pr.headRefOid;
+    }
+  };
+
+  /** Merges a PR; after three failed tries a person is asked. */
+  const merge = (pr, s, note = '') => {
+    // Run from outside the checkout, so gh doesn't try to delete local branches that worktrees hold.
+    const merged = act(`PR #${pr.number}: мерджимо в main («${pr.title}»)${note}`, () =>
+      run('gh', ['pr', 'merge', String(pr.number), '--repo', REPO, `--${config.merge.method}`, '--delete-branch'], { cwd: tmpdir() }));
+    if (merged !== undefined) mergedNow = true;
+    else if ((s.mergeFailures = (s.mergeFailures ?? 0) + 1) >= 3) {
+      needsHuman('pr', pr.number, 'не вдається змерджити: подробиці в лозі конвеєра');
+    }
+  };
+
+  // Pull requests, oldest first.
   for (const pr of [...pulls].sort((a, b) => a.number - b.number)) {
     const n = pr.number;
     const s = (state.prs[n] ??= {});
-    if (onHold(pr, s, PR_COUNTS) || s.job) continue;
+    const okByPerson = Boolean(config.merge.okLabel) && labelsOf(pr).includes(config.merge.okLabel);
+    if ((!okByPerson && onHold(pr, s, PR_COUNTS)) || s.job) continue;
     if (pr.mergeable === 'UNKNOWN') continue; // GitHub is still working it out
     const ci = ciState(pr);
     // A verdict still holds after main was merged into the branch, as long as nothing else was pushed.
     const v = latestVerdict(n);
     const current = v && onlyMainMergedSince(n, v.sha, pr.headRefOid);
 
+    // A person's `merge-ok` on an approved PR stands in for whatever held it (its size, protected files): it is brought
+    // up to date with main and merged once CI is green. It counts only for the commits the reviewer approved, and the
+    // agents have nothing more to do here: no approval, a conflict or red CI wait for the person.
+    if (okByPerson) {
+      if (!current || v.verdict !== 'approve' || pr.mergeable === 'CONFLICTING' || ci === 'failed' || ci === 'pending') continue;
+      if (pr.mergeStateStatus === 'BEHIND' || ci === 'none') {
+        if (s.updatedFor !== pr.headRefOid) updateBranch(pr, s);
+        continue;
+      }
+      if (config.merge.enabled && !mergedNow) merge(pr, s, `, бо людина поставила ${config.merge.okLabel}`);
+      continue;
+    }
+
     // Requested changes go back straight away, along with anything else that's wrong:
     // no point updating the branch or waiting for CI on code that is about to change.
     if (current && v.verdict === 'changes') {
       setReviewLabel(pr, 'changes');
-      if ((s.reviewRounds ?? 0) >= config.maxReviewRounds) {
-        needsHuman('pr', n, `рев'ю не пройдено після ${s.reviewRounds} кіл`);
+      const rounds = s.reviewRounds ?? 0;
+      if (rounds >= config.maxReviewRounds) {
+        needsHuman('pr', n, `рев'ю не пройдено після ${rounds} кіл`);
         continue;
       }
       if (s.fixFor !== `review@${v.sha}`) {
         const reasons = ["зауваження рев'ю (останній коментар із conveyor-review)"];
         if (pr.mergeable === 'CONFLICTING') reasons.push('конфлікт із main');
         if (ci === 'failed') reasons.push('CI червоний');
-        requestFix(pr, s, reasons, `review@${v.sha}`);
+        // The last round's fixes go to the strongest coder: the author's didn't get the PR through the rounds before.
+        requestFix(pr, s, reasons, `review@${v.sha}`, rounds >= config.maxReviewRounds - 1 ? config.escalateTo : undefined);
         continue;
       }
       // Fixed without touching the code: the answer is in the description or a comment, so the reviewer
@@ -798,10 +841,7 @@ function tick() {
         needsHuman('pr', n, 'CI не запускається на цьому PR');
         continue;
       }
-      const why = pr.mergeStateStatus === 'BEHIND' ? 'відстає від main' : 'CI на ньому ще не запускався';
-      if (act(`PR #${n}: підтягнути main у гілку (${why})`, () => gh('pr', 'update-branch', String(n), '--repo', REPO)) !== undefined) {
-        s.updatedFor = pr.headRefOid;
-      }
+      updateBranch(pr, s);
       continue;
     }
     if (ci === 'pending') continue;
@@ -816,16 +856,11 @@ function tick() {
       if (!config.merge.enabled || mergedNow) continue;
       const blockers = mergeBlockers(pr);
       if (blockers.length) {
-        needsHuman('pr', n, `рев'ю пройдено, але автоматично не мерджу: ${blockers.join('; ')}`);
+        needsHuman('pr', n, `рев'ю пройдено, але автоматично не мерджу: ${blockers.join('; ')}`,
+          config.merge.okLabel ? `Якщо PR можна мерджити, поставте мітку \`${config.merge.okLabel}\`: конвеєр сам підтягне main і змерджить, щойно CI позеленіє.` : undefined);
         continue;
       }
-      // Run from outside the checkout, so gh doesn't try to delete local branches that worktrees hold.
-      const merged = act(`PR #${n}: мерджимо в main («${pr.title}»)`, () =>
-        run('gh', ['pr', 'merge', String(n), '--repo', REPO, `--${config.merge.method}`, '--delete-branch'], { cwd: tmpdir() }));
-      if (merged !== undefined) mergedNow = true;
-      else if ((s.mergeFailures = (s.mergeFailures ?? 0) + 1) >= 3) {
-        needsHuman('pr', n, 'не вдається змерджити: подробиці в лозі конвеєра');
-      }
+      merge(pr, s);
       continue;
     }
     // The reviewer stopped without a verdict on this commit. Its work may have been cut short, so another one gets
