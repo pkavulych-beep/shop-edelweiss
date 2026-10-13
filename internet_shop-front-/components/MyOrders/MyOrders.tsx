@@ -35,6 +35,28 @@ export const paymentStatusLabel: Record<PaymentStatus, string> = {
   [PaymentStatus.Refunded]: 'Повернено',
 };
 
+// Допоміжні функції для відображення статусу оплати
+export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): string => {
+  if (paymentMethod === PaymentMethod.Card) {
+    return paymentStatusLabel[paymentStatus];
+  }
+  return paymentStatusLabel[PaymentStatus.NotRequired];
+};
+
+export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): ChipProps['color'] => {
+  if (paymentMethod === PaymentMethod.Card) {
+    return paymentStatusColor[paymentStatus];
+  }
+  return paymentStatusColor[PaymentStatus.NotRequired];
+};
+
+// Чи замовлення неоплачене карткою (для підсвітки в адмінці)
+export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): boolean => {
+  return paymentMethod === PaymentMethod.Card &&
+    paymentStatus !== PaymentStatus.Paid &&
+    paymentStatus !== PaymentStatus.Refunded;
+};
+
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString('uk-UA', {
     day: 'numeric',
@@ -74,16 +96,8 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         <Chip label={order.status} color={statusColor[order.status]} size="small" />
         <Chip
-          label={
-            order.paymentMethod === PaymentMethod.Card
-              ? paymentStatusLabel[order.paymentStatus]
-              : paymentStatusLabel[PaymentStatus.NotRequired]
-          }
-          color={
-            order.paymentMethod === PaymentMethod.Card
-              ? paymentStatusColor[order.paymentStatus]
-              : paymentStatusColor[PaymentStatus.NotRequired]
-          }
+          label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
+          color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
           size="small"
         />
       </Box>

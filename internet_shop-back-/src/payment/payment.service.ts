@@ -94,8 +94,9 @@ export class PaymentService {
       ccy: 980,
       webHookUrl: `${baseUrl}payment/webhook/mono`,
       // FRONTEND_URL, як і BASE_URL, закінчується слешем: без подвійного слеша
-      // ведемо на наявну сторінку зі списком замовлень.
-      redirectUrl: `${frontendUrl}orders`,
+      // ведемо на сторінку результату оплати з orderId, щоб вона могла прочитати
+      // статус з беку.
+      redirectUrl: `${frontendUrl}payment/success?orderId=${orderId}`,
       reference: String(orderId),
     };
 

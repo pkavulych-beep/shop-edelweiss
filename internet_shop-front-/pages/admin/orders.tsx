@@ -20,7 +20,7 @@ import { Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderTyp
 import { Api } from '../../api/Api';
 import { OrdersPage } from '../../api/OrderApi';
 import { formatPhone } from '../../utils/phone';
-import { statusColor, paymentStatusColor, paymentStatusLabel } from '../../components/MyOrders/MyOrders';
+import { statusColor, paymentStatusColor, paymentStatusLabel, getPaymentChipLabel, getPaymentChipColor, isCardUnpaid } from '../../components/MyOrders/MyOrders';
 
 const LIMIT = 20;
 
@@ -92,14 +92,14 @@ export default function AdminOrdersPage() {
             </TableHead>
             <TableBody>
               {orders.data.map(({ id, createdAt, user, total, status, paymentMethod, paymentStatus }) => {
-                const isCardPending = paymentMethod === PaymentMethod.Card && paymentStatus === PaymentStatus.Pending;
+                const isUnpaidCard = isCardUnpaid(paymentMethod, paymentStatus);
                 return (
                   <TableRow
                     key={id}
                     hover
                     sx={{
                       cursor: 'pointer',
-                      ...(isCardPending && { bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main', color: 'white' } }),
+                      ...(isUnpaidCard && { bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main', color: 'white' } }),
                     }}
                     onClick={() => openOrder(id)}
                   >
@@ -130,10 +130,10 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={paymentMethod === PaymentMethod.Card ? paymentStatusLabel[paymentStatus] : paymentStatusLabel[PaymentStatus.NotRequired]}
-                        color={paymentMethod === PaymentMethod.Card ? paymentStatusColor[paymentStatus] : paymentStatusColor[PaymentStatus.NotRequired]}
+                        label={getPaymentChipLabel(paymentMethod, paymentStatus)}
+                        color={getPaymentChipColor(paymentMethod, paymentStatus)}
                         size='small'
-                        sx={isCardPending && { fontWeight: 700 }}
+                        sx={isUnpaidCard && { fontWeight: 700 }}
                       />
                     </TableCell>
                   </TableRow>

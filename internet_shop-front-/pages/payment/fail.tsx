@@ -10,7 +10,8 @@ import Link from 'next/link';
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import { MainLayout } from '../../layouts/MainLayout';
 import { Api } from '../../api/Api';
-import { PaymentStatus } from '../../redux/Types/orderType';
+import { PaymentStatus, PaymentMethod } from '../../redux/Types/orderType';
+import { paymentStatusLabel, getPaymentChipLabel, getPaymentChipColor, isCardUnpaid } from '../../components/MyOrders/MyOrders';
 
 export const PaymentFail: NextPage = () => {
   const router = useRouter();
@@ -20,7 +21,7 @@ export const PaymentFail: NextPage = () => {
 
   const [loading, setLoading] = useState(validId);
   const [error, setError] = useState<string | null>(validId ? null : 'Не знайдено або невірний ідентифікатор замовлення');
-  const [order, setOrder] = useState<{ id: number; paymentStatus: PaymentStatus } | null>(null);
+  const [order, setOrder] = useState<{ id: number; paymentStatus: PaymentStatus; paymentMethod: PaymentMethod } | null>(null);
 
   useEffect(() => {
     if (!validId) return;
@@ -29,7 +30,7 @@ export const PaymentFail: NextPage = () => {
       .orders.findById(id)
       .then((data) => {
         if (!cancelled) {
-          setOrder({ id: data.id, paymentStatus: data.paymentStatus });
+          setOrder({ id: data.id, paymentStatus: data.paymentStatus, paymentMethod: data.paymentMethod });
         }
       })
       .catch(() => {
@@ -76,6 +77,26 @@ export const PaymentFail: NextPage = () => {
   }
 
   const isPaid = order?.paymentStatus === PaymentStatus.Paid;
+  const isCard = order?.paymentMethod === PaymentMethod.Card;
+  const showRetry = isCard && order?.paymentStatus !== PaymentStatus.Paid && order?.paymentStatus !== PaymentStatus.Refunded;
+
+  const handleRetryPayment = async () => {
+    if (!order) return;
+    try {
+      const { pageUrl } = await Api().payment.createInvoice(order.id);
+      window.location.href = pageUrl;
+    } catch (e) {
+      const message = e?.response?.data?.message;
+      const details = String(Array.isArray(message) ? message.join('. ') : message || '')
+        .trim()
+        .replace(/\.$/, '');
+      setError(
+        `Замовлення №${order.id} створено, але не вдалося перейти до оплати.` +
+          (details ? ` ${details}.` : '') +
+          ' Спробуйте пізніше.'
+      );
+    }
+  };
 
   return (
     <MainLayout title={isPaid ? 'Оплата успішна' : 'Оплата не пройшла'}>
@@ -101,7 +122,7 @@ export const PaymentFail: NextPage = () => {
               Оплата не пройшла
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-              Статус оплати: {order?.paymentStatus ?? 'невідомо'}.
+              Статус оплати: {order ? paymentStatusLabel[order.paymentStatus] : 'невідомо'}.
               Спробуйте ще раз або оберіть інший спосіб оплати.
             </Typography>
           </>
@@ -112,12 +133,10 @@ export const PaymentFail: NextPage = () => {
               Мої замовлення
             </Button>
           </Link>
-          {order && (
-            <Link href={`/cart`}>
-              <Button variant="contained" size="large">
-                Повторити оплату
-              </Button>
-            </Link>
+          {showRetry && order && (
+            <Button variant="contained" size="large" onClick={handleRetryPayment}>
+              Повторити оплату
+            </Button>
           )}
         </Box>
       </Box>

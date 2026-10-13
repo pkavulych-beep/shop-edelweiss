@@ -109,11 +109,11 @@ describe('PaymentService', () => {
       expect(createInvoiceCall.ccy).toBe(980);
     });
 
-    it('redirects to the existing orders page without a double slash', async () => {
+    it('redirects to the payment success page with orderId', async () => {
       await service.createInvoice(3, 10);
 
       const createInvoiceCall = paymentProvider.createInvoice.mock.calls[0][0] as CreateInvoiceInput;
-      expect(createInvoiceCall.redirectUrl).toBe('http://localhost:3000/orders');
+      expect(createInvoiceCall.redirectUrl).toBe('http://localhost:3000/payment/success?orderId=10');
       expect(createInvoiceCall.webHookUrl).toBe('http://localhost:7777/payment/webhook/mono');
     });
 
