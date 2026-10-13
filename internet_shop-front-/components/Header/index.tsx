@@ -77,7 +77,7 @@ export default function Header() {
           height: 80,
           justifyContent: 'center',
           transition: 'background-color 0.3s ease',
-          zIndex: 1300,
+          zIndex: (theme) => theme.zIndex.drawer - 1,
           boxShadow: scrolled ? '0 1px 0 rgba(0,0,0,0.04)' : 'none',
         }}
       >

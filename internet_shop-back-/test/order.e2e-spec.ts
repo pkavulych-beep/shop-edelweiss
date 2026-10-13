@@ -12,12 +12,9 @@ import { UserEntity } from '../src/user/entities/user.entity';
 import { OrderEntity } from '../src/order/entities/order.entity';
 import { OrderItemEntity } from '../src/order/entities/order-item.entity';
 import { RefreshTokenEntity } from '../src/auth/entities/refresh-token.entity';
-import { PhotoEntity } from '../src/photos/entities/photo.entity';
-import { QuickOrderEntity } from '../src/quick-order/entities/quick-order.entity';
-import { BasketItemEntity } from '../src/user/entities/basket-item.entity';
 import { ProductStatus } from '../src/product/entities/product.entity';
 import { Status } from '../src/order/statusEnum';
-import { DataSource, Like } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 function generatePhone(): string {
   return `38066${Date.now().toString().slice(-7)}`;
@@ -131,7 +128,6 @@ describe('Order flow (e2e)', () => {
 
     const userId = registerRes.body.userData.id;
     createdUserIds.push(userId);
-    const token = registerRes.body.token;
 
     // 2. POST /auth/login
     const loginRes = await request(httpServer)

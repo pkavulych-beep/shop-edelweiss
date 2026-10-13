@@ -53,8 +53,9 @@ jobs:
           cache: npm
           cache-dependency-path: internet_shop-back-/package-lock.json
       - run: npm ci
+      - run: npm run lint:check
       - run: npm run build
-      - run: npm test -- --passWithNoTests
+      - run: npm test
       - name: Smoke test (API starts, schema syncs, seed and login work)
         run: |
           npm run start:prod > api.log 2>&1 &

@@ -14,7 +14,7 @@
 // `manual` keeps an issue out of it. The priority says what goes first, the difficulty label (`hard`,
 // `medium`, `easy`) which coder takes it. Each coder does one task at a time, alongside the others, on
 // ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
-// pauses only the agents on that plan. Coders and QA run the shop on its database in Docker: when Docker
+// pauses only the agents on that plan, or, for OpenCode's free models, on that model. Coders and QA run the shop on its database in Docker: when Docker
 // Desktop is closed the conveyor opens it, and hires none of them until the database is up.
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
 // removing the label hands it back to the conveyor, with its counts reset. A macOS notification says
@@ -53,7 +53,10 @@ const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
 const DEPENDS = /^[\s*>-]*(?:залежить від|depends on|blocked by)[:\s](.*)$/gim;
 // What Claude Code and Codex print when a plan's usage window runs out (not their warnings that it's close).
 // Claude Code names the limit ("You've hit your session limit · resets 1:50am"), Codex doesn't ("hit your usage limit").
-const LIMIT_TEXT = /hit your (?:[\w']+ ){0,2}limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage/i;
+const LIMIT_TEXT = /hit your (?:[\w']+ ){0,2}limit|usage limit reached|limit reached\s*[·∙•|-]?\s*resets|out of extra usage|free usage exceeded/i;
+// OpenCode counting down to its own retry once a free model's daily limit ran out: "Free usage exceeded, subscribe to
+// Go [retrying in 2h 36m attempt #1]". It goes on by itself when the time comes.
+const FREE_LIMIT_RETRY = /free usage exceeded[^\n]*retrying in/i;
 // Claude Code's limits counted over a week: their reset can be up to a day away even when it shows only the time.
 const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -207,8 +210,8 @@ const hour24 = (hour, ampm) => (Number(hour) % 12) + (ampm.toUpperCase() === 'PM
 
 /**
  * When a usage limit lifts, if the message says: Codex's "try again at Nov 3rd, 2026 8:00 PM" or
- * "try again in 2 days 3 hours", Claude Code's "resets 3am" or "resets Oct 9, 9am". It can be in the past:
- * the message is an old one, and the limit has already lifted.
+ * "try again in 2 days 3 hours", OpenCode's "retrying in 2h 36m", Claude Code's "resets 3am" or "resets Oct 9, 9am".
+ * It can be in the past: the message is an old one, and the limit has already lifted.
  */
 function resetTime(text, now) {
   let m = /try again at ([a-z]{3})[a-z]* (\d{1,2})(?:st|nd|rd|th)?,? (\d{4}),? (\d{1,2}):(\d{2})\s*([ap]m)/i.exec(text);
@@ -217,6 +220,9 @@ function resetTime(text, now) {
   }
   m = /try again in ((?:\d+\s*(?:days?|hours?|hrs?|minutes?|mins?)[\s,]*(?:and\s*)?)+)/i.exec(text);
   if (m) return now + [...m[1].matchAll(/(\d+)\s*([dhm])/gi)].reduce((ms, [, n, unit]) => ms + Number(n) * { d: 1440, h: 60, m: 1 }[unit.toLowerCase()] * MINUTE, 0);
+  // OpenCode's countdown: the last one is the latest.
+  m = [...text.matchAll(/retrying in ((?:\d+\s*[dhms]\b\s*)+)/gi)].at(-1);
+  if (m) return now + [...m[1].matchAll(/(\d+)\s*([dhms])/gi)].reduce((ms, [, n, unit]) => ms + Number(n) * { d: 86400, h: 3600, m: 60, s: 1 }[unit.toLowerCase()] * 1000, 0);
   // The last one: an older message can still be on the screen above it.
   m = [...text.matchAll(/resets? (?:at |on )?(?:([a-z]{3})[a-z]* (\d{1,2}),? )?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/gi)].at(-1);
   if (m) {
@@ -244,10 +250,13 @@ function nextDay(time) {
   return at.getTime();
 }
 
-/** Whether a worker's terminal, from byte `from` on, says its plan's usage limit ran out, and until when if it says. */
+/**
+ * Whether a worker's terminal, from byte `from` on, says its plan's usage limit ran out, until when if it says, and
+ * whether the agent will go on by itself (OpenCode retries once its free limit lifts).
+ */
 function usageLimit(workerId, from) {
   const text = terminalTail(workerId, from);
-  return LIMIT_TEXT.test(text) ? { until: resetTime(text, Date.now()) } : null;
+  return LIMIT_TEXT.test(text) ? { until: resetTime(text, Date.now()), selfResumes: FREE_LIMIT_RETRY.test(text) } : null;
 }
 
 // ── Docker ───────────────────────────────────────────────────────────────────────────────────
@@ -302,6 +311,15 @@ const portsOf = (agent) => ({ backPort: agent.ports.back, frontPort: agent.ports
 /** How long to wait before waking agents that ran into `provider`'s usage limit. */
 const pauseMinutes = (provider) =>
   typeof config.limitPauseMinutes === 'number' ? config.limitPauseMinutes : config.limitPauseMinutes[provider] ?? 60;
+
+/** How long a job may wait for its agent's limit to lift before the agent goes home and the work goes back. */
+const releaseHours = (provider) =>
+  typeof config.releaseAfterHours === 'number' ? config.releaseAfterHours : config.releaseAfterHours[provider] ?? 12;
+
+/** Whom a usage limit holds back: a plan's limit holds every agent on it, while each OpenCode free model has its own. */
+const limitKeyOf = (agent) => (agent.provider === 'opencode' ? agent.model : agent.provider);
+/** The limit a job's agent runs into: its coder's, else its provider's (reviewers and QA). */
+const limitKeyOfJob = (job) => (config.coders[job.coder] ? limitKeyOf(config.coders[job.coder]) : job.provider ?? 'claude');
 
 const when = (time) => new Date(time).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -522,47 +540,54 @@ function tick() {
   const busyCoders = new Set();
   let reviewerBusy = false;
 
-  /** Tells the agent of a job that stopped on a usage limit to go on. True if it was told. */
+  /**
+   * Tells the agent of a job that stopped on a usage limit to go on. True if it was told. OpenCode goes on by itself,
+   * and the "Free limit reached" dialog it keeps open would take typed text as "subscribe", so it is told nothing.
+   */
   const wake = (job) => {
-    if (tell(job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${job.worker}`) === undefined) return false;
+    if (job.selfResumes) log(`ліміт відновився: ${job.worker} продовжить сам`);
+    else if (tell(job.worker, 'Ліміт використання мав відновитися. Продовжуй свою задачу з того місця, де зупинився.', `ліміт відновився: будимо ${job.worker}`) === undefined) return false;
     job.limited = false;
+    delete job.selfResumes;
     job.wokenAt = now; // `since` stays: QA counts what it filed from then on
     job.scrollFrom = terminalSize(job.workerId); // the old limit message stays on its screen
     return true;
   };
 
-  // Usage limits: each plan's window runs out on its own, so wait it out, then wake whoever stopped on it.
-  for (const [provider, until] of Object.entries(state.paused)) {
+  // Usage limits: each plan's (or free model's) window runs out on its own, so wait it out, then wake whoever stopped on it.
+  for (const [key, until] of Object.entries(state.paused)) {
     if (until > now) continue;
-    delete state.paused[provider];
+    delete state.paused[key];
     for (const s of [...Object.values(state.prs), ...Object.values(state.issues), state.qa]) {
-      if (s.job?.limited && (s.job.provider ?? 'claude') === provider && wake(s.job)) s.job.wokeFor = until; // the reset it woke after
+      if (s.job?.limited && limitKeyOfJob(s.job) === key && wake(s.job)) s.job.wokeFor = until; // the reset it woke after
     }
   }
-  const pausedFor = (provider) => (state.paused[provider] ?? 0) > now;
+  const pausedFor = (agent) => (state.paused[limitKeyOf(agent)] ?? 0) > now;
   // Coders and QA run the shop: before one of them is hired, its database must be up. Looked at once a tick, if needed.
   let dbUp;
   const databaseReady = () => (dbUp ??= databaseUp(now));
 
   /**
-   * A job's agent ran into its plan's usage limit: no more agents on that plan until it lifts. The job waits for
-   * its agent, unless that takes longer than releaseAfterHours: then the agent goes home and the work goes back,
-   * as if it never started. True while the job is held.
+   * A job's agent ran into its plan's usage limit: no more agents on that plan (or that free model) until it lifts.
+   * The job waits for its agent, unless that takes longer than releaseAfterHours: then the agent goes home and the
+   * work goes back, as if it never started, for another coder to take. True while the job is held.
    */
   const waitOutLimit = (s, kind, n, limit) => {
     const job = s.job;
     const provider = job.provider ?? 'claude';
+    const key = limitKeyOfJob(job);
     const until = limit.until > now ? limit.until : now + pauseMinutes(provider) * MINUTE;
-    state.paused[provider] = Math.max(state.paused[provider] ?? 0, until);
-    const release = until - now > config.releaseAfterHours * 60 * MINUTE;
+    state.paused[key] = Math.max(state.paused[key] ?? 0, until);
+    const release = until - now > releaseHours(provider) * 60 * MINUTE;
     const what = kind === 'qa' ? 'перевірка QA' : `${kind === 'pr' ? 'PR' : 'issue'} #${n}`;
-    log(`${job.worker} уперся в ліміт ${provider}: пауза для агентів ${provider} до ${when(until)}${release ? `, ${what} повертається в чергу` : ''}`);
-    notify('Пауза через ліміт', `${job.worker} уперся в ліміт ${provider}. Агентів ${provider} не наймаю до ${when(until)}`);
+    log(`${job.worker} уперся в ліміт ${key}: пауза для агентів ${key} до ${when(until)}${release ? `, ${what} повертається в чергу` : ''}`);
+    notify('Пауза через ліміт', `${job.worker} уперся в ліміт ${key}. Агентів ${key} не наймаю до ${when(until)}`);
     if (!release) {
       job.limited = true;
+      if (limit.selfResumes) job.selfResumes = true;
       return true;
     }
-    if (workers) sendHome([job.worker], `ліміт ${provider} до ${when(until)}`);
+    if (workers) sendHome([job.worker], `ліміт ${key} до ${when(until)}`);
     delete s.job;
     if (job.kind === 'code') s.checked = true; // not a failed attempt
     if (job.kind === 'fix') {
@@ -692,7 +717,7 @@ function tick() {
     const author = again ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
     const coder = config.coders[s.coder];
-    if (busyCoders.has(s.coder) || pausedFor(coder.provider)) return; // waits for its coder
+    if (busyCoders.has(s.coder) || pausedFor(coder)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
     if (!databaseReady()) return; // nowhere to try the fix
     if (again) reasons = [...reasons, 'минулого разу PR після доопрацювання не змінився: доведи його до кінця й запуш'];
@@ -720,7 +745,7 @@ function tick() {
   /** Hires the reviewer for a PR; true if it was hired. */
   const requestReview = (pr, s, again = false) => {
     const reviewer = reviewerOf(pr);
-    if (reviewerBusy || pausedFor(reviewer.provider)) return false;
+    if (reviewerBusy || pausedFor(reviewer)) return false;
     const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
     const title = `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
     const worker = hire(reviewer, "рев'юера", title, text, ['--no-worktree']);
@@ -822,7 +847,7 @@ function tick() {
   // qa.maxWaitHours does QA check what there is, so the last merges before the work stops get checked too.
   const unchecked = config.qa?.enabled && !qa.job ? mergedSinceQa() : [];
   const startQa = () => {
-    if (pausedFor(config.qa.provider) || !databaseReady()) return;
+    if (pausedFor(config.qa) || !databaseReady()) return;
     const batch = unchecked.slice(0, config.qa.everyMerges);
     const list = batch.map((p) => `#${p.number}`).join(', ');
     const prs = batch.map((p) => `- #${p.number} «${p.title}» (${p.url})`).join('\n');
@@ -853,7 +878,7 @@ function tick() {
   let started = 0;
   const claimed = new Set();
   for (const [name, coder] of Object.entries(config.coders)) {
-    if (busyCoders.has(name) || pausedFor(coder.provider) || inFlight + started >= config.maxOpenPullRequests) continue;
+    if (busyCoders.has(name) || pausedFor(coder) || inFlight + started >= config.maxOpenPullRequests) continue;
     // Several coders can take the same difficulty: each free one takes the most important issue it can.
     const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number));
     if (!next) continue;

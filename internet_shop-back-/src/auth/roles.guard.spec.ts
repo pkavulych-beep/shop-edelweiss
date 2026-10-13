@@ -9,9 +9,13 @@ const SECRET = 'test-secret';
 
 class AdminController {
   @Roles('ADMIN')
-  adminOnly() {}
+  adminOnly() {
+    // Заглушка: метод потрібен лише як об'єкт для перевірки гардона
+  }
 
-  open() {}
+  open() {
+    // Заглушка: обробник без @Roles — має пропускатися без перевірок
+  }
 }
 
 describe('RolesGuard', () => {

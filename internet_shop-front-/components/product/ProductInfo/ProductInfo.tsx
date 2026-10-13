@@ -130,7 +130,16 @@ const ProductInfo: FC<IProductInfo> = (props) => {
       )}
 
       <AdminWrapper>
-        <Box sx={{ mt: 3, display: 'flex', gap: 1 }}>
+        <Box
+          sx={{
+            mt: 3,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: 'stretch',
+            gap: 2,
+            width: '100%',
+          }}
+        >
           <DeleteProduct id={+id} />
           <UpdateProduct idProduct={+id} />
         </Box>

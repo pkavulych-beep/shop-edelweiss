@@ -32,6 +32,9 @@ const verdict = (v, sha = HEAD) => ({ 50: [{ author: { login: 'pkavulych-beep' }
 const later = Date.now() + 3600_000;
 const app = (number, i) => ({ number, title: `PR ${number}`, url: `u${number}`, mergedAt: `2026-10-05T1${Math.floor(i / 6)}:${String((i % 6) * 10).padStart(2, '0')}:00Z`, files: [{ path: 'internet_shop-front-/pages/x.tsx' }] });
 const CODEX_LIMIT = '■ You’ve hit your usage limit. To continue using Codex ... or try again at Nov 3rd, 2026 8:00 PM.\n› 1. Switch to gpt-6-luna\n';
+const freeLimit = (wait) => `   ⬝⬝⬝■■■■■ Free usage exceeded, subscribe to Go [retrying in ${wait} attempt #1]  esc interrupt\n`;
+const zenJob = (job = {}) => ({ issues: { 191: { job: { kind: 'code', coder: 'zen', provider: 'opencode', worker: 'Byte', workerId: 'w-z', since: 0, ...job } } } });
+const byte = (status) => ({ name: 'Byte', id: 'w-z', kind: 'agent', provider: 'opencode', status });
 // Claude Code's limit message, with the reset time as it prints it ("1:50am"); `minute` is that time as a timestamp.
 const NOW = Date.now();
 const MIN = 60_000;
@@ -51,30 +54,33 @@ const failedReport = { number: 60, state: 'OPEN', createdAt: '2026-10-05T18:51:4
 const HIRE = (provider, model) => `^office-workers hire --provider ${provider} --model ${model.replace(/\//g, '\\/')} `;
 const scenarios = [
   // ── Coders by difficulty ──
-  { name: 'easy, усі вільні → Zen: opencode/big-pickle без --effort, порти 7780/3003',
+  { name: 'easy, усі вільні → LongCat: opencode/longcat-2.5-preview-free без --effort, порти 7782/3006',
     fx: { workers: [me], issues: [issue(30, ['easy', 'P1-high'])], state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30 <<.*бек 7780, фронт 3003, база \`Edelweiss_zen\``], not: ['--effort  ', 'opencode.*--effort'] },
-  { name: 'medium P0 і easy → Codex бере medium, Zen бере easy',
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 30 <<.*бек 7782, фронт 3006, база \`Edelweiss_longcat\``], not: ['--effort  ', 'opencode.*--effort'] },
+  { name: 'easy, LongCat на паузі через ліміт → бере Zen на портах 7780/3003',
+    fx: { workers: [me], issues: [issue(30, ['easy', 'P1-high'])], state: st({ paused: { 'opencode/longcat-2.5-preview-free': later } }) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30 <<.*бек 7780, фронт 3003, база \`Edelweiss_zen\``], not: ['longcat'] },
+  { name: 'medium P0 і easy → Codex бере medium, LongCat бере easy',
     fx: { workers: [me], issues: [issue(31, ['medium', 'P0-critical']), issue(30, ['easy', 'P1-high'])], state: st() },
-    want: [`${HIRE('codex', 'gpt-5.6-terra')}--effort high --json --issue 31`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`] },
+    want: [`${HIRE('codex', 'gpt-5.6-terra')}--effort high --json --issue 31`, `${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 30`] },
   { name: 'два medium, Codex на паузі → Zen бере P0',
     fx: { workers: [me], issues: [issue(31, ['medium', 'P2-medium']), issue(33, ['medium', 'P0-critical'])], state: st({ paused: { codex: later } }) },
     want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 33`], not: ['--provider codex'] },
-  { name: 'hard, medium, easy, Codex на паузі → Opus hard, Zen medium P1, Nemotron easy P2',
+  { name: 'hard, medium, easy, Codex на паузі → Opus hard, LongCat easy, Zen medium',
     fx: { workers: [me], issues: [issue(32, ['hard']), issue(31, ['medium', 'P1-high']), issue(30, ['easy', 'P2-medium'])], state: st({ paused: { codex: later } }) },
-    want: [`${HIRE('claude', 'opus')}--effort high --json --issue 32`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 31`, `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 30`] },
-  { name: 'два easy → Zen бере важливіше, Nemotron друге, на портах 7781/3005',
-    fx: { workers: [me], issues: [issue(30, ['easy', 'P2-medium']), issue(34, ['easy', 'P1-high'])], state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 34`, `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 30 <<.*бек 7781, фронт 3005, база \`Edelweiss_nemotron\``] },
-  { name: 'P0 «Залежить від #90», а #90 відкрите → Zen бере P2, яке ні від чого не залежить',
+    want: [`${HIRE('claude', 'opus')}--effort high --json --issue 32`, `${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 30`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 31`], not: ['nemotron'] },
+  { name: 'три easy → LongCat бере найважливіше, далі Zen, а Nemotron — на портах 7781/3005',
+    fx: { workers: [me], issues: [issue(30, ['easy', 'P2-medium']), issue(34, ['easy', 'P1-high']), issue(37, ['easy', 'P3-low'])], state: st() },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 34`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`, `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 37 <<.*бек 7781, фронт 3005, база \`Edelweiss_nemotron\``] },
+  { name: 'P0 «Залежить від #90», а #90 відкрите → LongCat бере P2, яке ні від чого не залежить',
     fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: 'Що зробити…\n\nЗалежить від #90.' }, issue(92, ['easy', 'P2-medium']), { ...issue(90, ['hard', 'P1-high']), labels: [{ name: 'manual' }] }], state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 92`], not: ['--issue 91'] },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 92`], not: ['--issue 91'] },
   { name: '«Залежить від #90, #93», обидва вже закриті → бере',
     fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: '- Залежить від #90, #93' }], state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 91`] },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 91`] },
   { name: 'своє P3 і своє P2 без agent → обидва в черзі, P2 першим',
     fx: { workers: [me], issues: [{ ...issue(35, []), labels: [{ name: 'easy' }, { name: 'P3-low' }] }, { ...issue(36, []), labels: [{ name: 'easy' }, { name: 'P2-medium' }] }], state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 36`, `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 35`] },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 36`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 35`] },
   { name: 'чуже issue з P0 без agent → не брати', fx: { workers: [me], issues: [{ ...issue(40, ['P0-critical'], 'stranger'), labels: [{ name: 'P0-critical' }] }], state: st() }, not: ['hire'] },
   { name: 'issue з manual → не брати', fx: { workers: [me], issues: [issue(41, ['manual', 'easy'])], state: st() }, not: ['hire'] },
   { name: 'кодер закінчив, а його PR (знайдено за гілкою) без «Closes #70» → дописати, не рахувати невдачею, нікого більше не наймати',
@@ -88,7 +94,7 @@ const scenarios = [
     not: ['^gh pr edit'], state: (s) => s.issues[70].failures === 1 },
   // ── Pull requests ──
   { name: 'червоний CI у PR від Zen → повернути автору з портами 7780/3003',
-    fx: { workers: [me, { name: 'Zed', id: 'w-z', kind: 'agent', provider: 'opencode', status: 'idle', pr: { number: 50 } }], pulls: [pr({ statusCheckRollup: red })], issues: [], state: st() },
+    fx: { workers: [me, { name: 'Zed', id: 'w-z', kind: 'agent', provider: 'opencode', model: 'opencode/big-pickle', status: 'idle', pr: { number: 50 } }], pulls: [pr({ statusCheckRollup: red })], issues: [], state: st() },
     want: ['^office-workers tell Zed <<.*бек 7780, фронт 3003'] },
   { name: 'червоний CI у PR, issue якого робив Nemotron → автору з портами Nemotron 7781/3005, а не Zen',
     fx: { workers: [me, { name: 'Nemo', id: 'w-n', kind: 'agent', provider: 'opencode', status: 'idle', pr: { number: 50 } }], pulls: [pr({ statusCheckRollup: red })], issues: [issue(70, ['easy'])],
@@ -190,6 +196,16 @@ const scenarios = [
   { name: 'після цього знову стоїть на тому ж старому повідомленні → без паузи й без другого прохання, задача закінчена',
     fx: { workers: [me, cosmo('idle')], issues: [], scrollback: { 'w-c': claudeLimit(NOW - 5 * MIN) }, state: st(coding({ nudgedFor: minute(NOW - 5 * MIN) })) },
     not: ['^office-workers tell'], state: (s) => !s.paused.claude && !s.issues[94]?.job },
+  { name: 'Zen: «Free usage exceeded … retrying in 2h 36m» → пауза лише для big-pickle, агент додому, issue бере Nemotron',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], scrollback: { 'w-z': freeLimit('2h 36m') }, state: st({ paused: { codex: later }, ...zenJob() }) },
+    want: ['^office-workers home Byte ', `${HIRE('opencode', 'opencode/nemotron-3-ultra-free')}--json --issue 191`], not: ['--model opencode/big-pickle'],
+    state: (s) => Math.abs(s.paused['opencode/big-pickle'] - (NOW + 156 * MIN)) < 5 * MIN && !s.paused.opencode && s.issues[191]?.job?.coder === 'nemotron' },
+  { name: 'Zen: безкоштовний ліміт скинеться за 20 хв → чекає того ж агента, нічого йому не друкувати',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], scrollback: { 'w-z': freeLimit('20m') }, state: st({ paused: { codex: later }, ...zenJob() }) },
+    not: ['^office-workers (home|tell|hire)'], state: (s) => s.issues[191]?.job?.limited && s.issues[191].job.selfResumes && s.paused['opencode/big-pickle'] > NOW },
+  { name: 'пауза big-pickle скінчилась → агентові не друкувати (OpenCode продовжить сам), лише зняти паузу',
+    fx: { workers: [me, byte('working')], issues: [issue(191, ['medium'])], state: st({ paused: { codex: later, 'opencode/big-pickle': minute(NOW - MIN) }, ...zenJob({ limited: true, selfResumes: true }) }) },
+    not: ['^office-workers (tell|home)'], state: (s) => !s.paused['opencode/big-pickle'] && s.issues[191]?.job && !s.issues[191].job.limited },
   // ── QA ──
   { name: '10 мерджів коду → QA на Sonnet, порти 7779/3002',
     fx: { workers: [me], issues: [], merged: Array.from({ length: 10 }, (_, i) => app(100 + i, i)), state: st() },
@@ -219,13 +235,13 @@ const scenarios = [
     not: ['^office-workers hire', '^open ', '^osascript'] },
   { name: 'Docker запрацював → кодера наймаємо, стан Docker забуто',
     fx: { workers: [me], issues: [issue(30, ['easy'])], state: st({ docker: { since: NOW - 20 * MIN, opened: true, told: true } }) },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], state: (s) => !s.docker },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 30`], state: (s) => !s.docker },
   { name: 'Docker працює, а база не піднімається → одразу сповіщення з помилкою, Docker не відкривати',
     fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'broken', state: st() },
     want: ['^osascript .*is unhealthy'], not: ['^office-workers hire', '^open '] },
   { name: 'порт бази зайняв контейнер з worktree агента → це теж база, кодера наймаємо',
     fx: { workers: [me], issues: [issue(30, ['easy'])], docker: 'taken', state: st() },
-    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['^osascript', '^open '], state: (s) => !s.docker },
+    want: [`${HIRE('opencode', 'opencode/longcat-2.5-preview-free')}--json --issue 30`], not: ['^osascript', '^open '], state: (s) => !s.docker },
   { name: "Docker не працює, а треба лише рев'ю → рев'юер працює, Docker не чіпаємо",
     fx: { workers: [me], pulls: [pr()], issues: [], docker: 'down', state: st() },
     want: [`${HIRE('claude', 'opus')}--effort high --json --no-worktree`], not: ['^docker ', '^open '] },

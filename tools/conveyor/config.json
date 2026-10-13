@@ -13,7 +13,7 @@
   "maxIssueAttempts": 2,
   "needsInputMinutes": 20,
   "limitPauseMinutes": { "claude": 60, "codex": 360, "opencode": 60 },
-  "releaseAfterHours": 12,
+  "releaseAfterHours": { "claude": 12, "codex": 12, "opencode": 1 },
   "coders": {
     "opus": {
       "provider": "claude",
@@ -28,6 +28,12 @@
       "effort": "high",
       "takes": ["medium"],
       "ports": { "back": 7778, "front": 3001, "db": "Edelweiss_codex" }
+    },
+    "longcat": {
+      "provider": "opencode",
+      "model": "opencode/longcat-2.5-preview-free",
+      "takes": ["easy"],
+      "ports": { "back": 7782, "front": 3006, "db": "Edelweiss_longcat" }
     },
     "zen": {
       "provider": "opencode",
