@@ -58,6 +58,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const orderIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -97,28 +98,39 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             );
             return;
           }
-          const order = await Api().orders.create({
-            comment: values.comment,
-            items,
-            cityName,
-            department,
-            paymentMethod,
-          });
+
+          let orderId: number;
+
+          if (paymentMethod === 'CARD' && orderIdRef.current) {
+            orderId = orderIdRef.current;
+          } else {
+            const order = await Api().orders.create({
+              comment: values.comment,
+              items,
+              cityName,
+              department,
+              paymentMethod,
+            });
+            orderId = order.id;
+            orderIdRef.current = orderId;
+          }
+
+          await dispatch(cleanTheBasket(id));
 
           if (paymentMethod === 'CARD') {
             try {
-              const { pageUrl } = await Api().payment.createInvoice(order.id);
+              const { pageUrl } = await Api().payment.createInvoice(orderId);
               window.location.href = pageUrl;
+              return;
             } catch (e) {
               const message = e?.response?.data?.message;
               changeError(
                 (Array.isArray(message) ? message.join('. ') : message) ||
-                  'Не вдалося створити інвойс для оплати. Спробуйте ще раз.'
+                  `Замовлення №${orderId} створено, але не вдалося перейти до оплати. Спробуйте ще раз.`
               );
               return;
             }
           } else {
-            await dispatch(cleanTheBasket(id));
             router.push('/orders');
           }
         } catch (e) {
