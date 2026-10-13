@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotImplementedException,
+} from '@nestjs/common';
 import {
   CreateInvoiceInput,
   CreateInvoiceOutput,
@@ -52,7 +56,6 @@ export class MonoPaymentProvider implements PaymentProvider {
       {
         amount: input.amount,
         ccy: input.ccy,
-        orderId: input.orderId,
         webHookUrl: input.webHookUrl,
         redirectUrl: input.redirectUrl,
         merchantPaymInfo: {
@@ -63,18 +66,11 @@ export class MonoPaymentProvider implements PaymentProvider {
     return { invoiceId, pageUrl };
   }
 
-  verifyWebhook(input: VerifyWebhookInput): VerifyWebhookOutput {
-    const { body } = input;
-    const invoiceId = body.invoiceId as string;
-    const status = body.status as string;
-    const orderId = body.orderId as string;
-    const amount = body.amount as number;
-
-    if (!invoiceId || !status || !orderId || !amount) {
-      throw new InternalServerErrorException('Invalid webhook payload');
-    }
-
-    return { invoiceId, orderId, status, amount };
+  // Перевірка підпису X-Sign (ECDSA + SHA-256 над сирим тілом), звірка суми та
+  // ідемпотентність вебхука реалізуються в #192. До того часу endpoint вебхука
+  // не під'єднано, тож цей метод навмисно не приймає нічого довіреного.
+  verifyWebhook(_input: VerifyWebhookInput): VerifyWebhookOutput {
+    throw new NotImplementedException('Перевірку вебхука реалізовано в #192');
   }
 
   async refund(input: RefundInput): Promise<void> {

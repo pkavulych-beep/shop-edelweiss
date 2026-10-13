@@ -1,5 +1,5 @@
 import { MonoPaymentProvider } from './mono.provider';
-import { InternalServerErrorException } from '@nestjs/common';
+import { InternalServerErrorException, NotImplementedException } from '@nestjs/common';
 
 describe('MonoPaymentProvider', () => {
   let provider: MonoPaymentProvider;
@@ -18,7 +18,6 @@ describe('MonoPaymentProvider', () => {
         provider.createInvoice({
           amount: 150000,
           ccy: 980,
-          orderId: '10',
           webHookUrl: 'http://localhost:7777/payment/webhook',
           redirectUrl: 'http://localhost:3000/order/10',
           reference: '10',
@@ -40,7 +39,6 @@ describe('MonoPaymentProvider', () => {
       const result = await provider.createInvoice({
         amount: 150000,
         ccy: 980,
-        orderId: '10',
         webHookUrl: 'http://localhost:7777/payment/webhook',
         redirectUrl: 'http://localhost:3000/order/10',
         reference: '10',
@@ -57,7 +55,6 @@ describe('MonoPaymentProvider', () => {
           body: JSON.stringify({
             amount: 150000,
             ccy: 980,
-            orderId: '10',
             webHookUrl: 'http://localhost:7777/payment/webhook',
             redirectUrl: 'http://localhost:3000/order/10',
             merchantPaymInfo: { reference: '10' },
@@ -78,7 +75,6 @@ describe('MonoPaymentProvider', () => {
         provider.createInvoice({
           amount: 150000,
           ccy: 980,
-          orderId: '10',
           webHookUrl: 'http://localhost:7777/payment/webhook',
           redirectUrl: 'http://localhost:3000/order/10',
           reference: '10',
@@ -87,33 +83,15 @@ describe('MonoPaymentProvider', () => {
     });
   });
 
+  // Підпис X-Sign, звірку суми та ідемпотентність вебхука робить #192.
   describe('verifyWebhook', () => {
-    it('returns parsed webhook data', () => {
-      const result = provider.verifyWebhook({
-        body: {
-          invoiceId: 'mono-invoice-123',
-          orderId: '10',
-          status: 'success',
-          amount: 150000,
-        },
-        signature: 'test-signature',
-      });
-
-      expect(result).toEqual({
-        invoiceId: 'mono-invoice-123',
-        orderId: '10',
-        status: 'success',
-        amount: 150000,
-      });
-    });
-
-    it('throws on invalid payload', () => {
+    it('is not implemented yet in this PR (moved to #192)', () => {
       expect(() =>
         provider.verifyWebhook({
           body: { invoiceId: 'mono-invoice-123' },
           signature: 'test-signature',
         }),
-      ).toThrow(InternalServerErrorException);
+      ).toThrow(NotImplementedException);
     });
   });
 

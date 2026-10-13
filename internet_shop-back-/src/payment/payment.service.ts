@@ -11,11 +11,7 @@ import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
 import { PaymentEntity } from './entities/payment.entity';
-import {
-  CreateInvoiceInput,
-  PaymentProvider,
-  VerifyWebhookOutput,
-} from './providers/payment-provider.interface';
+import { CreateInvoiceInput, PaymentProvider } from './providers/payment-provider.interface';
 
 @Injectable()
 export class PaymentService {
@@ -58,7 +54,6 @@ export class PaymentService {
     const input: CreateInvoiceInput = {
       amount,
       ccy: 980,
-      orderId: String(orderId),
       webHookUrl: `${baseUrl}payment/webhook`,
       redirectUrl: `${frontendUrl}/order/${orderId}`,
       reference: String(orderId),
@@ -83,71 +78,47 @@ export class PaymentService {
     return { pageUrl };
   }
 
-  async handleWebhook(
-    body: Record<string, unknown>,
-    signature: string,
-  ): Promise<VerifyWebhookOutput> {
-    const result = this.paymentProvider.verifyWebhook({ body, signature });
-
-    const order = await this.orderRepository.findOne({
-      where: { id: Number(result.orderId) },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Order ${result.orderId} not found`);
-    }
-
-    if (order.paymentInvoiceId !== result.invoiceId) {
-      throw new BadRequestException('Invoice ID mismatch');
-    }
-
-    const paymentLog = await this.paymentRepository.findOne({
-      where: { invoiceId: result.invoiceId },
-    });
-
-    if (paymentLog) {
-      paymentLog.status = result.status;
-      paymentLog.rawPayload = { ...paymentLog.rawPayload, ...body };
-      await this.paymentRepository.save(paymentLog);
-    }
-
-    if (result.status === 'success' || result.status === 'approved') {
-      order.paymentStatus = PaymentStatus.Paid;
-      order.paidAt = new Date();
-      await this.orderRepository.save(order);
-    } else if (result.status === 'failure' || result.status === 'reversed') {
-      order.paymentStatus = PaymentStatus.Failed;
-      await this.orderRepository.save(order);
-    }
-
-    return result;
-  }
-
   async refund(invoiceId: string, amount?: number): Promise<void> {
     const paymentLog = await this.paymentRepository.findOne({
       where: { invoiceId },
     });
 
     if (!paymentLog) {
-      throw new NotFoundException('Payment log not found');
+      throw new NotFoundException('Платіж не знайдено');
+    }
+
+    if (paymentLog.status !== PaymentStatus.Paid) {
+      throw new BadRequestException('Повернути кошти можна лише для оплаченого платежу');
+    }
+
+    const refundAmount = amount ?? paymentLog.amount;
+    if (refundAmount > paymentLog.amount) {
+      throw new BadRequestException('Сума повернення перевищує суму платежу');
     }
 
     await this.paymentProvider.refund({ invoiceId, amount });
 
-    if (amount && amount < paymentLog.amount) {
-      paymentLog.status = PaymentStatus.Refunded;
+    // Часткове повернення не робить платіж повністю поверненим: статус
+    // лишається PAID, а повернута сума накопичується в журналі.
+    if (refundAmount < paymentLog.amount) {
+      const alreadyRefunded = Number(paymentLog.rawPayload?.refundedAmount) || 0;
+      paymentLog.rawPayload = {
+        ...paymentLog.rawPayload,
+        refundedAmount: alreadyRefunded + refundAmount,
+      };
       await this.paymentRepository.save(paymentLog);
-    } else {
-      paymentLog.status = PaymentStatus.Refunded;
-      await this.paymentRepository.save(paymentLog);
+      return;
+    }
 
-      const order = await this.orderRepository.findOne({
-        where: { id: paymentLog.orderId },
-      });
-      if (order) {
-        order.paymentStatus = PaymentStatus.Refunded;
-        await this.orderRepository.save(order);
-      }
+    paymentLog.status = PaymentStatus.Refunded;
+    await this.paymentRepository.save(paymentLog);
+
+    const order = await this.orderRepository.findOne({
+      where: { id: paymentLog.orderId },
+    });
+    if (order) {
+      order.paymentStatus = PaymentStatus.Refunded;
+      await this.orderRepository.save(order);
     }
   }
 }

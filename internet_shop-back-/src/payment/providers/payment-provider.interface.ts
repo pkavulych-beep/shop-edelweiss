@@ -1,7 +1,6 @@
 export interface CreateInvoiceInput {
   amount: number;
   ccy: number;
-  orderId: string;
   webHookUrl: string;
   redirectUrl: string;
   reference: string;
