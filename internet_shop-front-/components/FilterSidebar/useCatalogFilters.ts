@@ -81,7 +81,14 @@ export const useCatalogFilters = () => {
     const handleRouteChangeStart = (url: string) => {
       if (!isOwnNavigation(url)) cancelPending();
     };
-    const handleRouteChangeError = () => cancelPending();
+    // Скасування нашого переходу нашим же наступним push приходить як
+    // routeChangeError із err.cancelled: не чіпаємо pendingRef (його вже
+    // перезаписав новий push), далі routeChangeStart сам вирішить, чий це
+    // перехід. Справжня помилка переходу — скидаємо стан.
+    const handleRouteChangeError = (err: { cancelled?: boolean } | null) => {
+      if (err?.cancelled) return;
+      cancelPending();
+    };
 
     router.events.on('routeChangeStart', handleRouteChangeStart);
     router.events.on('routeChangeError', handleRouteChangeError);
