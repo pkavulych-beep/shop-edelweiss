@@ -100,6 +100,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
               setFilter('onSale', e.target.checked ? 'true' : undefined)
             }
             size="small"
+            sx={{ mr: 1 }}
           />
         }
         label={
@@ -107,7 +108,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ gender }) => {
             Тільки зі знижкою
           </Typography>
         }
-        sx={{ mb: 2, width: '100%', display: 'block' }}
+        sx={{ mb: 2, ml: 0 }}
       />
 
       <FilterGroup
