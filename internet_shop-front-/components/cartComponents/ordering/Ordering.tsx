@@ -15,6 +15,11 @@ import LoadingButton from '@mui/lab/LoadingButton';
 import { Api } from '../../../api/Api';
 import { CreateOrderItemDto } from '../../../api/OrderApi';
 import { useRouter } from 'next/dist/client/router';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import FormControl from '@mui/material/FormControl';
+import FormLabel from '@mui/material/FormLabel';
 import { cleanTheBasket } from '../../../redux/slices/cart-reducer';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { normalizePhone } from '../../../utils/phone';
@@ -49,6 +54,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
 
   const [cityName, setCity] = useState('');
   const [department, setDepartment] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'CARD'>('COD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -91,14 +97,30 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             );
             return;
           }
-          await Api().orders.create({
+          const order = await Api().orders.create({
             comment: values.comment,
             items,
             cityName,
             department,
+            paymentMethod,
           });
-          await dispatch(cleanTheBasket(id));
-          router.push('/orders');
+
+          if (paymentMethod === 'CARD') {
+            try {
+              const { pageUrl } = await Api().payment.createInvoice(order.id);
+              window.location.href = pageUrl;
+            } catch (e) {
+              const message = e?.response?.data?.message;
+              changeError(
+                (Array.isArray(message) ? message.join('. ') : message) ||
+                  'Не вдалося створити інвойс для оплати. Спробуйте ще раз.'
+              );
+              return;
+            }
+          } else {
+            await dispatch(cleanTheBasket(id));
+            router.push('/orders');
+          }
         } catch (e) {
           const message = e?.response?.data?.message;
           if (e?.response?.status === 401) {
@@ -160,6 +182,52 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               setCity={setCity}
               setDepartment={setDepartment}
             />
+          </Box>
+        </Box>
+
+        {/* Section 3: Payment method */}
+        <Box sx={{ mb: 6 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontSize: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mb: 3,
+            }}
+          >
+            3. Спосіб оплати
+          </Typography>
+          <Box
+            sx={{
+              bgcolor: '#eceeee',
+              borderRadius: 3,
+              p: { xs: 2, md: 4 },
+            }}
+          >
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Оберіть спосіб оплати</FormLabel>
+              <RadioGroup
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as 'COD' | 'CARD')}
+                row
+                sx={{ gap: 4 }}
+              >
+                <FormControlLabel
+                  value="COD"
+                  control={<Radio color="primary" />}
+                  label="При отриманні (готівка або картка кур'єру)"
+                  labelPlacement="end"
+                />
+                <FormControlLabel
+                  value="CARD"
+                  control={<Radio color="primary" />}
+                  label="Карткою онлайн (Mono)"
+                  labelPlacement="end"
+                />
+              </RadioGroup>
+            </FormControl>
           </Box>
         </Box>
 

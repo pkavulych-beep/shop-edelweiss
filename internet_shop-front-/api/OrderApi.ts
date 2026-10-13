@@ -13,6 +13,7 @@ export interface CreateOrderDto {
   cityName: string;
   department: string;
   comment: string;
+  paymentMethod?: 'COD' | 'CARD';
 }
 
 // Список усіх замовлень для адміна (GET /order)
