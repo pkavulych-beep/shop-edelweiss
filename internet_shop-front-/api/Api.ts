@@ -7,6 +7,7 @@ import { authApi } from './authApi';
 import { cartApi } from './CartApi';
 import { ordersApi } from './OrderApi';
 import { quickOrderApi } from './QuickOrderApi';
+import { paymentApi } from './PaymentApi';
 
 export type ApiReturnType = {
   user: ReturnType<typeof userApi>;
@@ -15,6 +16,7 @@ export type ApiReturnType = {
   cart: ReturnType<typeof cartApi>;
   orders: ReturnType<typeof ordersApi>;
   quickOrder: ReturnType<typeof quickOrderApi>;
+  payment: ReturnType<typeof paymentApi>;
 };
 
 type Ctx = NextPageContext | GetServerSidePropsContext;
@@ -151,6 +153,7 @@ export const Api = (ctx?: Ctx): ApiReturnType => {
     auth: authApi(instance),
     cart: cartApi(instance),
     orders: ordersApi(instance),
-    quickOrder: quickOrderApi(instance)
+    quickOrder: quickOrderApi(instance),
+    payment: paymentApi(instance),
   };
 };
