@@ -19,10 +19,10 @@ import TableRow from '@mui/material/TableRow';
 import { MainLayout } from '../../../layouts/MainLayout';
 import { useAppSelector } from '../../../redux/hooks';
 import { Role } from '../../../redux/Types/ProductType';
-import { Order, Status } from '../../../redux/Types/orderType';
+import { Order, Status, PaymentMethod, PaymentStatus } from '../../../redux/Types/orderType';
 import { Api } from '../../../api/Api';
 import { formatPhone } from '../../../utils/phone';
-import { statusColor } from '../../../components/MyOrders/MyOrders';
+import { statusColor, paymentStatusColor, paymentStatusLabel } from '../../../components/MyOrders/MyOrders';
 
 const sectionSx = {
   border: '1px solid',
@@ -195,9 +195,17 @@ export default function AdminOrderDetailsPage() {
         </Box>
 
         <Box sx={{ ...sectionSx }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <Typography sx={{ fontWeight: 700 }}>Статус</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontWeight: 700 }}>Статус виконання</Typography>
             <Chip label={order.status} color={statusColor[order.status]} size='small' />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontWeight: 700 }}>Статус оплати</Typography>
+            <Chip
+              label={order.paymentMethod === PaymentMethod.Card ? paymentStatusLabel[order.paymentStatus] : paymentStatusLabel[PaymentStatus.NotRequired]}
+              color={order.paymentMethod === PaymentMethod.Card ? paymentStatusColor[order.paymentStatus] : paymentStatusColor[PaymentStatus.NotRequired]}
+              size='small'
+            />
           </Box>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
             <Select

@@ -87,7 +87,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
         comment: '',
       }}
       validationSchema={ValidateOrder}
-      onSubmit={async (values) => {
+      onSubmit={async (values, { setSubmitting }) => {
         changeLoading(true);
         changeError(null);
         let redirecting = false;
@@ -98,6 +98,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               saved?.message ||
                 'Не вдалося зберегти контактні дані. Спробуйте ще раз.'
             );
+            setSubmitting(false);
             return;
           }
 
@@ -158,6 +159,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
           if (!redirecting) {
             changeLoading(false);
           }
+          setSubmitting(false);
         }
       }}
     >

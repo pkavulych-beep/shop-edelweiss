@@ -16,11 +16,11 @@ import TableRow from '@mui/material/TableRow';
 import { MainLayout } from '../../layouts/MainLayout';
 import { useAppSelector } from '../../redux/hooks';
 import { Role } from '../../redux/Types/ProductType';
-import { Status } from '../../redux/Types/orderType';
+import { Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
 import { Api } from '../../api/Api';
 import { OrdersPage } from '../../api/OrderApi';
 import { formatPhone } from '../../utils/phone';
-import { statusColor } from '../../components/MyOrders/MyOrders';
+import { statusColor, paymentStatusColor, paymentStatusLabel } from '../../components/MyOrders/MyOrders';
 
 const LIMIT = 20;
 
@@ -86,44 +86,59 @@ export default function AdminOrdersPage() {
                 <TableCell>Покупець</TableCell>
                 <TableCell>Телефон</TableCell>
                 <TableCell align='right'>Сума</TableCell>
-                <TableCell>Статус</TableCell>
+                <TableCell>Статус виконання</TableCell>
+                <TableCell>Статус оплати</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {orders.data.map(({ id, createdAt, user, total, status }) => (
-                <TableRow
-                  key={id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => openOrder(id)}
-                >
-                  <TableCell>
-                    <Link
-                      href={`/admin/orders/${id}`}
-                      style={{ color: 'inherit' }}
-                      onClick={event => event.stopPropagation()}
-                    >
-                      {id}
-                    </Link>
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    {new Date(createdAt).toLocaleString('uk-UA', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    })}
-                  </TableCell>
-                  <TableCell>{user?.fullName ?? 'Користувача видалено'}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    {user && <a href={`tel:+${user.phoneNumber}`}>{formatPhone(user.phoneNumber)}</a>}
-                  </TableCell>
-                  <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
-                    {total} грн
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={status} color={statusColor[status]} size='small' />
-                  </TableCell>
-                </TableRow>
-              ))}
+              {orders.data.map(({ id, createdAt, user, total, status, paymentMethod, paymentStatus }) => {
+                const isCardPending = paymentMethod === PaymentMethod.Card && paymentStatus === PaymentStatus.Pending;
+                return (
+                  <TableRow
+                    key={id}
+                    hover
+                    sx={{
+                      cursor: 'pointer',
+                      ...(isCardPending && { bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main', color: 'white' } }),
+                    }}
+                    onClick={() => openOrder(id)}
+                  >
+                    <TableCell>
+                      <Link
+                        href={`/admin/orders/${id}`}
+                        style={{ color: 'inherit' }}
+                        onClick={event => event.stopPropagation()}
+                      >
+                        {id}
+                      </Link>
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {new Date(createdAt).toLocaleString('uk-UA', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                    </TableCell>
+                    <TableCell>{user?.fullName ?? 'Користувача видалено'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {user && <a href={`tel:+${user.phoneNumber}`}>{formatPhone(user.phoneNumber)}</a>}
+                    </TableCell>
+                    <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
+                      {total} грн
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={status} color={statusColor[status]} size='small' />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={paymentMethod === PaymentMethod.Card ? paymentStatusLabel[paymentStatus] : paymentStatusLabel[PaymentStatus.NotRequired]}
+                        color={paymentMethod === PaymentMethod.Card ? paymentStatusColor[paymentStatus] : paymentStatusColor[PaymentStatus.NotRequired]}
+                        size='small'
+                        sx={isCardPending && { fontWeight: 700 }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>

@@ -10,13 +10,29 @@ import Typography from '@mui/material/Typography';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
-import { Order, Status } from '../../redux/Types/orderType';
+import { Order, Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
 
 export const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
   [Status.Sent]: 'info',
   [Status.Received]: 'success',
   [Status.Canceled]: 'default',
+};
+
+export const paymentStatusColor: Record<PaymentStatus, ChipProps['color']> = {
+  [PaymentStatus.NotRequired]: 'default',
+  [PaymentStatus.Pending]: 'warning',
+  [PaymentStatus.Paid]: 'success',
+  [PaymentStatus.Failed]: 'error',
+  [PaymentStatus.Refunded]: 'info',
+};
+
+export const paymentStatusLabel: Record<PaymentStatus, string> = {
+  [PaymentStatus.NotRequired]: 'Оплата при отриманні',
+  [PaymentStatus.Pending]: 'Очікує оплати',
+  [PaymentStatus.Paid]: 'Оплачено',
+  [PaymentStatus.Failed]: 'Не сплачено',
+  [PaymentStatus.Refunded]: 'Повернено',
 };
 
 const formatDate = (value: string) =>
@@ -42,6 +58,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
         alignItems: 'flex-start',
         gap: 2,
         mb: 2,
+        flexWrap: 'wrap',
       }}
     >
       <Box>
@@ -54,7 +71,22 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
           </Typography>
         )}
       </Box>
-      <Chip label={order.status} color={statusColor[order.status]} size="small" />
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Chip label={order.status} color={statusColor[order.status]} size="small" />
+        <Chip
+          label={
+            order.paymentMethod === PaymentMethod.Card
+              ? paymentStatusLabel[order.paymentStatus]
+              : paymentStatusLabel[PaymentStatus.NotRequired]
+          }
+          color={
+            order.paymentMethod === PaymentMethod.Card
+              ? paymentStatusColor[order.paymentStatus]
+              : paymentStatusColor[PaymentStatus.NotRequired]
+          }
+          size="small"
+        />
+      </Box>
     </Box>
 
     <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
