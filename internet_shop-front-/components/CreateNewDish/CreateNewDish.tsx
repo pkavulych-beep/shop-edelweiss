@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Formik } from 'formik';
 import { Validatione } from './Validatione';
 import DishForm from './DishForm';
-import { Alert, Button, Dialog, Snackbar } from '@mui/material';
+import { Alert, Box, Button, Dialog, Snackbar } from '@mui/material';
 import { saveNewProduct } from '../../redux/slices/product-reducer';
 import { useAppDispatch } from '../../redux/hooks';
 
@@ -53,9 +53,11 @@ const CreateNewDish = () => {
 
   return (
     <div>
-      <Button variant='contained' color='primary' onClick={handleClickOpen}>
-        Додати товар
-      </Button>
+      <Box sx={{ maxWidth: 1440, mx: 'auto', px: { xs: 2, md: 6 }, py: { xs: 2, md: 3 } }}>
+        <Button variant='contained' color='primary' onClick={handleClickOpen}>
+          Додати товар
+        </Button>
+      </Box>
       <Dialog open={open} title={'Створення товару'} onClose={handleClose}>
         {submitError && (
           <Alert severity='error' sx={{ m: 2, mb: 0 }}>
