@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
+import { Status } from 'src/order/statusEnum';
 import { PaymentEntity } from './entities/payment.entity';
 import { CreateInvoiceInput, PaymentProvider } from './providers/payment-provider.interface';
 
@@ -31,6 +32,10 @@ export class PaymentService {
       roles: [{ value: 'USER' }],
     });
 
+    if (order.status === Status.Canceled) {
+      throw new BadRequestException('Замовлення скасовано, оплата неможлива');
+    }
+
     if (order.paymentMethod !== 'CARD') {
       throw new BadRequestException('Замовлення не вимагає онлайн-оплати');
     }
@@ -40,6 +45,21 @@ export class PaymentService {
     }
 
     if (order.paymentInvoiceId) {
+      // Повторний запит, поки інвойс ще PENDING, не створює новий, а повертає
+      // той самий pageUrl: покупець, який закрив сторінку оплати, може
+      // спробувати ще раз. Новий інвойс після FAILED/строку — у #192.
+      const existingLog = await this.paymentRepository.findOne({
+        where: { invoiceId: order.paymentInvoiceId },
+      });
+      const existingPageUrl = existingLog?.rawPayload?.pageUrl;
+
+      if (
+        order.paymentStatus === PaymentStatus.Pending &&
+        typeof existingPageUrl === 'string'
+      ) {
+        return { pageUrl: existingPageUrl };
+      }
+
       throw new BadRequestException('Інвойс для цього замовлення вже створено');
     }
 
@@ -73,7 +93,7 @@ export class PaymentService {
       invoiceId,
       amount,
       status: PaymentStatus.Pending,
-      rawPayload: { amount, ccy: 980, orderId: String(orderId) },
+      rawPayload: { amount, ccy: 980, orderId: String(orderId), pageUrl },
     });
     await this.paymentRepository.save(paymentLog);
 

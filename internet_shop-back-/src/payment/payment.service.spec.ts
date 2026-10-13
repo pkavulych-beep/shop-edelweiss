@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PaymentStatus } from '../order/paymentEnum';
+import { Status } from '../order/statusEnum';
 import { CreateInvoiceInput } from './providers/payment-provider.interface';
 
 describe('PaymentService', () => {
@@ -19,6 +20,7 @@ describe('PaymentService', () => {
     id: 10,
     user: { id: 3 },
     total: 1500,
+    status: Status.Processed,
     paymentMethod: 'CARD',
     paymentStatus: PaymentStatus.NotRequired,
     paymentInvoiceId: null,
@@ -128,6 +130,33 @@ describe('PaymentService', () => {
       });
 
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException for a canceled order', async () => {
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        status: Status.Canceled,
+      });
+
+      await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
+    });
+
+    it('returns the stored pageUrl while the invoice is still pending', async () => {
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        paymentStatus: PaymentStatus.Pending,
+        paymentInvoiceId: 'mono-invoice-123',
+      });
+      paymentRepository.findOne.mockResolvedValueOnce({
+        invoiceId: 'mono-invoice-123',
+        rawPayload: { pageUrl: 'https://mono.com/invoice/mono-invoice-123' },
+      });
+
+      const result = await service.createInvoice(3, 10);
+
+      expect(result).toEqual({ pageUrl: 'https://mono.com/invoice/mono-invoice-123' });
       expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
     });
 
