@@ -190,27 +190,159 @@ export class OrderService {
   }
 
   async update(updateOrderDto: UpdateOrderDto) {
-    const { id, ...changes } = updateOrderDto;
+    const { id, status, ...changes } = updateOrderDto;
+    // If status is being changed, delegate to updateStatus for proper stock handling
+    if (status !== undefined) {
+      return this.updateStatus(id, status, changes);
+    }
+    // No status change - just update other fields
     const order = await this.findOneById(id);
-    // Поля, яких немає в запиті, не чіпаємо
     for (const [key, value] of Object.entries(changes)) {
       if (value !== undefined) order[key] = value;
     }
-
     return this.repository.save(order);
   }
 
-  async updateStatus(id: number, status: Status) {
-    const order = await this.findOneById(id);
-    order.status = status;
-    return this.repository.save(order);
+  async updateStatus(id: number, status: Status, changes: Record<string, unknown> = {}) {
+    // Use transaction with pessimistic locking on order row to prevent race conditions
+    return this.repository.manager.transaction(async (manager: EntityManager) => {
+      // First, lock the order row
+      const order = await manager.findOne(OrderEntity, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!order) {
+        throw new NotFoundException(null, 'Не знайдено такого замовлення');
+      }
+
+      // Now load the order with items (no lock needed since order is locked)
+      const orderWithItems = await manager.findOne(OrderEntity, {
+        where: { id },
+        relations: { items: { product: true } },
+        order: { items: { id: 'ASC' } },
+      });
+
+      // Apply non-status changes from the request
+      for (const [key, value] of Object.entries(changes)) {
+        if (value !== undefined) {
+          orderWithItems[key] = value;
+        }
+      }
+
+      // If trying to cancel an already cancelled order, just update status (no stock change)
+      if (status === Status.Canceled && orderWithItems.status === Status.Canceled) {
+        orderWithItems.status = status;
+        return manager.save(OrderEntity, orderWithItems);
+      }
+
+      // If transitioning FROM Canceled to another status, decrement stock
+      if (orderWithItems.status === Status.Canceled && status !== Status.Canceled) {
+        await this.decrementProductCounts(manager, orderWithItems.items);
+        orderWithItems.status = status;
+        return manager.save(OrderEntity, orderWithItems);
+      }
+
+      // If cancelling an order that wasn't already cancelled, restore stock
+      if (status === Status.Canceled && orderWithItems.status !== Status.Canceled) {
+        await this.restoreProductCounts(manager, orderWithItems.items);
+        orderWithItems.status = status;
+        return manager.save(OrderEntity, orderWithItems);
+      }
+
+      // Any other status change - no stock modification
+      orderWithItems.status = status;
+      return manager.save(OrderEntity, orderWithItems);
+    });
+  }
+
+  private async restoreProductCounts(manager: EntityManager, items: OrderEntity['items']) {
+    // Sum quantities by productId for stock increment
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of items) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
+    // Increment product count atomically with pessimistic locking
+    for (const [productId, quantity] of quantitiesByProduct.entries()) {
+      const product = await manager.findOne(ProductEntity, {
+        where: { id: productId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!product) {
+        continue; // Product might have been deleted, skip
+      }
+
+      // Only increment if count is tracked (not null)
+      if (product.count !== null && product.count !== undefined) {
+        product.count += quantity;
+        await manager.save(ProductEntity, product);
+      }
+    }
+  }
+
+  private async decrementProductCounts(manager: EntityManager, items: OrderEntity['items']) {
+    // Sum quantities by productId for stock decrement
+    const quantitiesByProduct = new Map<number, number>();
+    for (const item of items) {
+      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
+      quantitiesByProduct.set(item.productId, total);
+    }
+
+    // Decrement product count atomically with pessimistic locking
+    for (const [productId, quantity] of quantitiesByProduct.entries()) {
+      const product = await manager.findOne(ProductEntity, {
+        where: { id: productId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!product) {
+        throw new NotFoundException(null, 'Товар не знайдено');
+      }
+
+      // Only decrement if count is tracked (not null)
+      if (product.count !== null && product.count !== undefined) {
+        if (product.count < quantity) {
+          throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
+        }
+        product.count -= quantity;
+        await manager.save(ProductEntity, product);
+      }
+    }
   }
 
   async remove(id: number) {
-    const { affected } = await this.repository.delete(id);
-    if (!affected) {
-      throw new NotFoundException(null, 'Не знайдено такого замовлення');
-    }
-    return 'Замовлення було успішно видалено';
+    // Use transaction with pessimistic locking on order row to prevent race conditions
+    return this.repository.manager.transaction(async (manager: EntityManager) => {
+      // First, lock the order row
+      const order = await manager.findOne(OrderEntity, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!order) {
+        throw new NotFoundException(null, 'Не знайдено такого замовлення');
+      }
+
+      // Now load the order with items (no lock needed since order is locked)
+      const orderWithItems = await manager.findOne(OrderEntity, {
+        where: { id },
+        relations: { items: { product: true } },
+        order: { items: { id: 'ASC' } },
+      });
+
+      // Only restore stock if order was not already cancelled
+      if (orderWithItems.status !== Status.Canceled) {
+        await this.restoreProductCounts(manager, orderWithItems.items);
+      }
+
+      const { affected } = await manager.delete(OrderEntity, id);
+      if (!affected) {
+        throw new NotFoundException(null, 'Не знайдено такого замовлення');
+      }
+      return 'Замовлення було успішно видалено';
+    });
   }
 }

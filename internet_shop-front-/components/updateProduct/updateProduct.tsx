@@ -1,5 +1,5 @@
 import { NextPage } from "next";
-import { Button, Dialog } from "@mui/material";
+import { Button, Box, Dialog } from "@mui/material";
 import { Formik } from "formik";
 import { Validatione } from "../CreateNewDish/Validatione";
 import DishForm from "../CreateNewDish/DishForm";
@@ -57,8 +57,13 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
   };
 
   return (
-    <div>
-      <Button variant="contained" color="primary" onClick={handleClickOpen}>
+    <Box sx={{ width: { xs: '100%', sm: 'auto' } }}>
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleClickOpen}
+        sx={{ whiteSpace: 'nowrap', height: 48, width: { xs: '100%', sm: 'auto' } }}
+      >
         Редагувати товар
       </Button>
       <Dialog
@@ -93,6 +98,6 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
           </Formik>
         }
       </Dialog>
-    </div>
+    </Box>
   );
 };
