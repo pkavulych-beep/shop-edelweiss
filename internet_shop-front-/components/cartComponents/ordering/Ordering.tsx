@@ -59,6 +59,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const orderIdRef = useRef<number | null>(null);
+  const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -89,6 +90,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
       onSubmit={async (values) => {
         changeLoading(true);
         changeError(null);
+        let redirecting = false;
         try {
           const saved = await checkUserData(values.fullName, values.phoneNumber);
           if (!saved?.success) {
@@ -99,11 +101,10 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             return;
           }
 
-          let orderId: number;
-
-          if (paymentMethod === 'CARD' && orderIdRef.current) {
-            orderId = orderIdRef.current;
-          } else {
+          // Замовлення вже створене, але інвойс не вдався: повторюємо лише інвойс,
+          // щоб не створити дубль і не списати склад удруге
+          let orderId = orderIdRef.current;
+          if (!orderId) {
             const order = await Api().orders.create({
               comment: values.comment,
               items,
@@ -113,25 +114,34 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             });
             orderId = order.id;
             orderIdRef.current = orderId;
+            if (mountedRef.current) {
+              setCreatedOrderId(orderId);
+            }
           }
 
-          await dispatch(cleanTheBasket(id));
-
-          if (paymentMethod === 'CARD') {
-            try {
-              const { pageUrl } = await Api().payment.createInvoice(orderId);
-              window.location.href = pageUrl;
-              return;
-            } catch (e) {
-              const message = e?.response?.data?.message;
-              changeError(
-                (Array.isArray(message) ? message.join('. ') : message) ||
-                  `Замовлення №${orderId} створено, але не вдалося перейти до оплати. Спробуйте ще раз.`
-              );
-              return;
-            }
-          } else {
+          if (paymentMethod === 'COD') {
+            await dispatch(cleanTheBasket(id));
             router.push('/orders');
+            return;
+          }
+
+          try {
+            const { pageUrl } = await Api().payment.createInvoice(orderId);
+            // Кошик чистимо лише тепер: порожній кошик розмонтовує форму,
+            // і на помилці інвойсу покупець не побачив би повідомлення
+            await dispatch(cleanTheBasket(id));
+            redirecting = true;
+            window.location.href = pageUrl;
+          } catch (e) {
+            const message = e?.response?.data?.message;
+            const details = String(Array.isArray(message) ? message.join('. ') : message || '')
+              .trim()
+              .replace(/\.$/, '');
+            changeError(
+              `Замовлення №${orderId} створено, але не вдалося перейти до оплати.` +
+                (details ? ` ${details}.` : '') +
+                ' Натисніть «Оформити замовлення», щоб спробувати ще раз.'
+            );
           }
         } catch (e) {
           const message = e?.response?.data?.message;
@@ -144,7 +154,10 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             );
           }
         } finally {
-          changeLoading(false);
+          // Під час переходу на сторінку mono кнопка лишається в стані завантаження
+          if (!redirecting) {
+            changeLoading(false);
+          }
         }
       }}
     >
@@ -218,7 +231,9 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               p: { xs: 2, md: 4 },
             }}
           >
-            <FormControl component="fieldset">
+            {/* Після створення замовлення спосіб оплати не змінюється,
+                щоб повтор не створив друге замовлення */}
+            <FormControl component="fieldset" disabled={createdOrderId !== null}>
               <FormLabel component="legend">Оберіть спосіб оплати</FormLabel>
               <RadioGroup
                 value={paymentMethod}
