@@ -62,6 +62,9 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
 
   useEffect(() => {
+    // StrictMode у dev імітує розмонтування й повторний монтаж, тож без цього
+    // mountedRef лишається false і стан завантаження та помилки не показуються
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
