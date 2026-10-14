@@ -7,6 +7,19 @@ export enum Status {
   Canceled = 'відмінено',
 }
 
+export enum PaymentMethod {
+  Cod = 'COD',
+  Card = 'CARD',
+}
+
+export enum PaymentStatus {
+  NotRequired = 'NOT_REQUIRED',
+  Pending = 'PENDING',
+  Paid = 'PAID',
+  Failed = 'FAILED',
+  Refunded = 'REFUNDED',
+}
+
 // price — ціна за одиницю на момент покупки
 export type OrderItem = {
   id: number;
@@ -28,6 +41,8 @@ export type Order = {
   cityName: string;
   department: string;
   createdAt: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
 };
 
 // Замовлення в адмінському списку: без позицій, лише їх кількість

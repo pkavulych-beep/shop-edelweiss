@@ -22,7 +22,7 @@ import { Role } from '../../../redux/Types/ProductType';
 import { Order, Status } from '../../../redux/Types/orderType';
 import { Api } from '../../../api/Api';
 import { formatPhone } from '../../../utils/phone';
-import { statusColor } from '../../../components/MyOrders/MyOrders';
+import { statusColor, getPaymentChipLabel, getPaymentChipColor } from '../../../components/MyOrders/MyOrders';
 
 const sectionSx = {
   border: '1px solid',
@@ -195,9 +195,17 @@ export default function AdminOrderDetailsPage() {
         </Box>
 
         <Box sx={{ ...sectionSx }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <Typography sx={{ fontWeight: 700 }}>Статус</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontWeight: 700 }}>Статус виконання</Typography>
             <Chip label={order.status} color={statusColor[order.status]} size='small' />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontWeight: 700 }}>Статус оплати</Typography>
+            <Chip
+              label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
+              color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
+              size='small'
+            />
           </Box>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
             <Select

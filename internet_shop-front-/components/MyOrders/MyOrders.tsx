@@ -10,13 +10,56 @@ import Typography from '@mui/material/Typography';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
-import { Order, Status } from '../../redux/Types/orderType';
+import { Order, Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
 
 export const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
   [Status.Sent]: 'info',
   [Status.Received]: 'success',
   [Status.Canceled]: 'default',
+};
+
+export const paymentStatusColor: Record<PaymentStatus, ChipProps['color']> = {
+  [PaymentStatus.NotRequired]: 'default',
+  [PaymentStatus.Pending]: 'warning',
+  [PaymentStatus.Paid]: 'success',
+  [PaymentStatus.Failed]: 'error',
+  [PaymentStatus.Refunded]: 'info',
+};
+
+export const paymentStatusLabel: Record<PaymentStatus, string> = {
+  [PaymentStatus.NotRequired]: 'Оплата при отриманні',
+  [PaymentStatus.Pending]: 'Очікує оплати',
+  [PaymentStatus.Paid]: 'Оплачено',
+  [PaymentStatus.Failed]: 'Не сплачено',
+  [PaymentStatus.Refunded]: 'Повернено',
+};
+
+// Допоміжні функції для відображення статусу оплати
+export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): string => {
+  if (paymentMethod === PaymentMethod.Card) {
+    // CARD-замовлення лишається NOT_REQUIRED, якщо інвойс не створився: оплати ще не було
+    return paymentStatus === PaymentStatus.NotRequired
+      ? paymentStatusLabel[PaymentStatus.Pending]
+      : paymentStatusLabel[paymentStatus];
+  }
+  return paymentStatusLabel[PaymentStatus.NotRequired];
+};
+
+export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): ChipProps['color'] => {
+  if (paymentMethod === PaymentMethod.Card) {
+    return paymentStatus === PaymentStatus.NotRequired
+      ? paymentStatusColor[PaymentStatus.Pending]
+      : paymentStatusColor[paymentStatus];
+  }
+  return paymentStatusColor[PaymentStatus.NotRequired];
+};
+
+// Чи замовлення неоплачене карткою (для підсвітки в адмінці)
+export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): boolean => {
+  return paymentMethod === PaymentMethod.Card &&
+    paymentStatus !== PaymentStatus.Paid &&
+    paymentStatus !== PaymentStatus.Refunded;
 };
 
 const formatDate = (value: string) =>
@@ -42,6 +85,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
         alignItems: 'flex-start',
         gap: 2,
         mb: 2,
+        flexWrap: 'wrap',
       }}
     >
       <Box>
@@ -54,7 +98,14 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
           </Typography>
         )}
       </Box>
-      <Chip label={order.status} color={statusColor[order.status]} size="small" />
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Chip label={order.status} color={statusColor[order.status]} size="small" />
+        <Chip
+          label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
+          color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
+          size="small"
+        />
+      </Box>
     </Box>
 
     <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
