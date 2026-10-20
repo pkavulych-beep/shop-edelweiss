@@ -1,4 +1,5 @@
 import axios from "axios";
+import { DeliveryCityOption, DeliverySearch } from "../utils/delivery";
 
 const NOVA_POSHTA_API_URL = "https://api.novaposhta.ua/v2.0/json/";
 const NOVA_POSHTA_API_KEY = "ad68239527c403ae3359b6d9ba22931b";
@@ -89,5 +90,18 @@ export const mailApi = {
       .map((city) => city.Description)
       .filter((description) => Boolean(description));
     return Array.from(new Set(names));
+  },
+};
+
+// Новою Поштою місто відділень визначається його назвою, тому id варіанта —
+// це сама назва
+export const novaPoshtaDeliverySearch: DeliverySearch = {
+  async getCities(query: string): Promise<DeliveryCityOption[]> {
+    const names = await mailApi.getCities(query);
+    return names.map((name) => ({ id: name, label: name }));
+  },
+
+  getDepartments(city: DeliveryCityOption): Promise<string[]> {
+    return mailApi.getDepartment(city.label);
   },
 };

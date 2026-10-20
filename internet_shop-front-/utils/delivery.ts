@@ -1,5 +1,18 @@
 import { DeliveryMethod, Order } from '../redux/Types/orderType';
 
+// Варіант міста в пошуку доставки: id — для запиту відділень
+// (у Нової пошти це сама назва, у Meest — city_id), label — для показу
+export type DeliveryCityOption = {
+  id: string;
+  label: string;
+};
+
+// Пошук міст і відділень перевізника: однакові функції для обох автокомплітів
+export type DeliverySearch = {
+  getCities: (query: string) => Promise<DeliveryCityOption[]>;
+  getDepartments: (city: DeliveryCityOption) => Promise<string[]>;
+};
+
 // Назви перевізників: єдине джерело для рядка доставки і для вибору в оформленні
 export const deliveryMethodLabels: Record<DeliveryMethod, string> = {
   [DeliveryMethod.NovaPoshta]: 'Нова пошта',
