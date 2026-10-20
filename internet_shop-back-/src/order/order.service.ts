@@ -16,6 +16,7 @@ import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { ProductEntity } from '../product/entities/product.entity';
+import { BasketItemEntity } from '../user/entities/basket-item.entity';
 
 @Injectable()
 export class OrderService {
@@ -141,6 +142,11 @@ export class OrderService {
           await manager.save(ProductEntity, product);
         }
       }
+
+      // Кошик чистимо в межах тієї ж транзакції: товари вже належать
+      // створеному замовленню, тож повторне оформлення не дублює їх
+      // (інакше після невдалого інвойсу вони лишалися в кошику, #226)
+      await manager.delete(BasketItemEntity, { userId });
 
       // Return the order with items using the transaction manager
       return manager.findOne(OrderEntity, {
