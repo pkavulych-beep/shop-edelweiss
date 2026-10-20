@@ -2,10 +2,13 @@ import { NextPage } from "next";
 import { Autocomplete, Box, TextField } from "@mui/material";
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import { mailApi } from "../../../../api/novaposhtaApi";
+import { DeliveryCityOption, DeliverySearch } from "../../../../utils/delivery";
 import { CustomAutocomplete } from "./CustomAutocomplete";
 
 interface IDeliveryProps {
+  // Пошук міст і відділень залежить від перевізника: компонент сам не знає,
+  // з яким API має справу
+  search: DeliverySearch;
   cityName: string;
   department: string;
   setCity: React.Dispatch<React.SetStateAction<string>>;
@@ -18,6 +21,7 @@ const toMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 const DeliveryComponent: NextPage<IDeliveryProps> = ({
+  search,
   cityName,
   department,
   setCity,
@@ -26,7 +30,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
   // Результати прив'язані до запиту й міста: завантаження і помилку виводимо з них
   const [citiesResult, setCitiesResult] = useState<{
     query: string;
-    cities: string[];
+    cities: DeliveryCityOption[];
     error: string | null;
   } | null>(null);
   const [cityQuery, setCityQuery] = useState("");
@@ -37,6 +41,17 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     error: string | null;
   } | null>(null);
   const [departmentQuery, setDepartmentQuery] = useState("");
+
+  // Вибране місто тримаємо як варіант з id: воно потрібне, щоб завантажити
+  // відділення (у Meest — за city_id, а не за назвою)
+  const [selectedCity, setSelectedCity] = useState<DeliveryCityOption | null>(
+    null
+  );
+  // У батька лишається лише назва міста, тож варіант вважаємо вибраним лише
+  // поки його назва збігається з містом у замовленні: зміна перевізника
+  // чистить місто в батька, і відділення скидаються без ефекту-синхронізації
+  const activeCity =
+    cityName && selectedCity?.label === cityName ? selectedCity : null;
 
   const cityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cityRequestIdRef = useRef(0);
@@ -72,7 +87,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
 
     cityTimerRef.current = setTimeout(async () => {
       try {
-        const foundCities = await mailApi.getCities(query);
+        const foundCities = await search.getCities(query);
         if (requestId !== cityRequestIdRef.current) {
           return;
         }
@@ -94,23 +109,24 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
         clearTimeout(cityTimerRef.current);
       }
     };
-  }, [cityQuery, cityName]);
+  }, [cityQuery, cityName, search]);
 
   useEffect(() => {
+    const city = activeCity;
     const requestId = ++departmentRequestIdRef.current;
 
-    if (!cityName) {
+    if (!city) {
       return;
     }
 
     (async () => {
       try {
-        const cityDepartments = await mailApi.getDepartment(cityName);
+        const cityDepartments = await search.getDepartments(city);
         if (requestId !== departmentRequestIdRef.current) {
           return;
         }
         setDepartmentsResult({
-          city: cityName,
+          city: city.id,
           departments: cityDepartments,
           error: null,
         });
@@ -119,13 +135,13 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
           return;
         }
         setDepartmentsResult({
-          city: cityName,
+          city: city.id,
           departments: [],
           error: toMessage(error, "Не вдалося завантажити відділення."),
         });
       }
     })();
-  }, [cityName]);
+  }, [activeCity, search]);
 
   const trimmedCityQuery = cityQuery.trim();
   const searchingCities = Boolean(trimmedCityQuery) && trimmedCityQuery !== cityName;
@@ -139,13 +155,16 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
       : [];
 
   const currentDepartments =
-    cityName && departmentsResult?.city === cityName ? departmentsResult : null;
+    activeCity && departmentsResult?.city === activeCity.id
+      ? departmentsResult
+      : null;
   const departments = currentDepartments?.departments ?? [];
-  const departmentsLoading = Boolean(cityName) && !currentDepartments;
+  const departmentsLoading = Boolean(activeCity) && !currentDepartments;
   const departmentsError = currentDepartments?.error ?? null;
 
-  const handleCityChange = (_: unknown, value: string | null) => {
-    setCity(value || "");
+  const handleCityChange = (_: unknown, value: DeliveryCityOption | null) => {
+    setSelectedCity(value);
+    setCity(value?.label || "");
     resetDepartment();
   };
 
@@ -162,7 +181,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
     }
 
     setCityQuery(value);
-    // Під час набору тексту вибір міста скидається, якщо він більше не
+    // Під час набору тексту вибір міста скидається, якщо воно більше не
     // збігається з поточним містом. Інакше у замовлення пішло б старе місто.
     const cleared =
       (reason === "reset" || reason === "clear") && value === "";
@@ -172,6 +191,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
       if (edited && cityName) {
         keepInputOnResetRef.current = true;
       }
+      setSelectedCity(null);
       setCity("");
       resetDepartment();
     }
@@ -213,12 +233,14 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
       <Autocomplete
         id="delivery-city"
         options={cities}
-        value={cityName || null}
+        value={activeCity}
         inputValue={cityQuery}
         onChange={handleCityChange}
         onInputChange={handleCityInputChange}
         loading={citiesLoading}
         filterOptions={(options) => options}
+        getOptionLabel={(option) => option.label}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
         fullWidth
         sx={{ marginTop: 4 }}
         noOptionsText={
@@ -245,7 +267,7 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
         loading={departmentsLoading}
         fullWidth
         noOptionsText={
-          cityName ? "Відділень не знайдено" : "Спочатку оберіть місто"
+          activeCity ? "Відділень не знайдено" : "Спочатку оберіть місто"
         }
         loadingText="Завантаження…"
         renderInput={(params) => (

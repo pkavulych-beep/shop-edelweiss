@@ -7,6 +7,8 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import { Delivery } from './delivery/delivery';
 import { UkrposhtaDelivery } from './delivery/UkrposhtaDelivery';
+import { novaPoshtaDeliverySearch } from '../../../api/novaposhtaApi';
+import { meestDeliverySearch } from '../../../api/meestApi';
 import * as React from 'react';
 import { Form, Formik } from 'formik';
 import CustomizedInputBase from '../../CustomizedInputBase/CustomizedInputBase';
@@ -255,6 +257,12 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
                   label={deliveryMethodLabels[DeliveryMethod.Ukrposhta]}
                   labelPlacement="end"
                 />
+                <FormControlLabel
+                  value={DeliveryMethod.Meest}
+                  control={<Radio color="primary" />}
+                  label={deliveryMethodLabels[DeliveryMethod.Meest]}
+                  labelPlacement="end"
+                />
               </RadioGroup>
             </FormControl>
             {deliveryMethod === DeliveryMethod.Ukrposhta ? (
@@ -266,6 +274,14 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               />
             ) : (
               <Delivery
+                // key: зміна перевізника має скинути й внутрішній стан пошуку —
+                // залишкові результати іншого перевізника не повинні показуватися
+                key={deliveryMethod}
+                search={
+                  deliveryMethod === DeliveryMethod.Meest
+                    ? meestDeliverySearch
+                    : novaPoshtaDeliverySearch
+                }
                 cityName={cityName}
                 department={department}
                 setCity={setCity}
