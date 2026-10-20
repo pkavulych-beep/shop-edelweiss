@@ -1,5 +1,5 @@
 import { AxiosInstance } from "axios";
-import { Order, OrderListItem, Status } from "../redux/Types/orderType";
+import { DeliveryMethod, Order, OrderListItem, Status } from "../redux/Types/orderType";
 
 export interface CreateOrderItemDto {
   productId: number;
@@ -14,6 +14,7 @@ export interface CreateOrderDto {
   department: string;
   comment: string;
   paymentMethod?: 'COD' | 'CARD';
+  deliveryMethod?: DeliveryMethod;
 }
 
 // Список усіх замовлень для адміна (GET /order)

@@ -11,6 +11,7 @@ import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
 import { Order, Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
+import { formatDelivery } from '../../utils/delivery';
 
 export const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
@@ -111,7 +112,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => (
     </Box>
 
     <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
-      Доставка: Нова пошта, {order.cityName}, {order.department}
+      Доставка: {formatDelivery(order)}
     </Typography>
 
     <Box>
