@@ -2,7 +2,6 @@ import { NextPage } from "next";
 import { Autocomplete, Box, TextField } from "@mui/material";
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import Typography from "@mui/material/Typography";
 import { mailApi } from "../../../../api/novaposhtaApi";
 import { CustomAutocomplete } from "./CustomAutocomplete";
 
@@ -211,9 +210,6 @@ const DeliveryComponent: NextPage<IDeliveryProps> = ({
 
   return (
     <Box minWidth={"40%"}>
-      <Typography variant="h6" sx={{ marginTop: 3 }}>
-        ДОСТАВКА НОВОЮ ПОШТОЮ
-      </Typography>
       <Autocomplete
         id="delivery-city"
         options={cities}

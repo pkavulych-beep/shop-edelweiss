@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import { Delivery } from './delivery/delivery';
+import { UkrposhtaDelivery } from './delivery/UkrposhtaDelivery';
 import * as React from 'react';
 import { Form, Formik } from 'formik';
 import CustomizedInputBase from '../../CustomizedInputBase/CustomizedInputBase';
@@ -23,6 +24,9 @@ import FormLabel from '@mui/material/FormLabel';
 import { cleanTheBasket } from '../../../redux/slices/cart-reducer';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { normalizePhone } from '../../../utils/phone';
+import { DeliveryMethod } from '../../../redux/Types/orderType';
+import { deliveryMethodLabels } from '../../../utils/delivery';
+import { isUkrposhtaIndexValid } from './delivery/UkrposhtaDelivery';
 
 interface OrderingComponentProps {
   items: CreateOrderItemDto[];
@@ -54,12 +58,33 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
 
   const [cityName, setCity] = useState('');
   const [department, setDepartment] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>(
+    DeliveryMethod.NovaPoshta
+  );
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'CARD'>('COD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const orderIdRef = useRef<number | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
+
+  // Зміна перевізника очищає місто й відділення: значення одного
+  // перевізника не годяться для іншого (у Укрпошти в department — індекс)
+  const changeDeliveryMethod = (method: DeliveryMethod) => {
+    if (method === deliveryMethod) {
+      return;
+    }
+    setDeliveryMethod(method);
+    setCity('');
+    setDepartment('');
+  };
+
+  // Доставка заповнена: для Нової пошти вибрано відділення,
+  // для Укрпошти є населений пункт і правильний індекс
+  const deliveryFilled =
+    deliveryMethod === DeliveryMethod.Ukrposhta
+      ? Boolean(cityName.trim()) && isUkrposhtaIndexValid(department)
+      : Boolean(department);
 
   useEffect(() => {
     // StrictMode у dev імітує розмонтування й повторний монтаж, тож без цього
@@ -113,6 +138,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               items,
               cityName,
               department,
+              deliveryMethod,
               paymentMethod,
             });
             orderId = order.id;
@@ -204,12 +230,48 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
               p: { xs: 2, md: 4 },
             }}
           >
-            <Delivery
-              cityName={cityName}
-              department={department}
-              setCity={setCity}
-              setDepartment={setDepartment}
-            />
+            {/* Після створення замовлення перевізника не змінюється,
+                як і спосіб оплати: інакше повтор інвойсу розійдеться
+                з уже створеним замовленням */}
+            <FormControl component="fieldset" disabled={createdOrderId !== null}>
+              <FormLabel component="legend">Оберіть перевізника</FormLabel>
+              <RadioGroup
+                value={deliveryMethod}
+                onChange={(e) =>
+                  changeDeliveryMethod(e.target.value as DeliveryMethod)
+                }
+                row
+                sx={{ gap: 4, flexWrap: 'wrap' }}
+              >
+                <FormControlLabel
+                  value={DeliveryMethod.NovaPoshta}
+                  control={<Radio color="primary" />}
+                  label={deliveryMethodLabels[DeliveryMethod.NovaPoshta]}
+                  labelPlacement="end"
+                />
+                <FormControlLabel
+                  value={DeliveryMethod.Ukrposhta}
+                  control={<Radio color="primary" />}
+                  label={deliveryMethodLabels[DeliveryMethod.Ukrposhta]}
+                  labelPlacement="end"
+                />
+              </RadioGroup>
+            </FormControl>
+            {deliveryMethod === DeliveryMethod.Ukrposhta ? (
+              <UkrposhtaDelivery
+                cityName={cityName}
+                department={department}
+                setCity={setCity}
+                setDepartment={setDepartment}
+              />
+            ) : (
+              <Delivery
+                cityName={cityName}
+                department={department}
+                setCity={setCity}
+                setDepartment={setDepartment}
+              />
+            )}
           </Box>
         </Box>
 
@@ -273,7 +335,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
         {/* Submit */}
         <LoadingButton
           loading={loading}
-          disabled={!department}
+          disabled={!deliveryFilled}
           type="submit"
           variant="contained"
           fullWidth
