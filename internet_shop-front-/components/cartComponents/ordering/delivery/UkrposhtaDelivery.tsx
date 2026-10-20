@@ -32,7 +32,7 @@ const UkrposhtaDeliveryComponent: NextPage<IUkrposhtaDeliveryProps> = ({
         required
         fullWidth
         value={cityName}
-        onChange={(e) => setCity(e.target.value.trim())}
+        onChange={(e) => setCity(e.target.value)}
         sx={{ marginTop: 4 }}
       />
       <TextField

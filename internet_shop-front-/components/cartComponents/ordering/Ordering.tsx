@@ -136,7 +136,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
             const order = await Api().orders.create({
               comment: values.comment,
               items,
-              cityName,
+              cityName: cityName.trim(),
               department,
               deliveryMethod,
               paymentMethod,
