@@ -4,6 +4,7 @@ import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 import { OrderEntity } from './entities/order.entity';
+import { BasketItemEntity } from '../user/entities/basket-item.entity';
 
 describe('OrderService', () => {
   describe('create', () => {
@@ -22,6 +23,7 @@ describe('OrderService', () => {
     beforeEach(() => {
       mockManager = {
         save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ id: 10, ...data })),
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
         findOne: jest.fn().mockImplementation((entity, options) => {
           // Return order for OrderEntity, product for ProductEntity
           if (entity.name === 'OrderEntity' || (entity && entity.name === 'order')) {
@@ -124,6 +126,15 @@ describe('OrderService', () => {
       expect(mockManager.save.mock.calls[0][1].paymentStatus).toBe(
         PaymentStatus.NotRequired,
       );
+    });
+
+    it('clears the user cart in the same transaction as order creation', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+      });
+
+      expect(mockManager.delete).toHaveBeenCalledWith(BasketItemEntity, { userId: 3 });
     });
 
     it('returns the saved order with its items', async () => {
