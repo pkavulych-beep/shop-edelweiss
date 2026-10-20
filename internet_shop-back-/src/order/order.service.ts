@@ -15,6 +15,7 @@ import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
+import { DeliveryMethod } from './deliveryEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
 
@@ -117,6 +118,8 @@ export class OrderService {
         // стан оплати нове замовлення завжди має NOT_REQUIRED
         paymentMethod: restDto.paymentMethod ?? PaymentMethod.Cod,
         paymentStatus: PaymentStatus.NotRequired,
+        // Перевізник: за замовчуванням Нова пошта, як і спосіб оплати
+        deliveryMethod: restDto.deliveryMethod ?? DeliveryMethod.NovaPoshta,
         items: orderItems,
         total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });

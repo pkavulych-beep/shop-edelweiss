@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { OrderService } from './order.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
+import { DeliveryMethod } from './deliveryEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 import { OrderEntity } from './entities/order.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
@@ -113,6 +114,31 @@ describe('OrderService', () => {
       expect(mockManager.save.mock.calls[0][1]).toMatchObject({
         paymentMethod: PaymentMethod.Card,
         paymentStatus: PaymentStatus.NotRequired,
+      });
+    });
+
+    it('defaults a new order to Nova Poshta', async () => {
+      await service.create(3, {
+        ...delivery,
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+      });
+
+      expect(mockManager.save.mock.calls[0][1].deliveryMethod).toBe(
+        DeliveryMethod.NovaPoshta,
+      );
+    });
+
+    it('keeps the delivery method chosen by the client', async () => {
+      await service.create(3, {
+        ...delivery,
+        deliveryMethod: DeliveryMethod.Ukrposhta,
+        department: '79000',
+        items: [{ productId: 1, size: 'M', quantity: 1 }],
+      });
+
+      expect(mockManager.save.mock.calls[0][1]).toMatchObject({
+        deliveryMethod: DeliveryMethod.Ukrposhta,
+        department: '79000',
       });
     });
 

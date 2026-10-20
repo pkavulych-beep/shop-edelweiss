@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Status } from '../statusEnum';
 import { PaymentMethod, PaymentStatus } from '../paymentEnum';
+import { DeliveryMethod } from '../deliveryEnum';
 import { OrderItemEntity } from './order-item.entity';
 
 @Entity('order')
@@ -46,6 +47,15 @@ export class OrderEntity {
 
   @Column({ nullable: true })
   comment: string;
+
+  // Перевізник. Колонка з default: міграцій немає (synchronize: true), тож
+  // наявні замовлення стають Новою поштою — до цього інших перевізників не було
+  @Column({
+    type: 'enum',
+    enum: DeliveryMethod,
+    default: DeliveryMethod.NovaPoshta,
+  })
+  deliveryMethod: DeliveryMethod;
 
   @Column()
   cityName: string;
