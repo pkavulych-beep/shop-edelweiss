@@ -1,6 +1,6 @@
 import React from 'react';
 import css from '../styles/info.module.scss';
-import NovaPoshtaIcon from '../icons/NovaPoschtaIcon';
+import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined';
 import { MainLayout } from '../layouts/MainLayout';
 
 const Info: React.FC = () => {
@@ -9,11 +9,17 @@ const Info: React.FC = () => {
       <div className={css.deliveryPayment}>
         <h1>Доставка, оплата, повернення</h1>
         <div className={css.deliveryItem}>
-          <NovaPoshtaIcon />
+          <LocalShippingOutlinedIcon sx={{ fontSize: 40, color: '#b3b3b3', alignSelf: 'center' }} />
           <div className={css.deliveryItemTitle}>
             <div className={css.subtitle}>Доставка</div>
             <div className={css.deliveryDesc}>
-              Новою Поштою в будь-який куточок України 1-3 дні.
+              Доставляємо трьома перевізниками:
+              <ul>
+                <li>Нова пошта — у відділення чи поштомат, 1-3 дні.</li>
+                <li>Укрпошта — у відділення за поштовим індексом.</li>
+                <li>Meest Пошта — у відділення чи поштомат.</li>
+              </ul>
+              Терміни доставки Укрпоштою та Meest Поштою залежать від перевізника.
             </div>
             <div className={css.deliveryItalic}>
               (Терміни відправлення товару, можуть змінюватись продавцем)
