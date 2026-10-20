@@ -6,4 +6,5 @@ module.exports = {
   bundlePagesRouterDependencies: true,
   // next dev 16 сам створює AGENTS.md з інструкціями для агентів; правила агентів ведемо в кореневому AGENTS.md
   agentRules: false,
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
 }

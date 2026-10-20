@@ -56,7 +56,9 @@ export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus:
 };
 
 // Чи замовлення неоплачене карткою (для підсвітки в адмінці)
-export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): boolean => {
+// Скасовані замовлення не підсвічуються, бо не потребують уваги
+export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): boolean => {
+  if (status === Status.Canceled) return false;
   return paymentMethod === PaymentMethod.Card &&
     paymentStatus !== PaymentStatus.Paid &&
     paymentStatus !== PaymentStatus.Refunded;
