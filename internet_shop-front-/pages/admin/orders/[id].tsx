@@ -22,6 +22,7 @@ import { Role } from '../../../redux/Types/ProductType';
 import { Order, Status } from '../../../redux/Types/orderType';
 import { Api } from '../../../api/Api';
 import { formatPhone } from '../../../utils/phone';
+import { formatDelivery } from '../../../utils/delivery';
 import { statusColor, getPaymentChipLabel, getPaymentChipColor } from '../../../components/MyOrders/MyOrders';
 
 const sectionSx = {
@@ -185,7 +186,7 @@ export default function AdminOrderDetailsPage() {
         <Box sx={{ ...sectionSx }}>
           <Typography sx={{ fontWeight: 700, mb: 1 }}>Доставка</Typography>
           <Typography sx={{ fontSize: '0.9rem' }}>
-            Нова пошта, {order.cityName}, {order.department}
+            {formatDelivery(order)}
           </Typography>
           {order.comment && (
             <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary', mt: 0.5 }}>

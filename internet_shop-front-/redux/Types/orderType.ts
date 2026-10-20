@@ -12,6 +12,13 @@ export enum PaymentMethod {
   Card = 'CARD',
 }
 
+// Значення такі самі, як у бекенда (src/order/deliveryEnum.ts)
+export enum DeliveryMethod {
+  NovaPoshta = 'NOVA_POSHTA',
+  Ukrposhta = 'UKRPOSHTA',
+  Meest = 'MEEST',
+}
+
 export enum PaymentStatus {
   NotRequired = 'NOT_REQUIRED',
   Pending = 'PENDING',
@@ -40,6 +47,7 @@ export type Order = {
   comment: string;
   cityName: string;
   department: string;
+  deliveryMethod: DeliveryMethod;
   createdAt: string;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
