@@ -92,7 +92,7 @@ export default function AdminOrdersPage() {
             </TableHead>
             <TableBody>
               {orders.data.map(({ id, createdAt, user, total, status, paymentMethod, paymentStatus }) => {
-                const isUnpaidCard = isCardUnpaid(paymentMethod, paymentStatus);
+                const isUnpaidCard = isCardUnpaid(paymentMethod, paymentStatus, status);
                 return (
                   <TableRow
                     key={id}
