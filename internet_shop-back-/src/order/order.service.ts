@@ -265,6 +265,42 @@ export class OrderService {
     });
   }
 
+  // Скасовує замовлення, яке досі чекає на оплату, у транзакції виклику:
+  // повертає товар на склад і ставить paymentStatus FAILED. Якщо замовлення
+  // вже оплачене (вебхук прийшов раніше) або перейшло на інший інвойс,
+  // нічого не змінює. Використовується плановою звіркою неоплачених
+  // CARD-замовлень.
+  async cancelUnpaidOrder(
+    manager: EntityManager,
+    id: number,
+    invoiceId: string,
+  ): Promise<OrderEntity | null> {
+    const order = await manager.findOne(OrderEntity, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (
+      !order ||
+      order.paymentStatus !== PaymentStatus.Pending ||
+      order.paymentInvoiceId !== invoiceId ||
+      order.status === Status.Canceled
+    ) {
+      return null;
+    }
+
+    const orderWithItems = await manager.findOne(OrderEntity, {
+      where: { id },
+      relations: { items: { product: true } },
+      order: { items: { id: 'ASC' } },
+    });
+
+    await this.restoreProductCounts(manager, orderWithItems.items ?? []);
+    orderWithItems.status = Status.Canceled;
+    orderWithItems.paymentStatus = PaymentStatus.Failed;
+    return manager.save(OrderEntity, orderWithItems);
+  }
+
   private async restoreProductCounts(manager: EntityManager, items: OrderEntity['items']) {
     // Sum quantities by productId for stock increment
     const quantitiesByProduct = new Map<number, number>();

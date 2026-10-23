@@ -23,6 +23,7 @@ import { QuickOrderEntity } from './quick-order/entities/quick-order.entity';
 import { RefreshTokenEntity } from './auth/entities/refresh-token.entity';
 import { PaymentModule } from './payment/payment.module';
 import { PaymentEntity } from './payment/entities/payment.entity';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import {
   AUTH_ATTEMPTS_LIMIT,
@@ -32,6 +33,7 @@ import {
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       throttlers: [
         {

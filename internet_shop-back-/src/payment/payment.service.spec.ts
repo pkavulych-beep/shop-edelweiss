@@ -574,4 +574,195 @@ describe('PaymentService', () => {
       expect(manager.save).not.toHaveBeenCalled();
     });
   });
+
+  describe('reconcilePendingCardPayments', () => {
+    const NOW = new Date('2026-10-13T12:00:00Z');
+    const INVOICE_ID = 'mono-invoice-123';
+    const invoiceCreatedAt = new Date('2026-10-13T10:00:00Z');
+    const status = (overrides: Record<string, unknown> = {}) => ({
+      invoiceId: INVOICE_ID,
+      status: 'success',
+      amount: 150000,
+      ccy: 980,
+      modifiedDate: '2026-10-13T11:00:00Z',
+      ...overrides,
+    });
+
+    let invoiceLog: any;
+    let order: any;
+
+    const givenInvoice = (createdAt = invoiceCreatedAt) => ({
+      id: 1,
+      orderId: 10,
+      provider: 'mono',
+      invoiceId: INVOICE_ID,
+      kind: PaymentLogKind.Invoice,
+      amount: 150000,
+      status: PaymentStatus.Pending,
+      providerModifiedAt: null,
+      createdAt,
+    });
+
+    const statusLogs = () =>
+      manager.save.mock.calls.filter(
+        ([entity, data]: [unknown, any]) =>
+          entity === PaymentEntity && data.kind === PaymentLogKind.StatusCheck,
+      );
+
+    beforeEach(() => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+      jest.spyOn(Date, 'now').mockReturnValue(NOW.getTime());
+
+      invoiceLog = givenInvoice();
+      order = {
+        ...mockOrder,
+        paymentStatus: PaymentStatus.Pending,
+        paymentInvoiceId: INVOICE_ID,
+      };
+
+      paymentRepository.find = jest.fn().mockResolvedValue([invoiceLog]);
+      orderRepository.findOne.mockResolvedValue(order);
+      manager.findOne.mockImplementation((entity: unknown) =>
+        Promise.resolve(entity === PaymentEntity ? invoiceLog : order),
+      );
+      paymentProvider.getInvoiceStatus = jest
+        .fn()
+        .mockResolvedValue(status());
+      paymentProvider.invalidateInvoice = jest.fn().mockResolvedValue(undefined);
+      orderService.cancelUnpaidOrder = jest.fn().mockImplementation(async () => {
+        order.status = Status.Canceled;
+        order.paymentStatus = PaymentStatus.Failed;
+        return order;
+      });
+    });
+
+    afterEach(() => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+      jest.restoreAllMocks();
+    });
+
+    it('marks a successful invoice PAID and paidAt when the webhook was lost', async () => {
+      await service.reconcilePendingCardPayments();
+
+      expect(paymentProvider.getInvoiceStatus).toHaveBeenCalledWith(INVOICE_ID);
+      expect(invoiceLog.status).toBe(PaymentStatus.Paid);
+      expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+      expect(order.paidAt).toEqual(new Date('2026-10-13T11:00:00Z'));
+      expect(statusLogs()).toHaveLength(1);
+      expect(statusLogs()[0][1]).toEqual(
+        expect.objectContaining({
+          kind: PaymentLogKind.StatusCheck,
+          status: PaymentStatus.Paid,
+        }),
+      );
+    });
+
+    it('cancels an expired invoice, marks it FAILED and returns stock', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce(status({ status: 'expired' }));
+
+      await service.reconcilePendingCardPayments();
+
+      expect(orderService.cancelUnpaidOrder).toHaveBeenCalledWith(
+        manager,
+        10,
+        INVOICE_ID,
+      );
+      expect(invoiceLog.status).toBe(PaymentStatus.Failed);
+      expect(order.status).toBe(Status.Canceled);
+      expect(order.paymentStatus).toBe(PaymentStatus.Failed);
+      expect(statusLogs()).toHaveLength(1);
+      expect(statusLogs()[0][1]).toEqual(
+        expect.objectContaining({ status: PaymentStatus.Failed }),
+      );
+    });
+
+    it('cancels an unpaid invoice after failure as well', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce(status({ status: 'failure' }));
+
+      await service.reconcilePendingCardPayments();
+
+      expect(orderService.cancelUnpaidOrder).toHaveBeenCalled();
+      expect(invoiceLog.status).toBe(PaymentStatus.Failed);
+    });
+
+    it('removes a still-created invoice before cancelling the order', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce(status({ status: 'created' }));
+
+      await service.reconcilePendingCardPayments();
+
+      expect(paymentProvider.invalidateInvoice).toHaveBeenCalledWith(INVOICE_ID);
+      expect(orderService.cancelUnpaidOrder).toHaveBeenCalled();
+      // remove — строго до скасування, щоб рахунок уже не можна було оплатити.
+      expect(paymentProvider.invalidateInvoice.mock.invocationCallOrder[0]).toBeLessThan(
+        (orderService.cancelUnpaidOrder as jest.Mock).mock.invocationCallOrder[0],
+      );
+      expect(invoiceLog.status).toBe(PaymentStatus.Failed);
+    });
+
+    it('does nothing while the invoice is still processing', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce(status({ status: 'processing' }));
+
+      await service.reconcilePendingCardPayments();
+
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+      expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+      expect(invoiceLog.status).toBe(PaymentStatus.Pending);
+      expect(order.paymentStatus).toBe(PaymentStatus.Pending);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when mono returns an error', async () => {
+      paymentProvider.getInvoiceStatus.mockRejectedValueOnce(
+        new InternalServerErrorException('Mono API error: 429'),
+      );
+
+      await expect(service.reconcilePendingCardPayments()).resolves.toBeUndefined();
+
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+      expect(invoiceLog.status).toBe(PaymentStatus.Pending);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not overwrite an order already PAID by a webhook', async () => {
+      order.paymentStatus = PaymentStatus.Paid;
+      order.paidAt = new Date('2026-10-13T10:30:00Z');
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce(status({ status: 'expired' }));
+
+      await service.reconcilePendingCardPayments();
+
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+      expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+      expect(invoiceLog.status).toBe(PaymentStatus.Pending);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not ask mono about invoices younger than the timeout', async () => {
+      const fresh = givenInvoice(new Date('2026-10-13T11:30:00Z'));
+      paymentRepository.find.mockResolvedValueOnce([]);
+
+      await service.reconcilePendingCardPayments();
+
+      expect(paymentRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            kind: PaymentLogKind.Invoice,
+            status: PaymentStatus.Pending,
+          }),
+        }),
+      );
+      const where = paymentRepository.find.mock.calls[0][0].where;
+      expect(where.createdAt.value).toEqual(new Date('2026-10-13T10:55:00Z'));
+      expect(fresh.createdAt.getTime()).toBeGreaterThan(where.createdAt.value.getTime());
+      expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+    });
+
+    it('does nothing without MONO_ACQUIRING_TOKEN', async () => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+
+      await service.reconcilePendingCardPayments();
+
+      expect(paymentRepository.find).not.toHaveBeenCalled();
+      expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+    });
+  });
 });
