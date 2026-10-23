@@ -204,7 +204,9 @@ export class PaymentService {
   // Mono не надсилає вебхук для `expired`, тож неоплачені CARD-замовлення
   // самі не скасовуються. Раз на 5 хвилин перевіряємо лише ті інвойси, строк
   // яких уже минув (плюс запас), і один раз питаємо статус у mono.
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  // Явна назва: без неї @nestjs/schedule бере globalThis.crypto.randomUUID(),
+  // а в Jest (e2e) global crypto недоступний і застосунок не стартує.
+  @Cron(CronExpression.EVERY_5_MINUTES, { name: 'reconcile-pending-card-payments' })
   async reconcilePendingCardPayments(): Promise<void> {
     // Без токена mono перевірка нічого не робить (і не падає).
     if (!process.env.MONO_ACQUIRING_TOKEN) {
