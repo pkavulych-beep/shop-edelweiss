@@ -8,6 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
 import Typography from '@mui/material/Typography';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
+import PaymentIcon from '@mui/icons-material/Payment';
 import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
 import { Order, Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
@@ -56,8 +57,9 @@ export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus:
   return paymentStatusColor[PaymentStatus.NotRequired];
 };
 
-// Чи замовлення неоплачене карткою (для підсвітки в адмінці)
+// Чи замовлення неоплачене карткою (для підсвітки в адмінці і кнопки «Сплатити»)
 // Скасовані замовлення не підсвічуються, бо не потребують уваги
+// Показує кнопку для: Pending, NotRequired, Failed (після невдалої оплати покупець може спробувати ще раз)
 export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): boolean => {
   if (status === Status.Canceled) return false;
   return paymentMethod === PaymentMethod.Card &&
@@ -72,124 +74,173 @@ const formatDate = (value: string) =>
     year: 'numeric',
   });
 
-const OrderCard: FC<{ order: Order }> = ({ order }) => (
-  <Box
-    sx={{
-      border: '1px solid',
-      borderColor: 'rgba(175, 179, 179, 0.3)',
-      borderRadius: 3,
-      p: { xs: 2, md: 3 },
-    }}
-  >
+const OrderCard: FC<{ order: Order }> = ({ order }) => {
+  const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+
+  const handlePay = async () => {
+    if (!isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status)) return;
+    setPayLoading(true);
+    setPayError(null);
+    try {
+      const { pageUrl } = await Api().payment.createInvoice(order.id);
+      window.location.href = pageUrl;
+    } catch (e) {
+      const message = e?.response?.data?.message;
+      const details = String(Array.isArray(message) ? message.join('. ') : message || '')
+        .trim()
+        .replace(/\.$/, '');
+      setPayError(
+        `Не вдалося створити інвойс для оплати.` +
+          (details ? ` ${details}.` : '') +
+          ' Спробуйте пізніше.'
+      );
+    } finally {
+      setPayLoading(false);
+    }
+  };
+
+  const showPayButton = isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status);
+
+  return (
     <Box
       sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 2,
-        mb: 2,
-        flexWrap: 'wrap',
+        border: '1px solid',
+        borderColor: 'rgba(175, 179, 179, 0.3)',
+        borderRadius: 3,
+        p: { xs: 2, md: 3 },
       }}
     >
-      <Box>
-        <Typography sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
-          Замовлення №{order.id}
-        </Typography>
-        {order.createdAt && (
-          <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
-            {formatDate(order.createdAt)}
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          mb: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box>
+          <Typography sx={{ fontWeight: 700, fontSize: '0.95rem' }}>
+            Замовлення №{order.id}
           </Typography>
-        )}
+          {order.createdAt && (
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>
+              {formatDate(order.createdAt)}
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Chip label={order.status} color={statusColor[order.status]} size="small" />
+          <Chip
+            label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
+            color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
+            size="small"
+          />
+        </Box>
       </Box>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Chip label={order.status} color={statusColor[order.status]} size="small" />
-        <Chip
-          label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
-          color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
-          size="small"
-        />
-      </Box>
-    </Box>
 
-    <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
-      Доставка: {formatDelivery(order)}
-    </Typography>
+      <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
+        Доставка: {formatDelivery(order)}
+      </Typography>
 
-    <Box>
-      {order.items.map(({ id, product, size, quantity, price }) => (
-        <Box
-          key={id}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            py: 1.5,
-            borderTop: '1px solid',
-            borderColor: 'rgba(175, 179, 179, 0.15)',
-          }}
-        >
+      <Box>
+        {order.items.map(({ id, product, size, quantity, price }) => (
           <Box
+            key={id}
             sx={{
-              width: 48,
-              height: 58,
-              flexShrink: 0,
-              borderRadius: 1.5,
-              overflow: 'hidden',
-              bgcolor: '#eceeee',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              py: 1.5,
+              borderTop: '1px solid',
+              borderColor: 'rgba(175, 179, 179, 0.15)',
             }}
           >
-            {product.cover && (
-              <img
-                src={product.cover}
-                alt={product.name}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            )}
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Link href={'/product/' + product.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                {product.name}
+            <Box
+              sx={{
+                width: 48,
+                height: 58,
+                flexShrink: 0,
+                borderRadius: 1.5,
+                overflow: 'hidden',
+                bgcolor: '#eceeee',
+              }}
+            >
+              {product.cover && (
+                <img
+                  src={product.cover}
+                  alt={product.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              )}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Link href={'/product/' + product.id} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  {product.name}
+                </Typography>
+              </Link>
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                {size ? `Розмір: ${size} · ` : ''}{quantity} шт.
               </Typography>
-            </Link>
-            <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-              {size ? `Розмір: ${size} · ` : ''}{quantity} шт.
+            </Box>
+            {/* Ціна за одиницю на момент покупки */}
+            <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+              {quantity > 1 ? `${quantity} × ${price}` : price} грн
             </Typography>
           </Box>
-          {/* Ціна за одиницю на момент покупки */}
-          <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-            {quantity > 1 ? `${quantity} × ${price}` : price} грн
-          </Typography>
+        ))}
+      </Box>
+
+      {order.comment && (
+        <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mt: 1 }}>
+          Коментар: {order.comment}
+        </Typography>
+      )}
+
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          borderTop: '1px solid',
+          borderColor: 'rgba(175, 179, 179, 0.3)',
+          mt: 1.5,
+          pt: 1.5,
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+          Сума
+        </Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
+          {order.total} грн
+        </Typography>
+      </Box>
+
+      {showPayButton && (
+        <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'rgba(175, 179, 179, 0.15)' }}>
+          {payError && (
+            <Alert severity="error" sx={{ mb: 1.5, fontSize: '0.8rem' }}>
+              {payError}
+            </Alert>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<PaymentIcon fontSize="small" />}
+            onClick={handlePay}
+            disabled={payLoading}
+            sx={{ py: 1.2, borderRadius: 2, fontWeight: 600 }}
+            fullWidth
+          >
+            {payLoading ? 'Перенаправлення...' : `Сплатити ${order.total} грн`}
+          </Button>
         </Box>
-      ))}
+      )}
     </Box>
-
-    {order.comment && (
-      <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mt: 1 }}>
-        Коментар: {order.comment}
-      </Typography>
-    )}
-
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        borderTop: '1px solid',
-        borderColor: 'rgba(175, 179, 179, 0.3)',
-        mt: 1.5,
-        pt: 1.5,
-      }}
-    >
-      <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-        Сума
-      </Typography>
-      <Typography sx={{ fontWeight: 700, fontSize: '1.1rem' }}>
-        {order.total} грн
-      </Typography>
-    </Box>
-  </Box>
-);
+  );
+};
 
 // Список замовлень поточного користувача: і в профілі, і на /orders
 export const MyOrders: FC = () => {
