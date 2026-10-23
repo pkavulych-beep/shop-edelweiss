@@ -1,8 +1,9 @@
 import { OmitType, PartialType } from '@nestjs/mapped-types';
 import { CreateOrderDto } from './create-order.dto';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Max, Min, Validate } from 'class-validator';
 import { Status, statusMessage } from '../statusEnum';
 import { MAX_INT } from '../../common/constants';
+import { IsUkrposhtaIndexConstraint } from './ukrposhta-index.validator';
 
 // Позиції замовлення фіксуються під час покупки, тож тут їх не змінюють
 export class UpdateOrderDto extends PartialType(OmitType(CreateOrderDto, ['items'] as const)) {
@@ -14,4 +15,8 @@ export class UpdateOrderDto extends PartialType(OmitType(CreateOrderDto, ['items
   @IsOptional()
   @IsEnum(Status, { message: statusMessage })
   status?: Status;
+
+  @IsOptional()
+  @Validate(IsUkrposhtaIndexConstraint)
+  department?: string;
 }
