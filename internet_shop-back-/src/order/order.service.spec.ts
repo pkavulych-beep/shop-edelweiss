@@ -929,56 +929,94 @@ describe('OrderService', () => {
       });
     });
   });
-});
 
-  describe('update Ukrposhta validation', () => {
-    it('rejects updating only department when order uses UKRPOSHTA and department not 5 digits', async () => {
-      const order = {
-        id: 16,
-        deliveryMethod: DeliveryMethod.Ukrposhta,
-        department: 'Відділення №5',
-      } as OrderEntity;
-      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn() };
+  describe('Ukrposhta index validation', () => {
+    const makeService = (order: Partial<OrderEntity>) => {
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockResolvedValue({ ...order, items: [] }),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({ ...order }),
+        save: jest.fn(saved => Promise.resolve(saved)),
+        manager: mockManager,
+      };
       const service = new OrderService(repository as any, {} as any, {} as any);
-      await expect(
-        service.update({ id: 16, department: 'Відділення №5' } as any),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      return { service, repository, mockManager };
+    };
+    const legacyUkrposhtaOrder = {
+      id: 16,
+      status: Status.Processed,
+      deliveryMethod: DeliveryMethod.Ukrposhta,
+      department: 'Відділення №5',
+    };
+
+    it('rejects changing only department of a Ukrposhta order to a non-index', async () => {
+      const { service, repository } = makeService({ ...legacyUkrposhtaOrder, department: '79000' });
+
+      await expect(service.update({ id: 16, department: 'Відділення №5' })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
     });
 
-    it('rejects changing deliveryMethod to UKRPOSHTA without valid department', async () => {
-      const order = {
+    it('rejects switching deliveryMethod to Ukrposhta when the stored department is not an index', async () => {
+      const { service, repository } = makeService({
         id: 15,
+        status: Status.Processed,
         deliveryMethod: DeliveryMethod.Meest,
         department: 'Відділення 1',
-      } as OrderEntity;
-      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn() };
-      const service = new OrderService(repository as any, {} as any, {} as any);
+      });
+
+      await expect(service.update({ id: 15, deliveryMethod: DeliveryMethod.Ukrposhta })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('allows a valid 5-digit index for a Ukrposhta order', async () => {
+      const { service } = makeService({ ...legacyUkrposhtaOrder, department: '11111' });
+
+      await expect(service.update({ id: 16, department: '79000' })).resolves.toMatchObject({ department: '79000' });
+    });
+
+    it('allows switching to Ukrposhta together with a valid index', async () => {
+      const { service } = makeService({ id: 15, deliveryMethod: DeliveryMethod.Meest, department: 'Відділення 1' });
+
       await expect(
-        service.update({ id: 15, deliveryMethod: DeliveryMethod.Ukrposhta } as any),
+        service.update({ id: 15, deliveryMethod: DeliveryMethod.Ukrposhta, department: '79000' }),
+      ).resolves.toMatchObject({ deliveryMethod: DeliveryMethod.Ukrposhta, department: '79000' });
+    });
+
+    it('allows any department name for other delivery methods', async () => {
+      const { service } = makeService({ id: 18, deliveryMethod: DeliveryMethod.Meest, department: 'Відділення 1' });
+
+      await expect(service.update({ id: 18, department: 'Відділення 2' })).resolves.toMatchObject({ department: 'Відділення 2' });
+    });
+
+    it('allows changing only the comment of a legacy Ukrposhta order', async () => {
+      const { service } = makeService(legacyUkrposhtaOrder);
+
+      await expect(service.update({ id: 16, comment: 'Подзвоніть' })).resolves.toMatchObject({
+        comment: 'Подзвоніть',
+        department: 'Відділення №5',
+      });
+    });
+
+    it('allows changing the status of a legacy Ukrposhta order', async () => {
+      const { service, mockManager } = makeService(legacyUkrposhtaOrder);
+
+      await expect(service.updateStatus(16, Status.Sent)).resolves.toMatchObject({
+        status: Status.Sent,
+        department: 'Відділення №5',
+      });
+      expect(mockManager.save).toHaveBeenCalled();
+    });
+
+    it('rejects a status change together with an invalid Ukrposhta department', async () => {
+      const { service, mockManager } = makeService({ ...legacyUkrposhtaOrder, department: '79000' });
+
+      await expect(
+        service.update({ id: 16, status: Status.Sent, department: 'Відділення №5' }),
       ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('allows updating department with valid 5-digit index when UKRPOSHTA', async () => {
-      const order = {
-        id: 17,
-        deliveryMethod: DeliveryMethod.Ukrposhta,
-        department: '11111',
-      } as OrderEntity;
-      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn().mockImplementation(async o => o) };
-      const service = new OrderService(repository as any, {} as any, {} as any);
-      const result = await service.update({ id: 17, department: '79000' } as any);
-      expect(result.department).toBe('79000');
-    });
-
-    it('allows patching department when deliveryMethod not UKRPOSHTA', async () => {
-      const order = {
-        id: 18,
-        deliveryMethod: DeliveryMethod.Meest,
-        department: 'Відділення 1',
-      } as OrderEntity;
-      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn().mockImplementation(async o => o) };
-      const service = new OrderService(repository as any, {} as any, {} as any);
-      const result = await service.update({ id: 18, department: 'Відділення 2' } as any);
-      expect(result.department).toBe('Відділення 2');
+      expect(mockManager.save).not.toHaveBeenCalled();
     });
   });
+});
