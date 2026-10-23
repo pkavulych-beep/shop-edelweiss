@@ -6,11 +6,24 @@ export interface CreateInvoiceInput {
   webHookUrl: string;
   redirectUrl: string;
   reference: string;
+  // Скільки секунд рахунок можна оплатити. Після цього mono його закриває.
+  validity: number;
 }
 
 export interface CreateInvoiceOutput {
   invoiceId: string;
   pageUrl: string;
+}
+
+// Відповідь mono на GET /invoice/status. status — сирий статус провайдера
+// (created, processing, hold, success, failure, expired, reversed).
+export interface InvoiceStatusResult {
+  invoiceId: string;
+  status: string;
+  amount: number;
+  ccy: number;
+  modifiedDate?: string;
+  [key: string]: unknown;
 }
 
 // Підпис рахується над сирими байтами тіла, тож сюди передається саме
@@ -41,4 +54,8 @@ export interface PaymentProvider {
   // не схоже на вебхук провайдера.
   verifyWebhook(input: VerifyWebhookInput): Promise<WebhookEvent>;
   refund(input: RefundInput): Promise<void>;
+  // Статус інвойсу — лише для звірки, коли вебхук міг загубитися.
+  getInvoiceStatus(invoiceId: string): Promise<InvoiceStatusResult>;
+  // Робить рахунок неоплачуваним (скасовує його в mono).
+  invalidateInvoice(invoiceId: string): Promise<void>;
 }
