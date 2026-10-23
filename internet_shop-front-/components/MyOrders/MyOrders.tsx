@@ -57,20 +57,14 @@ export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus:
   return paymentStatusColor[PaymentStatus.NotRequired];
 };
 
-// Чи замовлення неоплачене карткою (для підсвітки в адмінці)
+// Чи замовлення неоплачене карткою (для підсвітки в адмінці і кнопки «Сплатити»)
 // Скасовані замовлення не підсвічуються, бо не потребують уваги
+// Показує кнопку для: Pending, NotRequired, Failed (після невдалої оплати покупець може спробувати ще раз)
 export const isCardUnpaid = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): boolean => {
   if (status === Status.Canceled) return false;
   return paymentMethod === PaymentMethod.Card &&
     paymentStatus !== PaymentStatus.Paid &&
     paymentStatus !== PaymentStatus.Refunded;
-};
-
-// Чи замовлення можна оплатити (має кнопку «Сплатити»)
-export const canPayOrder = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): boolean => {
-  if (status === Status.Canceled) return false;
-  if (paymentMethod !== PaymentMethod.Card) return false;
-  return paymentStatus === PaymentStatus.Pending || paymentStatus === PaymentStatus.NotRequired;
 };
 
 const formatDate = (value: string) =>
@@ -85,7 +79,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => {
   const [payError, setPayError] = useState<string | null>(null);
 
   const handlePay = async () => {
-    if (!canPayOrder(order.paymentMethod, order.paymentStatus, order.status)) return;
+    if (!isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status)) return;
     setPayLoading(true);
     setPayError(null);
     try {
@@ -106,7 +100,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => {
     }
   };
 
-  const showPayButton = canPayOrder(order.paymentMethod, order.paymentStatus, order.status);
+  const showPayButton = isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status);
 
   return (
     <Box
