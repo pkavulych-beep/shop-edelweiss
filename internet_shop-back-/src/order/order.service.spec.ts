@@ -930,3 +930,55 @@ describe('OrderService', () => {
     });
   });
 });
+
+  describe('update Ukrposhta validation', () => {
+    it('rejects updating only department when order uses UKRPOSHTA and department not 5 digits', async () => {
+      const order = {
+        id: 16,
+        deliveryMethod: DeliveryMethod.Ukrposhta,
+        department: 'Відділення №5',
+      } as OrderEntity;
+      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn() };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      await expect(
+        service.update({ id: 16, department: 'Відділення №5' } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects changing deliveryMethod to UKRPOSHTA without valid department', async () => {
+      const order = {
+        id: 15,
+        deliveryMethod: DeliveryMethod.Meest,
+        department: 'Відділення 1',
+      } as OrderEntity;
+      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn() };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      await expect(
+        service.update({ id: 15, deliveryMethod: DeliveryMethod.Ukrposhta } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('allows updating department with valid 5-digit index when UKRPOSHTA', async () => {
+      const order = {
+        id: 17,
+        deliveryMethod: DeliveryMethod.Ukrposhta,
+        department: '11111',
+      } as OrderEntity;
+      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn().mockImplementation(async o => o) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      const result = await service.update({ id: 17, department: '79000' } as any);
+      expect(result.department).toBe('79000');
+    });
+
+    it('allows patching department when deliveryMethod not UKRPOSHTA', async () => {
+      const order = {
+        id: 18,
+        deliveryMethod: DeliveryMethod.Meest,
+        department: 'Відділення 1',
+      } as OrderEntity;
+      const repository = { findOne: jest.fn().mockResolvedValue(order), save: jest.fn().mockImplementation(async o => o) };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      const result = await service.update({ id: 18, department: 'Відділення 2' } as any);
+      expect(result.department).toBe('Відділення 2');
+    });
+  });

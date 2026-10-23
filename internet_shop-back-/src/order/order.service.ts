@@ -206,6 +206,13 @@ export class OrderService {
     }
     // No status change - just update other fields
     const order = await this.findOneById(id);
+    const merged = { ...order, ...(changes as Record<string, unknown>) };
+    if (merged.deliveryMethod === DeliveryMethod.Ukrposhta) {
+      const department = merged.department;
+      if (typeof department !== 'string' || !/^\d{5}$/.test(department)) {
+        throw new BadRequestException('Вкажіть індекс відділення Укрпошти: 5 цифр');
+      }
+    }
     for (const [key, value] of Object.entries(changes)) {
       if (value !== undefined) order[key] = value;
     }
@@ -236,6 +243,14 @@ export class OrderService {
       for (const [key, value] of Object.entries(changes)) {
         if (value !== undefined) {
           orderWithItems[key] = value;
+        }
+      }
+
+      const mergedStatus = { ...orderWithItems, ...(changes as Record<string, unknown>) };
+      if ((mergedStatus as any).deliveryMethod === DeliveryMethod.Ukrposhta) {
+        const department = (mergedStatus as any).department;
+        if (typeof department !== 'string' || !/^\d{5}$/.test(department)) {
+          throw new BadRequestException('Вкажіть індекс відділення Укрпошти: 5 цифр');
         }
       }
 
