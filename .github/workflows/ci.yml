@@ -56,7 +56,9 @@ jobs:
       - run: npm run lint:check
       - run: npm run build
       - run: npm test
-      - name: Smoke test (API starts, schema syncs, seed and login work)
+      - name: Smoke test (API starts, migrations create the schema, seed and login work)
+        env:
+          NODE_ENV: production
         run: |
           npm run start:prod > api.log 2>&1 &
           for i in $(seq 1 30); do
@@ -72,6 +74,8 @@ jobs:
           curl -sf http://localhost:7777/auth/profile -H "Authorization: Bearer $token" > /dev/null \
             || { echo "::error::Profile request with the admin token failed"; exit 1; }
           echo "Smoke test passed"
+      - name: Migrations match the entities
+        run: npm run migration:generate -- src/migrations/EntityChanges --check
       - name: E2E tests (register → login → order)
         run: npm run test:e2e
       - name: API log

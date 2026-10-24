@@ -42,6 +42,16 @@
 
 1. Збери те, що змінював: бек `npm run build`, фронт `npm run build`. Збірка фронта включає лінт і перевірку типів і має пройти без помилок. Лінт бека: `npm run lint:check` (0 помилок і 0 попереджень).
 2. Тести бека: `npm test`. Якщо змінюєш логіку бека, додай або онови unit-тести (`*.spec.ts` поруч із кодом).
+   Якщо змінюєш `*.entity.ts`, у тому ж PR додай міграцію: локально схему підганяє `synchronize`, а на продакшні (`NODE_ENV=production`) її створюють лише міграції з `src/migrations/`. Генеруй міграцію на окремій порожній базі, а не на спільних базах агентів (з `internet_shop-back-`):
+   ```bash
+   docker compose exec -T db createdb -U postgres Edelweiss_mig_<твоє ім'я>
+   export DB_NAME=Edelweiss_mig_<твоє ім'я>
+   npm run migration:run                                   # наявні міграції
+   npm run migration:generate -- src/migrations/<Назва>    # нова міграція зі змін у сутностях
+   npm run migration:run && npm run migration:generate -- src/migrations/Check --check  # має бути «No changes»
+   docker compose exec -T db dropdb -U postgres Edelweiss_mig_<твоє ім'я>
+   ```
+   CI падає, якщо сутність змінено без міграції.
 3. Якщо змінилася поведінка (UI чи API), запусти застосунок і пройди сценарій у браузері через Playwright MCP. Відкривай тільки http://localhost.
 4. Одна задача = один невеликий PR. В описі напиши, що змінено, чому і як перевірено (команди й що саме перевірив у браузері). Якщо задача з issue, додай `Closes #N`.
 5. Після відкриття PR автоматично запускаються CI та рев'ю. Якщо CI червоний, виправ і запуш у ту саму гілку.
