@@ -843,6 +843,105 @@ describe('OrderService', () => {
     });
   });
 
+  describe('cancelOrderWithoutInvoice', () => {
+    const pendingOrderNoInvoice = () => ({
+      id: 10,
+      status: Status.Processed,
+      paymentMethod: PaymentMethod.Card,
+      paymentStatus: PaymentStatus.NotRequired,
+      paymentInvoiceId: null,
+      items: [
+        { productId: 1, quantity: 2 },
+        { productId: 2, quantity: 1 },
+      ],
+    });
+
+    const build = (order: ReturnType<typeof pendingOrderNoInvoice> | null) => {
+      const lockedOrder = order ? { ...order } : null;
+      const mockManager = {
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity || (entity && entity.name === 'OrderEntity')) {
+            return Promise.resolve(lockedOrder);
+          }
+          return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+        }),
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+      };
+      const service = new OrderService({} as any, {} as any, {} as any);
+      return { service, mockManager, lockedOrder };
+    };
+
+    it('cancels a CARD order without invoice, marks payment FAILED and returns stock', async () => {
+      const { service, mockManager, lockedOrder } = build(pendingOrderNoInvoice());
+
+      const result = await service.cancelOrderWithoutInvoice(mockManager as any, 10);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: Status.Canceled,
+          paymentStatus: PaymentStatus.Failed,
+        }),
+      );
+      expect(lockedOrder.paymentStatus).toBe(PaymentStatus.Failed);
+      const productSaves = mockManager.save.mock.calls.filter(
+        ([entity]: [unknown]) => entity === ProductEntity,
+      );
+      expect(productSaves).toHaveLength(2);
+      const product1 = productSaves.find(([, data]: [unknown, any]) => data.id === 1);
+      const product2 = productSaves.find(([, data]: [unknown, any]) => data.id === 2);
+      expect(product1[1].count).toBe(7);
+      expect(product2[1].count).toBe(6);
+    });
+
+    it('does not touch an order with paymentMethod COD', async () => {
+      const { service, mockManager } = build({
+        ...pendingOrderNoInvoice(),
+        paymentMethod: PaymentMethod.Cod,
+      });
+
+      const result = await service.cancelOrderWithoutInvoice(mockManager as any, 10);
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an order that already has paymentInvoiceId', async () => {
+      const { service, mockManager } = build({
+        ...pendingOrderNoInvoice(),
+        paymentInvoiceId: 'invoice-123',
+      });
+
+      const result = await service.cancelOrderWithoutInvoice(mockManager as any, 10);
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an order with paymentStatus other than NOT_REQUIRED', async () => {
+      const { service, mockManager } = build({
+        ...pendingOrderNoInvoice(),
+        paymentStatus: PaymentStatus.Pending,
+      });
+
+      const result = await service.cancelOrderWithoutInvoice(mockManager as any, 10);
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an already canceled order', async () => {
+      const { service, mockManager } = build({
+        ...pendingOrderNoInvoice(),
+        status: Status.Canceled,
+      });
+
+      const result = await service.cancelOrderWithoutInvoice(mockManager as any, 10);
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('deletes an existing order', async () => {
       const mockManager = {

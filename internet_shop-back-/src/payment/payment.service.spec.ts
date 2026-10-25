@@ -5,11 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service';
-import { PaymentStatus } from '../order/paymentEnum';
+import { PaymentMethod, PaymentStatus } from '../order/paymentEnum';
 import { Status } from '../order/statusEnum';
 import { CreateInvoiceInput, WebhookEvent } from './providers/payment-provider.interface';
 import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
 import { OrderEntity } from '../order/entities/order.entity';
+
+const DEFAULT_PAYMENT_TIMEOUT_MINUTES = 60;
+const STATUS_CHECK_GRACE_MINUTES = 5;
 
 describe('PaymentService', () => {
   let service: PaymentService;
@@ -214,6 +217,59 @@ describe('PaymentService', () => {
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
         InternalServerErrorException,
       );
+    });
+
+    it('throws BadRequestException for CARD order without invoice older than payment timeout', async () => {
+      const OLD_DATE = new Date('2026-10-13T10:00:00Z');
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: OLD_DATE,
+        paymentInvoiceId: null,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+
+      await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
+
+    it('allows creating invoice for CARD order without invoice younger than payment timeout', async () => {
+      const YOUNG_DATE = new Date('2026-10-13T11:30:00Z');
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: YOUNG_DATE,
+        paymentInvoiceId: null,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+
+      await expect(service.createInvoice(3, 10)).resolves.toEqual({
+        pageUrl: 'https://mono.com/invoice/mono-invoice-123',
+      });
+      expect(paymentProvider.createInvoice).toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
+    it('creates a new invoice after FAILED even when the order is older than payment timeout', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: new Date('2026-10-13T10:00:00Z'),
+        paymentInvoiceId: 'failed-invoice',
+        paymentStatus: PaymentStatus.Failed,
+      });
+
+      await expect(service.createInvoice(3, 10)).resolves.toEqual({
+        pageUrl: 'https://mono.com/invoice/mono-invoice-123',
+      });
+      expect(paymentProvider.createInvoice).toHaveBeenCalled();
+      expect(orderRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paymentInvoiceId: 'mono-invoice-123',
+          paymentStatus: PaymentStatus.Pending,
+        }),
+      );
+      jest.restoreAllMocks();
     });
   });
 
@@ -621,6 +677,7 @@ describe('PaymentService', () => {
       };
 
       paymentRepository.find = jest.fn().mockResolvedValue([invoiceLog]);
+      orderRepository.find = jest.fn().mockResolvedValue([]);
       orderRepository.findOne.mockResolvedValue(order);
       manager.findOne.mockImplementation((entity: unknown) =>
         Promise.resolve(entity === PaymentEntity ? invoiceLog : order),
@@ -630,6 +687,11 @@ describe('PaymentService', () => {
         .mockResolvedValue(status());
       paymentProvider.invalidateInvoice = jest.fn().mockResolvedValue(undefined);
       orderService.cancelUnpaidOrder = jest.fn().mockImplementation(async () => {
+        order.status = Status.Canceled;
+        order.paymentStatus = PaymentStatus.Failed;
+        return order;
+      });
+      orderService.cancelOrderWithoutInvoice = jest.fn().mockImplementation(async () => {
         order.status = Status.Canceled;
         order.paymentStatus = PaymentStatus.Failed;
         return order;
@@ -763,6 +825,148 @@ describe('PaymentService', () => {
 
       expect(paymentRepository.find).not.toHaveBeenCalled();
       expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+    });
+
+    describe('reconcileOrdersWithoutInvoice', () => {
+      const NOW = new Date('2026-10-13T12:00:00Z');
+      const OLD_ORDER_DATE = new Date('2026-10-13T10:00:00Z');
+      const _YOUNG_ORDER_DATE = new Date('2026-10-13T11:30:00Z');
+
+      beforeEach(() => {
+        process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+        jest.spyOn(Date, 'now').mockReturnValue(NOW.getTime());
+
+        orderRepository.find = jest.fn().mockResolvedValue([]);
+        orderRepository.findOne.mockResolvedValue(null);
+        paymentRepository.find = jest.fn().mockResolvedValue([]);
+        manager.findOne.mockResolvedValue(null);
+        orderService.cancelOrderWithoutInvoice = jest.fn().mockImplementation(async (mgr: any, id: number) => {
+          const o = await mgr.findOne(OrderEntity, { where: { id } });
+          if (o) {
+            o.status = Status.Canceled;
+            o.paymentStatus = PaymentStatus.Failed;
+            return o;
+          }
+          return null;
+        });
+      });
+
+      afterEach(() => {
+        delete process.env.MONO_ACQUIRING_TOKEN;
+        jest.restoreAllMocks();
+      });
+
+      it('cancels CARD order without invoice older than timeout, marks FAILED, returns stock', async () => {
+        const oldOrder = {
+          id: 20,
+          total: 1000,
+          status: Status.Processed,
+          paymentMethod: PaymentMethod.Card,
+          paymentStatus: PaymentStatus.NotRequired,
+          paymentInvoiceId: null,
+          createdAt: OLD_ORDER_DATE,
+          items: [{ productId: 1, quantity: 2 }],
+        };
+        orderRepository.find.mockResolvedValueOnce([oldOrder]);
+        manager.findOne.mockImplementation((entity: any) =>
+          Promise.resolve(entity === OrderEntity ? { ...oldOrder } : null),
+        );
+        manager.transaction = jest.fn().mockImplementation(async (cb) => cb(manager));
+
+        await service.reconcilePendingCardPayments();
+
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where).toEqual(
+          expect.objectContaining({
+            paymentMethod: PaymentMethod.Card,
+            paymentInvoiceId: expect.any(Object), // IsNull()
+            paymentStatus: PaymentStatus.NotRequired,
+            status: Status.Processed,
+            createdAt: expect.any(Object), // LessThanOrEqual
+          }),
+        );
+        // createdAt має бути меншим або рівним NOW - (timeout + 5 хв)
+        const expectedCutoff = new Date(
+          NOW.getTime() - (DEFAULT_PAYMENT_TIMEOUT_MINUTES + STATUS_CHECK_GRACE_MINUTES) * 60_000,
+        );
+        expect(findCall.where.createdAt.value).toEqual(expectedCutoff);
+        expect(orderService.cancelOrderWithoutInvoice).toHaveBeenCalledWith(manager, 20);
+        const statusLogs = manager.save.mock.calls.filter(
+          ([entity, data]: [unknown, any]) =>
+            entity === PaymentEntity && data.kind === PaymentLogKind.StatusCheck,
+        );
+        expect(statusLogs).toHaveLength(1);
+        expect(statusLogs[0][1]).toEqual(
+          expect.objectContaining({
+            orderId: 20,
+            status: PaymentStatus.Failed,
+            kind: PaymentLogKind.StatusCheck,
+            invoiceId: '',
+            rawPayload: expect.objectContaining({ reason: 'invoice_creation_failed' }),
+          }),
+        );
+      });
+
+      it('does not cancel CARD order without invoice younger than timeout', async () => {
+        orderRepository.find.mockResolvedValueOnce([]);
+
+        await service.reconcilePendingCardPayments();
+
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where).toEqual(
+          expect.objectContaining({
+            paymentMethod: PaymentMethod.Card,
+            paymentInvoiceId: expect.any(Object),
+            paymentStatus: PaymentStatus.NotRequired,
+            status: Status.Processed,
+            createdAt: expect.any(Object),
+          }),
+        );
+        const expectedCutoff = new Date(
+          NOW.getTime() - (DEFAULT_PAYMENT_TIMEOUT_MINUTES + STATUS_CHECK_GRACE_MINUTES) * 60_000,
+        );
+        expect(findCall.where.createdAt.value).toEqual(expectedCutoff);
+        expect(orderService.cancelOrderWithoutInvoice).not.toHaveBeenCalled();
+        expect(manager.save).not.toHaveBeenCalledWith(
+          PaymentEntity,
+          expect.objectContaining({ kind: PaymentLogKind.StatusCheck }),
+        );
+      });
+
+      it('does not touch COD orders', async () => {
+        orderRepository.find.mockResolvedValueOnce([]);
+
+        await service.reconcilePendingCardPayments();
+
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where.paymentMethod).toBe(PaymentMethod.Card);
+        expect(orderService.cancelOrderWithoutInvoice).not.toHaveBeenCalled();
+      });
+
+      it('works without MONO_ACQUIRING_TOKEN for orders without invoice', async () => {
+        delete process.env.MONO_ACQUIRING_TOKEN;
+
+        const oldOrder = {
+          id: 23,
+          total: 1000,
+          status: Status.Processed,
+          paymentMethod: PaymentMethod.Card,
+          paymentStatus: PaymentStatus.NotRequired,
+          paymentInvoiceId: null,
+          createdAt: OLD_ORDER_DATE,
+          items: [{ productId: 1, quantity: 1 }],
+        };
+        orderRepository.find.mockResolvedValueOnce([oldOrder]);
+        manager.findOne.mockImplementation((entity: any) =>
+          Promise.resolve(entity === OrderEntity ? { ...oldOrder } : null),
+        );
+        manager.transaction = jest.fn().mockImplementation(async (cb) => cb(manager));
+
+        await service.reconcilePendingCardPayments();
+
+        expect(orderService.cancelOrderWithoutInvoice).toHaveBeenCalledWith(manager, 23);
+        expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+      });
     });
   });
 });
