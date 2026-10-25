@@ -38,7 +38,16 @@ export const paymentStatusLabel: Record<PaymentStatus, string> = {
 };
 
 // Допоміжні функції для відображення статусу оплати
-export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): string => {
+// Для скасованих замовлень показуємо «Скасовано» лише для статусів, що очікують оплати
+// PAID і REFUNDED залишаємо як є (адмін/покупець мають бачити, що гроші були сплачені/повернені)
+const canceledPaymentStatuses: PaymentStatus[] = [
+  PaymentStatus.NotRequired,
+  PaymentStatus.Pending,
+  PaymentStatus.Failed,
+];
+
+export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): string => {
+  if (status === Status.Canceled && canceledPaymentStatuses.includes(paymentStatus)) return 'Скасовано';
   if (paymentMethod === PaymentMethod.Card) {
     // CARD-замовлення лишається NOT_REQUIRED, якщо інвойс не створився: оплати ще не було
     return paymentStatus === PaymentStatus.NotRequired
@@ -48,7 +57,8 @@ export const getPaymentChipLabel = (paymentMethod: PaymentMethod, paymentStatus:
   return paymentStatusLabel[PaymentStatus.NotRequired];
 };
 
-export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus): ChipProps['color'] => {
+export const getPaymentChipColor = (paymentMethod: PaymentMethod, paymentStatus: PaymentStatus, status?: Status): ChipProps['color'] => {
+  if (status === Status.Canceled && canceledPaymentStatuses.includes(paymentStatus)) return 'default';
   if (paymentMethod === PaymentMethod.Card) {
     return paymentStatus === PaymentStatus.NotRequired
       ? paymentStatusColor[PaymentStatus.Pending]
@@ -134,8 +144,8 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Chip label={order.status} color={statusColor[order.status]} size="small" />
           <Chip
-            label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
-            color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
+            label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status)}
+            color={getPaymentChipColor(order.paymentMethod, order.paymentStatus, order.status)}
             size="small"
           />
         </Box>
