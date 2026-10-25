@@ -52,6 +52,16 @@ describe('order status validation', () => {
     );
   });
 
+  it.each([
+    ['cityName', 'Вкажіть місто доставки'],
+    ['department', 'Вкажіть відділення доставки'],
+  ])('UpdateOrderDto rejects null %s like an empty string', async (field, message) => {
+    const error = await validate(UpdateOrderDto, { id: 1, [field]: null }).catch(err => err);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(error.getResponse()).toMatchObject({ message: expect.arrayContaining([message]) });
+  });
+
   it('UpdateOrderDto rejects an unknown delivery method', async () => {
     await expect(
       validate(UpdateOrderDto, { id: 1, deliveryMethod: 'DHL' }),
