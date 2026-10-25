@@ -8,6 +8,7 @@ import { PaymentStatus } from '../../order/paymentEnum';
 import {
   CreateInvoiceInput,
   CreateInvoiceOutput,
+  InvoiceStatusResult,
   PaymentProvider,
   RefundInput,
   VerifyWebhookInput,
@@ -79,12 +80,24 @@ export class MonoPaymentProvider implements PaymentProvider {
         ccy: input.ccy,
         webHookUrl: input.webHookUrl,
         redirectUrl: input.redirectUrl,
+        validity: input.validity,
         merchantPaymInfo: {
           reference: input.reference,
         },
       },
     );
     return { invoiceId, pageUrl };
+  }
+
+  async getInvoiceStatus(invoiceId: string): Promise<InvoiceStatusResult> {
+    return this.request<InvoiceStatusResult>(
+      'GET',
+      `/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`,
+    );
+  }
+
+  async invalidateInvoice(invoiceId: string): Promise<void> {
+    await this.request('POST', '/invoice/remove', { invoiceId });
   }
 
   async verifyWebhook({ rawBody, signature }: VerifyWebhookInput): Promise<WebhookEvent> {

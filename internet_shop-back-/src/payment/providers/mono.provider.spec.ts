@@ -23,6 +23,7 @@ describe('MonoPaymentProvider', () => {
           webHookUrl: 'http://localhost:7777/payment/webhook/mono',
           redirectUrl: 'http://localhost:3000/order/10',
           reference: '10',
+          validity: 3600,
         }),
       ).rejects.toBeInstanceOf(InternalServerErrorException);
     });
@@ -44,6 +45,7 @@ describe('MonoPaymentProvider', () => {
         webHookUrl: 'http://localhost:7777/payment/webhook/mono',
         redirectUrl: 'http://localhost:3000/order/10',
         reference: '10',
+        validity: 3600,
       });
 
       expect(global.fetch).toHaveBeenCalledWith(
@@ -59,6 +61,7 @@ describe('MonoPaymentProvider', () => {
             ccy: 980,
             webHookUrl: 'http://localhost:7777/payment/webhook/mono',
             redirectUrl: 'http://localhost:3000/order/10',
+            validity: 3600,
             merchantPaymInfo: { reference: '10' },
           }),
         }),
@@ -80,8 +83,68 @@ describe('MonoPaymentProvider', () => {
           webHookUrl: 'http://localhost:7777/payment/webhook/mono',
           redirectUrl: 'http://localhost:3000/order/10',
           reference: '10',
+          validity: 3600,
         }),
       ).rejects.toBeInstanceOf(InternalServerErrorException);
+    });
+  });
+
+  describe('getInvoiceStatus', () => {
+    it('asks mono for the invoice status by invoiceId', async () => {
+      const status = {
+        invoiceId: 'mono-invoice-123',
+        status: 'success',
+        amount: 150000,
+        ccy: 980,
+        modifiedDate: '2026-10-13T10:00:00Z',
+      };
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue(status),
+      });
+
+      const result = await provider.getInvoiceStatus('mono-invoice-123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.monobank.ua/api/merchant/invoice/status?invoiceId=mono-invoice-123',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({ 'X-Token': 'test-token' }),
+        }),
+      );
+      expect(result).toEqual(status);
+    });
+
+    it('throws on API error', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: jest.fn().mockResolvedValue('Too Many Requests'),
+      });
+
+      await expect(provider.getInvoiceStatus('mono-invoice-123')).rejects.toBeInstanceOf(
+        InternalServerErrorException,
+      );
+    });
+  });
+
+  describe('invalidateInvoice', () => {
+    it('removes the invoice in mono so it cannot be paid', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({}),
+      });
+
+      await provider.invalidateInvoice('mono-invoice-123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.monobank.ua/api/merchant/invoice/remove',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'X-Token': 'test-token' }),
+          body: JSON.stringify({ invoiceId: 'mono-invoice-123' }),
+        }),
+      );
     });
   });
 

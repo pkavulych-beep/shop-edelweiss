@@ -14,6 +14,7 @@ import { getUploadsDir } from './file/uploads-dir';
 import { getDataSourceOptions } from './database/data-source-options';
 import { QuickOrderModule } from './quick-order/quick-order.module';
 import { PaymentModule } from './payment/payment.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import {
   AUTH_ATTEMPTS_LIMIT,
@@ -23,6 +24,7 @@ import {
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot({
       throttlers: [
         {
