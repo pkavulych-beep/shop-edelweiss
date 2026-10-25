@@ -13,10 +13,11 @@ describe('UsersService cart', () => {
       find: jest.fn().mockResolvedValue([]),
       create: jest.fn(item => item),
       save: jest.fn(item => Promise.resolve(item)),
+      delete: jest.fn(),
     };
     productService = {
       assertPurchasable: jest.fn(),
-      findPurchasableIds: jest.fn(),
+      findPurchasable: jest.fn(),
       findProductsMain: jest.fn().mockResolvedValue([{ id: 5, sizes: ['M'] }]),
     };
     service = new UsersService({} as any, basketRepository, {} as any, productService);
@@ -81,15 +82,85 @@ describe('UsersService cart', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(basketRepository.save).not.toHaveBeenCalled();
   });
+  it('rejects adding more than the stock of the size', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([
+      { id: 5, sizes: ['S', 'M'], sizeStock: { S: 2, M: 0 }, count: 2 },
+    ]);
+    basketRepository.findOne.mockResolvedValueOnce({ userId: 1, productId: 5, size: 'S', quantity: 2 });
+
+    await expect(
+      service.addProductToBasket(1, { idProduct: 5, size: 'S' }),
+    ).rejects.toThrow('Недостатньо товару на складі. Доступно: 2');
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects a size that is out of stock', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([
+      { id: 5, sizes: ['S', 'M'], sizeStock: { S: 2, M: 0 }, count: 2 },
+    ]);
+
+    await expect(
+      service.addProductToBasket(1, { idProduct: 5, size: 'M' }),
+    ).rejects.toThrow('Доступно: 0');
+  });
+
+  it('adds while the stock of the size allows it', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([
+      { id: 5, sizes: ['S', 'M'], sizeStock: { S: 2, M: 0 }, count: 2 },
+    ]);
+    basketRepository.findOne.mockResolvedValueOnce({ userId: 1, productId: 5, size: 'S', quantity: 1 });
+
+    await service.addProductToBasket(1, { idProduct: 5, size: 'S' });
+    expect(basketRepository.save).toHaveBeenCalledWith(expect.objectContaining({ quantity: 2 }));
+  });
+
+  it('limits a product without sizes by its count', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([{ id: 5, sizes: [], sizeStock: null, count: 1 }]);
+    basketRepository.findOne.mockResolvedValueOnce({ userId: 1, productId: 5, size: '', quantity: 1 });
+
+    await expect(service.addProductToBasket(1, { idProduct: 5 })).rejects.toThrow('Доступно: 1');
+  });
+
+  it('trims guest cart quantities to the stock of the size', async () => {
+    productService.findPurchasable.mockResolvedValue([
+      { id: 1, sizes: ['S', 'M'], sizeStock: { S: 3, M: 0 }, count: 3 },
+    ]);
+    basketRepository.findOne
+      .mockResolvedValueOnce({ userId: 7, productId: 1, size: 'S', quantity: 2 })
+      .mockResolvedValueOnce(null);
+
+    await service.syncCart(7, [
+      { productId: 1, size: 'S', quantity: 5 },
+      { productId: 1, size: 'M', quantity: 1 },
+    ]);
+
+    expect(basketRepository.save).toHaveBeenCalledTimes(1);
+    expect(basketRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ size: 'S', quantity: 3 }),
+    );
+  });
+
+  it('removes a basket item whose size sold out when syncing a guest cart', async () => {
+    productService.findPurchasable.mockResolvedValue([
+      { id: 1, sizes: ['S', 'M'], sizeStock: { S: 3, M: 0 }, count: 3 },
+    ]);
+    basketRepository.findOne.mockResolvedValueOnce({ id: 9, userId: 7, productId: 1, size: 'M', quantity: 1 });
+
+    await service.syncCart(7, [{ productId: 1, size: 'M', quantity: 1 }]);
+
+    expect(basketRepository.delete).toHaveBeenCalledWith({ id: 9 });
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
   it('skips hidden products when syncing a guest cart', async () => {
-    productService.findPurchasableIds.mockResolvedValue([1]);
+    productService.findPurchasable.mockResolvedValue([{ id: 1, sizes: ['M'], count: null }]);
 
     await service.syncCart(7, [
       { productId: 1, size: 'M', quantity: 2 },
       { productId: 5, size: 'L', quantity: 1 },
     ]);
 
-    expect(productService.findPurchasableIds).toHaveBeenCalledWith([1, 5]);
+    expect(productService.findPurchasable).toHaveBeenCalledWith([1, 5]);
     expect(basketRepository.save).toHaveBeenCalledTimes(1);
     expect(basketRepository.save).toHaveBeenCalledWith({
       userId: 7,

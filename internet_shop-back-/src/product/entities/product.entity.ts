@@ -68,6 +68,12 @@ export class ProductEntity {
   @Column('text', { array: true, default: '{}' })
   sizes: string[];
 
+  // Залишок по розмірах ({"S": 3, "M": 0}); тоді sizes — його ключі, а count —
+  // сума. NULL — товар без розмірів, залишок лише в count. Тип json, а не
+  // jsonb: jsonb сортує ключі, а порядок розмірів задає адмін
+  @Column({ type: 'json', nullable: true, default: null })
+  sizeStock: Record<string, number> | null;
+
   @Column({ nullable: true })
   weight: string;
 
