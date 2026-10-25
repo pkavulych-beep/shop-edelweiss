@@ -129,7 +129,7 @@ export const PaymentSuccess: NextPage = () => {
         ) : (
           <>
             <Alert severity="warning" sx={{ mb: 3 }}>
-              Оплата ще не підтверджена. Статус: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus) : 'невідомо'}.
+              Оплата ще не підтверджена. Статус: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status) : 'невідомо'}.
             </Alert>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
               Якщо ви оплатили замовлення, статус оновиться протягом декілька хвилин.

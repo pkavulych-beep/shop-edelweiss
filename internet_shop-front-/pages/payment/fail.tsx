@@ -135,7 +135,7 @@ export const PaymentFail: NextPage = () => {
               Оплата не пройшла
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-              Статус оплати: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus) : 'невідомо'}.
+              Статус оплати: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status) : 'невідомо'}.
               Спробуйте ще раз або оберіть інший спосіб оплати.
             </Typography>
           </>
