@@ -11,6 +11,9 @@ import { CreateInvoiceInput, WebhookEvent } from './providers/payment-provider.i
 import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
 import { OrderEntity } from '../order/entities/order.entity';
 
+const DEFAULT_PAYMENT_TIMEOUT_MINUTES = 60;
+const STATUS_CHECK_GRACE_MINUTES = 5;
+
 describe('PaymentService', () => {
   let service: PaymentService;
   let paymentRepository: any;
@@ -214,6 +217,38 @@ describe('PaymentService', () => {
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
         InternalServerErrorException,
       );
+    });
+
+    it('throws BadRequestException for CARD order without invoice older than payment timeout', async () => {
+      const OLD_DATE = new Date('2026-10-13T10:00:00Z');
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: OLD_DATE,
+        paymentInvoiceId: null,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+
+      await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
+
+    it('allows creating invoice for CARD order without invoice younger than payment timeout', async () => {
+      const YOUNG_DATE = new Date('2026-10-13T11:30:00Z');
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: YOUNG_DATE,
+        paymentInvoiceId: null,
+        paymentStatus: PaymentStatus.NotRequired,
+      });
+
+      await expect(service.createInvoice(3, 10)).resolves.toEqual({
+        pageUrl: 'https://mono.com/invoice/mono-invoice-123',
+      });
+      expect(paymentProvider.createInvoice).toHaveBeenCalled();
+      jest.restoreAllMocks();
     });
   });
 
@@ -774,7 +809,7 @@ describe('PaymentService', () => {
     describe('reconcileOrdersWithoutInvoice', () => {
       const NOW = new Date('2026-10-13T12:00:00Z');
       const OLD_ORDER_DATE = new Date('2026-10-13T10:00:00Z');
-      const YOUNG_ORDER_DATE = new Date('2026-10-13T11:30:00Z');
+      const _YOUNG_ORDER_DATE = new Date('2026-10-13T11:30:00Z');
 
       beforeEach(() => {
         process.env.MONO_ACQUIRING_TOKEN = 'test-token';
@@ -819,16 +854,21 @@ describe('PaymentService', () => {
 
         await service.reconcilePendingCardPayments();
 
-        expect(orderRepository.find).toHaveBeenCalledWith(
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where).toEqual(
           expect.objectContaining({
-            where: expect.objectContaining({
-              paymentMethod: PaymentMethod.Card,
-              paymentInvoiceId: expect.any(Object), // IsNull()
-              paymentStatus: PaymentStatus.NotRequired,
-              status: Status.Processed,
-            }),
+            paymentMethod: PaymentMethod.Card,
+            paymentInvoiceId: expect.any(Object), // IsNull()
+            paymentStatus: PaymentStatus.NotRequired,
+            status: Status.Processed,
+            createdAt: expect.any(Object), // LessThanOrEqual
           }),
         );
+        // createdAt має бути меншим або рівним NOW - (timeout + 5 хв)
+        const expectedCutoff = new Date(
+          NOW.getTime() - (DEFAULT_PAYMENT_TIMEOUT_MINUTES + STATUS_CHECK_GRACE_MINUTES) * 60_000,
+        );
+        expect(findCall.where.createdAt.value).toEqual(expectedCutoff);
         expect(orderService.cancelOrderWithoutInvoice).toHaveBeenCalledWith(manager, 20);
         const statusLogs = manager.save.mock.calls.filter(
           ([entity, data]: [unknown, any]) =>
@@ -847,19 +887,24 @@ describe('PaymentService', () => {
       });
 
       it('does not cancel CARD order without invoice younger than timeout', async () => {
-        const _youngOrder = {
-          id: 21,
-          total: 1000,
-          status: Status.Processed,
-          paymentMethod: PaymentMethod.Card,
-          paymentStatus: PaymentStatus.NotRequired,
-          paymentInvoiceId: null,
-          createdAt: YOUNG_ORDER_DATE,
-        };
         orderRepository.find.mockResolvedValueOnce([]);
 
         await service.reconcilePendingCardPayments();
 
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where).toEqual(
+          expect.objectContaining({
+            paymentMethod: PaymentMethod.Card,
+            paymentInvoiceId: expect.any(Object),
+            paymentStatus: PaymentStatus.NotRequired,
+            status: Status.Processed,
+            createdAt: expect.any(Object),
+          }),
+        );
+        const expectedCutoff = new Date(
+          NOW.getTime() - (DEFAULT_PAYMENT_TIMEOUT_MINUTES + STATUS_CHECK_GRACE_MINUTES) * 60_000,
+        );
+        expect(findCall.where.createdAt.value).toEqual(expectedCutoff);
         expect(orderService.cancelOrderWithoutInvoice).not.toHaveBeenCalled();
         expect(manager.save).not.toHaveBeenCalledWith(
           PaymentEntity,
@@ -868,19 +913,12 @@ describe('PaymentService', () => {
       });
 
       it('does not touch COD orders', async () => {
-        const _codOrder = {
-          id: 22,
-          total: 1000,
-          status: Status.Processed,
-          paymentMethod: PaymentMethod.Cod,
-          paymentStatus: PaymentStatus.NotRequired,
-          paymentInvoiceId: null,
-          createdAt: OLD_ORDER_DATE,
-        };
         orderRepository.find.mockResolvedValueOnce([]);
 
         await service.reconcilePendingCardPayments();
 
+        const findCall = orderRepository.find.mock.calls[0][0];
+        expect(findCall.where.paymentMethod).toBe(PaymentMethod.Card);
         expect(orderService.cancelOrderWithoutInvoice).not.toHaveBeenCalled();
       });
 

@@ -96,6 +96,15 @@ export class PaymentService {
       throw new BadRequestException('Інвойс для цього замовлення вже створено');
     }
 
+    // Захист від гонки з reconcileOrdersWithoutInvoice:
+    // CARD-замовлення без інвойсу, яке старше за paymentTimeoutMinutes,
+    // може бути скасоване кроном у будь-який момент. Відхиляємо створення
+    // інвойсу, щоб не «оживити» уже скасоване замовлення.
+    const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / 60_000;
+    if (orderAgeMinutes > paymentTimeoutMinutes()) {
+      throw new BadRequestException('Час на оплату минув');
+    }
+
     const amount = Math.round(order.total * 100);
     const baseUrl = process.env.BASE_URL;
     const frontendUrl = process.env.FRONTEND_URL;
