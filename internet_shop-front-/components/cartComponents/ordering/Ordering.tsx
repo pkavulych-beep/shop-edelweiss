@@ -125,7 +125,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({
         changeError(null);
         if (hasStockIssue) {
           changeError(
-            'Деяких товарів у кошику не вистачає на складі. Зменште кількість або приберіть їх, щоб оформити замовлення.'
+            'Деяких товарів у кошику не вистачає на складі. Приберіть їх із кошика, щоб оформити замовлення.'
           );
           return;
         }
@@ -361,8 +361,8 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({
         {/* Submit */}
         {hasStockIssue && (
           <Alert severity="warning" sx={{ mb: 2, fontSize: '0.85rem' }}>
-            Деяких товарів у кошику не вистачає на складі. Зменште кількість
-            або приберіть їх, щоб оформити замовлення.
+            Деяких товарів у кошику не вистачає на складі. Приберіть їх із
+            кошика, щоб оформити замовлення.
           </Alert>
         )}
 
