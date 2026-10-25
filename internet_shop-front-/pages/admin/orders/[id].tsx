@@ -59,7 +59,10 @@ const formatDate = (value: string) =>
 
 // У базі суми в копійках, у магазині показуємо гривні
 const formatMoney = (kopeks: number) =>
-  `${(kopeks / 100).toLocaleString('uk-UA', { maximumFractionDigits: 2 })} грн`;
+  `${(kopeks / 100).toLocaleString('uk-UA', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} грн`;
 
 const parseRefundKopeks = (value: string): number | null => {
   const normalized = value.replace(',', '.').trim();
