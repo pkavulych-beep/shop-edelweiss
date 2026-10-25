@@ -91,6 +91,38 @@ describe('QuickOrderService', () => {
       expect(repository.save).not.toHaveBeenCalled();
     });
 
+    it('rejects a size that is out of stock', async () => {
+      const sizeStock = { S: 2, M: 0 };
+      productService.findByIdWithStock.mockResolvedValue({
+        ...product,
+        sizeStock,
+        count: 2,
+        status: ProductStatus.Active,
+      });
+      productService.findProductsMain.mockResolvedValue([
+        { ...product, sizeStock, count: 2 },
+      ]);
+
+      await expect(service.create(dto)).rejects.toThrow('Розміру M немає в наявності');
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('accepts a size that is in stock', async () => {
+      const sizeStock = { S: 0, M: 1 };
+      productService.findByIdWithStock.mockResolvedValue({
+        ...product,
+        sizeStock,
+        count: 1,
+        status: ProductStatus.Active,
+      });
+      productService.findProductsMain.mockResolvedValue([
+        { ...product, sizeStock, count: 1 },
+      ]);
+
+      await service.create(dto);
+      expect(repository.save).toHaveBeenCalled();
+    });
+
     it('accepts a request without size for a product without sizes', async () => {
       productService.findByIdWithStock.mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Active, sizes: [] });
       productService.findProductsMain.mockResolvedValue([{ ...fullProduct, sizes: [] }]);
