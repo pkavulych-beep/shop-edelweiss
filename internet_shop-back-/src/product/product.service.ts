@@ -224,11 +224,11 @@ export class ProductService {
     return products.map((product) => product.id);
   }
 
-  // Отримати товар за id з count і status (не кидає 404 для прихованих)
+  // Отримати товар за id з count, status і залишком по розмірах
   async findByIdWithStock(id: number): Promise<ProductEntity | null> {
     return this.repository.findOne({
       where: { id },
-      select: ['id', 'count', 'status', 'sizes'],
+      select: ['id', 'count', 'status', 'sizes', 'sizeStock'],
     });
   }
 

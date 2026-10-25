@@ -92,8 +92,15 @@ describe('QuickOrderService', () => {
     });
 
     it('rejects a size that is out of stock', async () => {
+      const sizeStock = { S: 2, M: 0 };
+      productService.findByIdWithStock.mockResolvedValue({
+        ...product,
+        sizeStock,
+        count: 2,
+        status: ProductStatus.Active,
+      });
       productService.findProductsMain.mockResolvedValue([
-        { ...product, sizeStock: { S: 2, M: 0 }, count: 2 },
+        { ...product, sizeStock, count: 2 },
       ]);
 
       await expect(service.create(dto)).rejects.toThrow('Розміру M немає в наявності');
@@ -101,8 +108,15 @@ describe('QuickOrderService', () => {
     });
 
     it('accepts a size that is in stock', async () => {
+      const sizeStock = { S: 0, M: 1 };
+      productService.findByIdWithStock.mockResolvedValue({
+        ...product,
+        sizeStock,
+        count: 1,
+        status: ProductStatus.Active,
+      });
       productService.findProductsMain.mockResolvedValue([
-        { ...product, sizeStock: { S: 0, M: 1 }, count: 1 },
+        { ...product, sizeStock, count: 1 },
       ]);
 
       await service.create(dto);
