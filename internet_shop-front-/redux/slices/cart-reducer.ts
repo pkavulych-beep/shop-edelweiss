@@ -110,14 +110,17 @@ export const fetchCartProductDetails =
 
     if (missingIds.length === 0) return;
 
-    dispatch(setLoading(true));
+    // Спінер — лише коли деталей ще немає. Фонове оновлення (force) не має
+    // розмонтовувати сторінку з формою оформлення, бо її стан тоді скинеться
+    const showSpinner = missingIds.some((id) => !existingDetails[id]);
+    if (showSpinner) dispatch(setLoading(true));
     try {
       const products = await Api().product.findByIds(missingIds);
       dispatch(setProductDetails(products));
     } catch (e) {
       console.error('Failed to fetch cart product details:', e);
     } finally {
-      dispatch(setLoading(false));
+      if (showSpinner) dispatch(setLoading(false));
     }
   };
 
