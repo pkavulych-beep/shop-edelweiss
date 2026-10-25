@@ -42,6 +42,26 @@ const ALLOWED_TRANSITIONS: Partial<Record<PaymentStatus, PaymentStatus[]>> = {
   [PaymentStatus.Paid]: [PaymentStatus.Refunded],
 };
 
+// Один запис журналу для адмінки. Сирий payload провайдера не віддаємо:
+// лише статус mono і причину відмови, якщо вони там є.
+export interface PaymentHistoryEntry {
+  at: Date;
+  kind: PaymentLogKind;
+  status: string;
+  amount: number;
+  monoStatus?: string;
+  failureReason?: string;
+}
+
+export interface OrderPaymentDetails {
+  invoiceId: string | null;
+  paidAt: Date | null;
+  amount: number | null;
+  refundedAmount: number;
+  refundableAmount: number;
+  history: PaymentHistoryEntry[];
+}
+
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -202,6 +222,61 @@ export class PaymentService {
         await this.orderRepository.save(order);
       }
     }
+  }
+
+  // Деталі оплати для адмінки: рахунок, час оплати, повернення й журнал подій.
+  // Замовлення без рахунку (COD або інвойс ще не створювали) — не помилка.
+  async getOrderPayment(orderId: number): Promise<OrderPaymentDetails> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Замовлення не знайдено');
+    }
+
+    const invoiceLog = order.paymentInvoiceId
+      ? await this.paymentRepository.findOne({
+          where: {
+            invoiceId: order.paymentInvoiceId,
+            kind: PaymentLogKind.Invoice,
+          },
+        })
+      : null;
+
+    // Історія — усі записи журналу замовлення, від старих до нових.
+    const logs = await this.paymentRepository.find({
+      where: { orderId },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+
+    const amount = invoiceLog ? invoiceLog.amount : null;
+    const refundedAmount = Number(invoiceLog?.rawPayload?.refundedAmount) || 0;
+
+    return {
+      invoiceId: order.paymentInvoiceId ?? null,
+      paidAt: order.paidAt ?? null,
+      amount,
+      refundedAmount,
+      refundableAmount: amount === null ? 0 : Math.max(amount - refundedAmount, 0),
+      history: logs.map((log) => this.toHistoryEntry(log)),
+    };
+  }
+
+  private toHistoryEntry(log: PaymentEntity): PaymentHistoryEntry {
+    const raw = log.rawPayload ?? {};
+    const entry: PaymentHistoryEntry = {
+      at: log.createdAt,
+      kind: log.kind,
+      status: log.status,
+      amount: log.amount,
+    };
+
+    if (typeof raw.status === 'string' && raw.status) {
+      entry.monoStatus = raw.status;
+    }
+    if (typeof raw.failureReason === 'string' && raw.failureReason) {
+      entry.failureReason = raw.failureReason;
+    }
+
+    return entry;
   }
 
   // Єдиний шлях, яким замовлення стає оплаченим. Підпис перевіряє провайдер
