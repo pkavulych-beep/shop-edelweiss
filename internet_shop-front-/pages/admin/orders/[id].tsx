@@ -203,8 +203,8 @@ export default function AdminOrderDetailsPage() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
             <Typography sx={{ fontWeight: 700 }}>Статус оплати</Typography>
             <Chip
-              label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus)}
-              color={getPaymentChipColor(order.paymentMethod, order.paymentStatus)}
+              label={getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status)}
+              color={getPaymentChipColor(order.paymentMethod, order.paymentStatus, order.status)}
               size='small'
             />
           </Box>

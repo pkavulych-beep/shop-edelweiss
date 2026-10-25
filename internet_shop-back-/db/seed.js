@@ -1,8 +1,9 @@
 // Seeds the reference data the app can't work without: the USER and ADMIN roles
 // (registration fails without USER) and a first admin account.
 //
-// The tables are created by TypeORM (`synchronize: true`) when the API starts, so start
-// the API first; this script waits up to a minute for them. Safe to run repeatedly.
+// The tables are created when the API starts (by `synchronize` locally, by migrations with
+// NODE_ENV=production), so start the API first; this script waits up to a minute for them.
+// Safe to run repeatedly.
 //
 // Usage: npm run seed
 require('dotenv/config');
@@ -35,7 +36,7 @@ async function waitForSchema(client) {
     await sleep(1000);
   }
   throw new Error(
-    'Tables not found after 60s. Start the API first (npm run start:dev) so TypeORM creates them.',
+    'Tables not found after 60s. Start the API first (npm run start:dev) so it creates them.',
   );
 }
 

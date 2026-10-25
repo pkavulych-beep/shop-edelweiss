@@ -15,9 +15,11 @@ import { ProductService } from '../product/product.service';
 import { UsersService } from 'src/user/user.service';
 import { Status } from './statusEnum';
 import { PaymentMethod, PaymentStatus } from './paymentEnum';
-import { DeliveryMethod } from './deliveryEnum';
+import { DeliveryMethod, ukrposhtaIndexMessage } from './deliveryEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
+
+type OrderChanges = Omit<UpdateOrderDto, 'id' | 'status'>;
 
 @Injectable()
 export class OrderService {
@@ -206,13 +208,14 @@ export class OrderService {
     }
     // No status change - just update other fields
     const order = await this.findOneById(id);
+    this.assertUkrposhtaIndex(order, changes);
     for (const [key, value] of Object.entries(changes)) {
       if (value !== undefined) order[key] = value;
     }
     return this.repository.save(order);
   }
 
-  async updateStatus(id: number, status: Status, changes: Record<string, unknown> = {}) {
+  async updateStatus(id: number, status: Status, changes: OrderChanges = {}) {
     // Use transaction with pessimistic locking on order row to prevent race conditions
     return this.repository.manager.transaction(async (manager: EntityManager) => {
       // First, lock the order row
@@ -231,6 +234,8 @@ export class OrderService {
         relations: { items: { product: true } },
         order: { items: { id: 'ASC' } },
       });
+
+      this.assertUkrposhtaIndex(orderWithItems, changes);
 
       // Apply non-status changes from the request
       for (const [key, value] of Object.entries(changes)) {
@@ -299,6 +304,18 @@ export class OrderService {
     orderWithItems.status = Status.Canceled;
     orderWithItems.paymentStatus = PaymentStatus.Failed;
     return manager.save(OrderEntity, orderWithItems);
+  }
+
+  // Для Укрпошти department — індекс відділення (5 цифр). Перевіряємо підсумковий стан замовлення,
+  // але лише коли запит змінює спосіб доставки чи відділення: старі замовлення з довільним
+  // department мають і далі змінювати статус чи коментар.
+  private assertUkrposhtaIndex(order: OrderEntity, changes: OrderChanges) {
+    if (changes.deliveryMethod === undefined && changes.department === undefined) return;
+    const deliveryMethod = changes.deliveryMethod ?? order.deliveryMethod;
+    const department = changes.department ?? order.department;
+    if (deliveryMethod === DeliveryMethod.Ukrposhta && !/^\d{5}$/.test(department ?? '')) {
+      throw new BadRequestException(ukrposhtaIndexMessage);
+    }
   }
 
   private async restoreProductCounts(manager: EntityManager, items: OrderEntity['items']) {
