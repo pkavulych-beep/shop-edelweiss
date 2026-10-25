@@ -356,6 +356,155 @@ describe('PaymentService', () => {
     });
   });
 
+  describe('getOrderPayment', () => {
+    const T1 = new Date('2026-10-13T10:00:00Z');
+    const T2 = new Date('2026-10-13T10:05:00Z');
+
+    const invoiceLog = () => ({
+      id: 1,
+      orderId: 10,
+      provider: 'mono',
+      invoiceId: 'mono-invoice-123',
+      kind: PaymentLogKind.Invoice,
+      amount: 150000,
+      status: PaymentStatus.Paid,
+      createdAt: T1,
+      rawPayload: { amount: 150000, ccy: 980, orderId: '10', pageUrl: 'https://mono.com/x' },
+    });
+
+    beforeEach(() => {
+      paymentRepository.find = jest.fn().mockResolvedValue([]);
+      orderRepository.findOne.mockResolvedValue({
+        ...mockOrder,
+        paymentMethod: 'CARD',
+        paymentStatus: PaymentStatus.Paid,
+        paymentInvoiceId: 'mono-invoice-123',
+        paidAt: T2,
+      });
+    });
+
+    it('returns invoice, paidAt, amounts and the payment log history', async () => {
+      paymentRepository.findOne.mockResolvedValueOnce({
+        ...invoiceLog(),
+        rawPayload: { ...invoiceLog().rawPayload, refundedAmount: 50000 },
+      });
+      paymentRepository.find.mockResolvedValueOnce([
+        invoiceLog(),
+        {
+          id: 2,
+          orderId: 10,
+          provider: 'mono',
+          invoiceId: 'mono-invoice-123',
+          kind: PaymentLogKind.Webhook,
+          amount: 150000,
+          status: PaymentStatus.Paid,
+          createdAt: T2,
+          rawPayload: {
+            invoiceId: 'mono-invoice-123',
+            status: 'success',
+            amount: 150000,
+            failureReason: undefined,
+            secret: 'must not leak',
+          },
+        },
+      ]);
+
+      const result = await service.getOrderPayment(10);
+
+      expect(paymentRepository.find).toHaveBeenCalledWith({
+        where: { orderId: 10 },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+      expect(result).toEqual({
+        invoiceId: 'mono-invoice-123',
+        paidAt: T2,
+        amount: 150000,
+        refundedAmount: 50000,
+        refundableAmount: 100000,
+        history: [
+          {
+            at: T1,
+            kind: PaymentLogKind.Invoice,
+            status: PaymentStatus.Paid,
+            amount: 150000,
+          },
+          {
+            at: T2,
+            kind: PaymentLogKind.Webhook,
+            status: PaymentStatus.Paid,
+            amount: 150000,
+            monoStatus: 'success',
+          },
+        ],
+      });
+      expect(JSON.stringify(result)).not.toContain('must not leak');
+      expect(JSON.stringify(result)).not.toContain('rawPayload');
+    });
+
+    it('takes only the mono status and failureReason from the raw payload', async () => {
+      paymentRepository.findOne.mockResolvedValueOnce(invoiceLog());
+      paymentRepository.find.mockResolvedValueOnce([
+        {
+          id: 2,
+          orderId: 10,
+          provider: 'mono',
+          invoiceId: 'mono-invoice-123',
+          kind: PaymentLogKind.StatusCheck,
+          amount: 150000,
+          status: PaymentStatus.Failed,
+          createdAt: T2,
+          rawPayload: {
+            status: 'failure',
+            failureReason: 'insufficient_funds',
+            rrn: '123456789',
+            cardMask: '444455******1111',
+          },
+        },
+      ]);
+
+      const [entry] = (await service.getOrderPayment(10)).history;
+
+      expect(entry).toEqual({
+        at: T2,
+        kind: PaymentLogKind.StatusCheck,
+        status: PaymentStatus.Failed,
+        amount: 150000,
+        monoStatus: 'failure',
+        failureReason: 'insufficient_funds',
+      });
+      expect(entry).not.toHaveProperty('rawPayload');
+      expect(entry).not.toHaveProperty('rrn');
+      expect(entry).not.toHaveProperty('cardMask');
+    });
+
+    it('returns an empty history and no amount for an order without an invoice', async () => {
+      orderRepository.findOne.mockResolvedValueOnce({
+        ...mockOrder,
+        paymentMethod: 'COD',
+        paymentInvoiceId: null,
+        paidAt: null,
+      });
+
+      const result = await service.getOrderPayment(10);
+
+      expect(paymentRepository.findOne).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        invoiceId: null,
+        paidAt: null,
+        amount: null,
+        refundedAmount: 0,
+        refundableAmount: 0,
+        history: [],
+      });
+    });
+
+    it('throws NotFoundException for an unknown order', async () => {
+      orderRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(service.getOrderPayment(999)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('handleWebhook', () => {
     const T1 = new Date('2026-10-13T10:00:00Z');
     const T2 = new Date('2026-10-13T10:05:00Z');
