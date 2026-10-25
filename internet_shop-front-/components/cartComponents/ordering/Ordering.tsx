@@ -29,6 +29,7 @@ import { normalizePhone } from '../../../utils/phone';
 import { DeliveryMethod } from '../../../redux/Types/orderType';
 import { deliveryMethodLabels } from '../../../utils/delivery';
 import { isUkrposhtaIndexValid } from './delivery/UkrposhtaDelivery';
+import { useCardPaymentAvailable } from '../../../hooks/useCardPaymentAvailable';
 
 interface OrderingComponentProps {
   items: CreateOrderItemDto[];
@@ -42,6 +43,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
   const fullName = userData?.fullName || '';
   const phoneNumber = userData?.phoneNumber || '';
   const id = userData?.id;
+  const cardPaymentAvailable = useCardPaymentAvailable();
 
   const checkUserData = async (newFullName, newPhoneNumber) => {
     // Порівнюємо за нормалізованим номером: у полі він із маскою,
@@ -328,12 +330,14 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
                   label="При отриманні (готівка або картка кур'єру)"
                   labelPlacement="end"
                 />
-                <FormControlLabel
-                  value="CARD"
-                  control={<Radio color="primary" />}
-                  label="Карткою онлайн (Mono)"
-                  labelPlacement="end"
-                />
+                {cardPaymentAvailable && (
+                  <FormControlLabel
+                    value="CARD"
+                    control={<Radio color="primary" />}
+                    label="Карткою онлайн (Mono)"
+                    labelPlacement="end"
+                  />
+                )}
               </RadioGroup>
             </FormControl>
           </Box>

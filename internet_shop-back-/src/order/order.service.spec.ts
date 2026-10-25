@@ -104,7 +104,11 @@ describe('OrderService', () => {
       });
     });
 
-    it('keeps the card payment method chosen by the client', async () => {
+    it('keeps the card payment method chosen by the client when acquiring is configured', async () => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+      process.env.BASE_URL = 'http://localhost:7777/';
+      process.env.FRONTEND_URL = 'http://localhost:3000/';
+
       await service.create(3, {
         ...delivery,
         paymentMethod: PaymentMethod.Card,
@@ -115,6 +119,44 @@ describe('OrderService', () => {
         paymentMethod: PaymentMethod.Card,
         paymentStatus: PaymentStatus.NotRequired,
       });
+
+      delete process.env.MONO_ACQUIRING_TOKEN;
+      delete process.env.BASE_URL;
+      delete process.env.FRONTEND_URL;
+    });
+
+    it('rejects card payment and creates no order without mono token', async () => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+      process.env.BASE_URL = 'http://localhost:7777/';
+      process.env.FRONTEND_URL = 'http://localhost:3000/';
+
+      await expect(
+        service.create(3, {
+          ...delivery,
+          paymentMethod: PaymentMethod.Card,
+          items: [{ productId: 1, size: 'M', quantity: 1 }],
+        }),
+      ).rejects.toThrow('Оплата карткою зараз недоступна');
+
+      expect(mockManager.transaction).not.toHaveBeenCalled();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects card payment when BASE_URL or FRONTEND_URL is missing', async () => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+      delete process.env.BASE_URL;
+      delete process.env.FRONTEND_URL;
+
+      await expect(
+        service.create(3, {
+          ...delivery,
+          paymentMethod: PaymentMethod.Card,
+          items: [{ productId: 1, size: 'M', quantity: 1 }],
+        }),
+      ).rejects.toThrow('Оплата карткою зараз недоступна');
+
+      expect(mockManager.transaction).not.toHaveBeenCalled();
+      delete process.env.MONO_ACQUIRING_TOKEN;
     });
 
     it('defaults a new order to Nova Poshta', async () => {

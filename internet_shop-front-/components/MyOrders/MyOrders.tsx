@@ -13,6 +13,7 @@ import { Api } from '../../api/Api';
 import { useAppSelector } from '../../redux/hooks';
 import { Order, Status, PaymentMethod, PaymentStatus } from '../../redux/Types/orderType';
 import { formatDelivery } from '../../utils/delivery';
+import { useCardPaymentAvailable } from '../../hooks/useCardPaymentAvailable';
 
 export const statusColor: Record<Status, ChipProps['color']> = {
   [Status.Processed]: 'warning',
@@ -84,7 +85,10 @@ const formatDate = (value: string) =>
     year: 'numeric',
   });
 
-const OrderCard: FC<{ order: Order }> = ({ order }) => {
+const OrderCard: FC<{ order: Order; cardPaymentAvailable: boolean }> = ({
+  order,
+  cardPaymentAvailable,
+}) => {
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
 
@@ -110,7 +114,9 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => {
     }
   };
 
-  const showPayButton = isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status);
+  const showPayButton =
+    cardPaymentAvailable &&
+    isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status);
 
   return (
     <Box
@@ -255,6 +261,7 @@ const OrderCard: FC<{ order: Order }> = ({ order }) => {
 // Список замовлень поточного користувача: і в профілі, і на /orders
 export const MyOrders: FC = () => {
   const userId = useAppSelector((state) => state.user.userData?.id);
+  const cardPaymentAvailable = useCardPaymentAvailable();
   // Результат прив'язаний до користувача, тож після зміни акаунта старі замовлення не показуємо
   const [loaded, setLoaded] = useState<{ userId: number; orders?: Order[]; error?: boolean } | null>(
     null
@@ -311,7 +318,11 @@ export const MyOrders: FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {orders.map((order) => (
-        <OrderCard key={order.id} order={order} />
+        <OrderCard
+          key={order.id}
+          order={order}
+          cardPaymentAvailable={cardPaymentAvailable}
+        />
       ))}
     </Box>
   );
