@@ -99,9 +99,14 @@ export class PaymentService {
     // Захист від гонки з reconcileOrdersWithoutInvoice:
     // CARD-замовлення без інвойсу, яке старше за paymentTimeoutMinutes,
     // може бути скасоване кроном у будь-який момент. Відхиляємо створення
-    // інвойсу, щоб не «оживити» уже скасоване замовлення.
+    // інвойсу, щоб не «оживити» уже скасоване замовлення. Повторна оплата
+    // після FAILED (інвойс уже є) крон не чіпає, тож її не обмежуємо.
     const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / 60_000;
-    if (orderAgeMinutes > paymentTimeoutMinutes()) {
+    if (
+      !order.paymentInvoiceId &&
+      order.paymentStatus === PaymentStatus.NotRequired &&
+      orderAgeMinutes > paymentTimeoutMinutes()
+    ) {
       throw new BadRequestException('Час на оплату минув');
     }
 

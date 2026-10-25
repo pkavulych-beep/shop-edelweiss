@@ -250,6 +250,27 @@ describe('PaymentService', () => {
       expect(paymentProvider.createInvoice).toHaveBeenCalled();
       jest.restoreAllMocks();
     });
+    it('creates a new invoice after FAILED even when the order is older than payment timeout', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: new Date('2026-10-13T10:00:00Z'),
+        paymentInvoiceId: 'failed-invoice',
+        paymentStatus: PaymentStatus.Failed,
+      });
+
+      await expect(service.createInvoice(3, 10)).resolves.toEqual({
+        pageUrl: 'https://mono.com/invoice/mono-invoice-123',
+      });
+      expect(paymentProvider.createInvoice).toHaveBeenCalled();
+      expect(orderRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paymentInvoiceId: 'mono-invoice-123',
+          paymentStatus: PaymentStatus.Pending,
+        }),
+      );
+      jest.restoreAllMocks();
+    });
   });
 
   describe('refund', () => {
