@@ -40,4 +40,11 @@ export const paymentApi = (instance: AxiosInstance) => ({
     const { data } = await instance.get<OrderPaymentDetails>(`payment/order/${orderId}`);
     return data;
   },
+
+  async refund(invoiceId: string, amount?: number): Promise<void> {
+    await instance.post(
+      `payment/${encodeURIComponent(invoiceId)}/refund`,
+      amount === undefined ? {} : { amount }
+    );
+  },
 });

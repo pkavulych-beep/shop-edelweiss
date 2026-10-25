@@ -7,7 +7,14 @@ import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
 import Select from '@mui/material/Select';
 import Snackbar from '@mui/material/Snackbar';
 import Table from '@mui/material/Table';
@@ -16,6 +23,7 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
+import TextField from '@mui/material/TextField';
 import { MainLayout } from '../../../layouts/MainLayout';
 import { useAppSelector } from '../../../redux/hooks';
 import { Role } from '../../../redux/Types/ProductType';
@@ -53,6 +61,15 @@ const formatDate = (value: string) =>
 const formatMoney = (kopeks: number) =>
   `${(kopeks / 100).toLocaleString('uk-UA', { maximumFractionDigits: 2 })} грн`;
 
+const parseRefundKopeks = (value: string): number | null => {
+  const normalized = value.replace(',', '.').trim();
+  if (!normalized) return null;
+  const hryvnias = Number(normalized);
+  if (!Number.isFinite(hryvnias) || hryvnias <= 0) return null;
+  const kopeks = Math.round(hryvnias * 100);
+  return kopeks > 0 ? kopeks : null;
+};
+
 const paymentEventLabel: Record<PaymentHistoryKind, string> = {
   invoice: 'Рахунок створено',
   webhook: 'Сповіщення mono',
@@ -85,6 +102,12 @@ export default function AdminOrderDetailsPage() {
     data?: OrderPaymentDetails;
     error?: string;
   } | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundConfirming, setRefundConfirming] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin || !router.isReady || !validId) return;
@@ -168,6 +191,78 @@ export default function AdminOrderDetailsPage() {
     const payment = paymentLoaded.data;
     if (!payment) return null;
 
+    const reloadOrderAndPayment = async () => {
+      const [data, paymentData] = await Promise.all([
+        Api().orders.findById(orderId),
+        Api().payment.getOrderPayment(orderId),
+      ]);
+      setLoaded({ id: orderId, order: data });
+      setStatus(data.status);
+      setPaymentLoaded({ id: orderId, data: paymentData });
+    };
+
+    const closeRefund = () => {
+      if (refunding) return;
+      setRefundOpen(false);
+      setRefundConfirming(false);
+      setRefundError(null);
+    };
+
+    const openRefund = () => {
+      setRefundMode('full');
+      setRefundAmount('');
+      setRefundConfirming(false);
+      setRefundError(null);
+      setRefundOpen(true);
+    };
+
+    const partialKopeks = refundMode === 'partial' ? parseRefundKopeks(refundAmount) : null;
+    const refundKopeks = refundMode === 'full' ? payment.refundableAmount : partialKopeks;
+    const partialAmountError =
+      refundMode === 'partial' && !refundConfirming
+        ? refundAmount.trim() === ''
+          ? 'Вкажіть суму'
+          : partialKopeks === null || partialKopeks > payment.refundableAmount
+          ? `Сума має бути більшою за нуль і не більшою за ${formatMoney(
+              payment.refundableAmount
+            )}`
+          : null
+        : null;
+    const canRefund =
+      order.paymentStatus === PaymentStatus.Paid &&
+      payment.invoiceId !== null &&
+      payment.refundableAmount > 0;
+
+    const submitRefund = async () => {
+      if (!payment.invoiceId || refundKopeks === null || refunding) return;
+      setRefunding(true);
+      setRefundError(null);
+      try {
+        await Api()
+          .payment.refund(
+            payment.invoiceId,
+            refundMode === 'partial' ? refundKopeks : undefined
+          );
+      } catch (err) {
+        setRefundError(readApiError(err, 'Не вдалося повернути кошти'));
+        setRefunding(false);
+        return;
+      }
+
+      setRefundOpen(false);
+      setRefundConfirming(false);
+      setMessage({ severity: 'success', text: `Повернено ${formatMoney(refundKopeks)}` });
+      try {
+        await reloadOrderAndPayment();
+      } catch (err) {
+        setMessage({
+          severity: 'error',
+          text: readApiError(err, 'Кошти повернено, але не вдалося оновити дані замовлення'),
+        });
+      }
+      setRefunding(false);
+    };
+
     const field = (label: string, value: string) => (
       <Box>
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{label}</Typography>
@@ -193,6 +288,14 @@ export default function AdminOrderDetailsPage() {
           {field('Повернено', formatMoney(payment.refundedAmount))}
           {field('Залишок до повернення', formatMoney(payment.refundableAmount))}
         </Box>
+
+        {canRefund && (
+          <Box sx={{ mb: 2 }}>
+            <Button variant='outlined' color='error' onClick={openRefund}>
+              Повернути кошти
+            </Button>
+          </Box>
+        )}
 
         <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', mb: 1 }}>Історія оплати</Typography>
         {payment.history.length === 0 ? (
@@ -239,6 +342,95 @@ export default function AdminOrderDetailsPage() {
             </Table>
           </TableContainer>
         )}
+
+        <Dialog
+          open={refundOpen}
+          onClose={closeRefund}
+          maxWidth='xs'
+          fullWidth
+          disableEscapeKeyDown={refunding}
+        >
+          <DialogTitle>
+            {refundConfirming ? 'Підтвердіть повернення' : 'Повернення коштів'}
+          </DialogTitle>
+          <DialogContent>
+            {refundError && (
+              <Alert severity='error' sx={{ mb: 2 }}>
+                {refundError}
+              </Alert>
+            )}
+            {refundConfirming ? (
+              <Typography sx={{ fontSize: '0.9rem' }}>
+                Повернути {refundKopeks === null ? '' : formatMoney(refundKopeks)} за рахунком{' '}
+                {payment.invoiceId}? Кошти надійдуть покупцю, скасувати дію не можна.
+              </Typography>
+            ) : (
+              <>
+                <Typography sx={{ fontSize: '0.9rem', color: 'text.secondary', mb: 1.5 }}>
+                  Залишок до повернення: {formatMoney(payment.refundableAmount)}
+                </Typography>
+                <RadioGroup
+                  value={refundMode}
+                  onChange={event => {
+                    setRefundMode(event.target.value as 'full' | 'partial');
+                    setRefundError(null);
+                  }}
+                >
+                  <FormControlLabel
+                    value='full'
+                    control={<Radio />}
+                    label={`Усю суму (${formatMoney(payment.refundableAmount)})`}
+                  />
+                  <FormControlLabel value='partial' control={<Radio />} label='Частину' />
+                </RadioGroup>
+                {refundMode === 'partial' && (
+                  <TextField
+                    label='Сума, грн'
+                    value={refundAmount}
+                    onChange={event => {
+                      setRefundAmount(event.target.value);
+                      setRefundError(null);
+                    }}
+                    error={Boolean(partialAmountError)}
+                    helperText={partialAmountError ?? ' '}
+                    inputProps={{ inputMode: 'decimal' }}
+                    size='small'
+                    fullWidth
+                    sx={{ mt: 1 }}
+                  />
+                )}
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            {refundConfirming ? (
+              <>
+                <Button onClick={() => setRefundConfirming(false)} disabled={refunding}>
+                  Назад
+                </Button>
+                <Button
+                  variant='contained'
+                  color='error'
+                  onClick={submitRefund}
+                  disabled={refunding}
+                >
+                  {refunding ? 'Повертаємо…' : 'Підтвердити'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={closeRefund}>Скасувати</Button>
+                <Button
+                  variant='contained'
+                  onClick={() => setRefundConfirming(true)}
+                  disabled={refundMode === 'partial' && Boolean(partialAmountError)}
+                >
+                  Далі
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
       </>
     );
   };
