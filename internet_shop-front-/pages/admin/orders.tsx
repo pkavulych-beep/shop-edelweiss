@@ -130,8 +130,8 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={getPaymentChipLabel(paymentMethod, paymentStatus)}
-                        color={getPaymentChipColor(paymentMethod, paymentStatus)}
+                        label={getPaymentChipLabel(paymentMethod, paymentStatus, status)}
+                        color={getPaymentChipColor(paymentMethod, paymentStatus, status)}
                         size='small'
                         sx={isUnpaidCard && { fontWeight: 700 }}
                       />
