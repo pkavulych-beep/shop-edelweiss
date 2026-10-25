@@ -150,41 +150,4 @@ describe('ProductService', () => {
       expect(manager.find).not.toHaveBeenCalled();
     });
   });
-
-  describe('update', () => {
-    beforeEach(() => {
-      repository.findOne.mockResolvedValue({ id: 5 });
-    });
-
-    const changesOf = () => repository.update.mock.calls[0][1];
-
-    it('derives sizes and count from the stock per size', async () => {
-      await service.update(5, { sizeStock: { S: 3, M: 0, L: 5 }, count: 99, sizes: ['XL'] });
-
-      expect(changesOf()).toMatchObject({
-        sizeStock: { S: 3, M: 0, L: 5 },
-        sizes: ['S', 'M', 'L'],
-        count: 8,
-      });
-    });
-
-    it('clears sizes when the stock per size is removed', async () => {
-      await service.update(5, { sizeStock: null, count: 4 });
-
-      expect(changesOf()).toMatchObject({ sizeStock: null, sizes: [], count: 4 });
-    });
-
-    it('drops the stock per size when only legacy sizes change', async () => {
-      await service.update(5, { sizes: ['S', 'M'] });
-
-      expect(changesOf()).toMatchObject({ sizes: ['S', 'M'], sizeStock: null });
-    });
-
-    it('keeps the stock per size on unrelated changes', async () => {
-      await service.update(5, { price: 100 });
-
-      expect(changesOf()).not.toHaveProperty('sizeStock');
-      expect(changesOf()).not.toHaveProperty('sizes');
-    });
-  });
 });

@@ -23,7 +23,6 @@ import css from '../../styles/Product.module.scss';
 import Popup from '../../components/Popup';
 import { Api } from '../../api/Api';
 import { maskPhoneInput, normalizePhone } from '../../utils/phone';
-import { availableStock } from '../../utils/stock';
 
 export default function Product() {
   const dispatch = useAppDispatch();
@@ -34,7 +33,6 @@ export default function Product() {
   const [selectedSize, setSelectedSize] = useState<null | string>(null);
   const [isOpenSizeReminder, setIsOpenSizeReminder] = useState(false);
   const [isCartConfirmOpen, setIsCartConfirmOpen] = useState(false);
-  const [cartError, setCartError] = useState<string | null>(null);
   const [isQuickOrderOpen, setIsQuickOrderOpen] = useState(false);
   const [quickOrderPhone, setQuickOrderPhone] = useState('');
   const [quickOrderError, setQuickOrderError] = useState<string | null>(null);
@@ -62,7 +60,7 @@ export default function Product() {
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
   const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count != null && currentProduct.count <= 0);
 
-  const putInTheCart = async () => {
+  const putInTheCart = () => {
     if (isOutOfStock) {
       return;
     }
@@ -71,18 +69,12 @@ export default function Product() {
       return;
     }
 
-    const size = hasSizes ? selectedSize : undefined;
-    const error = await dispatch(
+    dispatch(
       addPositionsToCart({
         idProduct: currentProduct.id,
-        size,
-        available: availableStock(currentProduct, size),
+        size: hasSizes ? selectedSize : undefined,
       }),
     );
-    if (error) {
-      setCartError(error);
-      return;
-    }
     setIsCartConfirmOpen(true);
   };
 
@@ -225,14 +217,6 @@ export default function Product() {
         onClose={() => setIsOpenSizeReminder(false)}
         title="Оберіть розмір"
         description="Спочатку необхідно обрати розмір товару"
-      />
-
-      {/* Cart error popup (наприклад, більше немає на складі) */}
-      <Popup
-        open={Boolean(cartError)}
-        onClose={() => setCartError(null)}
-        title="Не вдалося додати в кошик"
-        description={cartError ?? ''}
       />
 
       {/* Cart confirmation popup */}

@@ -13,7 +13,6 @@ export interface IBasketItemResponse {
     name: string;
     cover: string;
     sizes: string[];
-    sizeStock?: Record<string, number> | null;
     price: number;
     salePrice: number;
   };

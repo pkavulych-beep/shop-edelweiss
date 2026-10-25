@@ -5,7 +5,6 @@ import { ProductService } from '../product/product.service';
 import { CreateQuickOrderDto } from './dto/create-quick-order.dto';
 import { QuickOrderEntity } from './entities/quick-order.entity';
 import { normalizePhone } from '../common/phone';
-import { availableFor } from '../product/stock';
 
 @Injectable()
 export class QuickOrderService {
@@ -27,11 +26,6 @@ export class QuickOrderService {
       if (!product.sizes.includes(size)) {
         throw new BadRequestException('Такого розміру немає в цього товару');
       }
-    }
-    if (availableFor(product, size) === 0) {
-      throw new BadRequestException(
-        size ? `Розміру ${size} немає в наявності` : 'Товару немає в наявності',
-      );
     }
 
     const normalizedPhone = normalizePhone(phoneNumber) as string;

@@ -54,27 +54,4 @@ describe('CreateProductDto', () => {
     const { price, ...withoutPrice } = valid;
     await expect(messageOf(withoutPrice)).resolves.toContain('Вкажіть ціну');
   });
-
-  it('reads the stock per size sent through FormData as JSON', async () => {
-    await expect(
-      validate({ ...valid, sizeStock: '{"S":3," M ":0}' }),
-    ).resolves.toEqual({ ...valid, sizeStock: { S: 3, M: 0 } });
-  });
-
-  it('treats an empty stock per size as a product without sizes', async () => {
-    await expect(validate({ ...valid, sizeStock: '' })).resolves.toEqual({
-      ...valid,
-      sizeStock: null,
-    });
-  });
-
-  it.each(['не json', '{"S":-1}', '{"S":1.5}', '{"":2}', '["S"]'])(
-    'rejects sizeStock = %s',
-    async (sizeStock) => {
-      await expect(messageOf({ ...valid, sizeStock })).resolves.toEqual([
-        'Залишок по розмірах має бути об\'єктом «розмір: ціле число ≥ 0»',
-      ]);
-    },
-  );
 });
-

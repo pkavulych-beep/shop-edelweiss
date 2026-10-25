@@ -318,56 +318,6 @@ describe('OrderService', () => {
       );
       expect(productSaves.length).toBe(0);
     });
-
-    describe('with stock per size', () => {
-      const sized = {
-        id: 7, sizes: ['S', 'M'], sizeStock: { S: 2, M: 0 }, price: 400, salePrice: null, count: 2, status: 'active',
-      };
-      const productSaves = () =>
-        mockManager.save.mock.calls.filter(call => call[0] === ProductEntity);
-
-      beforeEach(() => {
-        productService.findPurchasable.mockResolvedValue([sized]);
-        mockManager.findOne.mockImplementation((entity, options) =>
-          Promise.resolve(
-            entity === ProductEntity
-              ? { ...sized, sizeStock: { ...sized.sizeStock } }
-              : { id: options.where.id, items: [], user: { id: 3 } },
-          ),
-        );
-      });
-
-      it('decrements the stock of the ordered size and the total count', async () => {
-        await service.create(3, { ...delivery, items: [{ productId: 7, size: 'S', quantity: 2 }] });
-
-        expect(productSaves()).toHaveLength(1);
-        expect(productSaves()[0][1]).toMatchObject({ sizeStock: { S: 0, M: 0 }, count: 0 });
-      });
-
-      it('rejects more than the stock of the size', async () => {
-        await expect(
-          service.create(3, { ...delivery, items: [{ productId: 7, size: 'S', quantity: 3 }] }),
-        ).rejects.toThrow('Недостатньо товару на складі. Доступно: 2');
-        expect(mockManager.transaction).not.toHaveBeenCalled();
-      });
-
-      it('rejects a size that is out of stock', async () => {
-        await expect(
-          service.create(3, { ...delivery, items: [{ productId: 7, size: 'M', quantity: 1 }] }),
-        ).rejects.toThrow('Розміру M немає в наявності');
-      });
-
-      it('checks the stock again inside the transaction', async () => {
-        mockManager.findOne.mockImplementationOnce(() =>
-          Promise.resolve({ ...sized, sizeStock: { S: 1, M: 0 }, count: 1 }),
-        );
-
-        await expect(
-          service.create(3, { ...delivery, items: [{ productId: 7, size: 'S', quantity: 2 }] }),
-        ).rejects.toThrow('Доступно: 1');
-        expect(productSaves()).toHaveLength(0);
-      });
-    });
   });
 
   describe('findOneForUser', () => {
@@ -650,32 +600,6 @@ describe('OrderService', () => {
       const product2Save = productSaves.find(call => call[1].id === 2);
       expect(product2Save).toBeDefined();
       expect(product2Save[1].count).toBe(6);
-    });
-
-    it('restores the stock of the ordered size when cancelling', async () => {
-      const items = [
-        { productId: 7, size: 'S', quantity: 2 },
-        { productId: 7, size: 'M', quantity: 1 },
-      ];
-      const mockManager = {
-        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
-        findOne: jest.fn().mockImplementation((entity, options) =>
-          Promise.resolve(
-            entity === ProductEntity
-              ? { id: options.where.id, sizes: ['S', 'M'], sizeStock: { S: 0, M: 4 }, count: 4 }
-              : { id: options.where.id, items, status: Status.Processed },
-          ),
-        ),
-        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
-      };
-      const repository = { manager: mockManager };
-      const service = new OrderService(repository as any, {} as any, {} as any);
-
-      await service.updateStatus(10, Status.Canceled);
-
-      const productSaves = mockManager.save.mock.calls.filter(call => call[0] === ProductEntity);
-      expect(productSaves).toHaveLength(1);
-      expect(productSaves[0][1]).toMatchObject({ sizeStock: { S: 2, M: 5 }, count: 7 });
     });
 
     it('does not restore stock when cancelling an already cancelled order', async () => {

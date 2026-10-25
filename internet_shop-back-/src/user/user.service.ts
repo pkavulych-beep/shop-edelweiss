@@ -16,7 +16,6 @@ import { productToBasketDto } from './dto/productToBasket.dto';
 import { SyncCartItemDto } from './dto/sync-cart.dto';
 import { hashPassword } from '../auth/password';
 import { normalizeEmail } from '../common/email';
-import { availableFor } from '../product/stock';
 
 @Injectable()
 export class UsersService {
@@ -157,13 +156,6 @@ export class UsersService {
       where: { userId: idUser, productId: idProduct, size: effectiveSize },
     });
 
-    const available = availableFor(product, effectiveSize);
-    if (available !== null && (existing?.quantity ?? 0) + 1 > available) {
-      throw new BadRequestException(
-        `Недостатньо товару на складі. Доступно: ${available}`,
-      );
-    }
-
     if (existing) {
       existing.quantity += 1;
       return await this.basketRepository.save(existing);
@@ -192,45 +184,29 @@ export class UsersService {
   }
 
   async syncCart(idUser: number, items: SyncCartItemDto[]) {
-    // Приховані («видалені») товари з гостьового кошика пропускаємо, а
-    // кількість обрізаємо до залишку розміру (або товару, якщо розмірів нема)
-    const purchasable = new Map(
-      (
-        await this.productService.findPurchasable(
-          items.map((item) => item.productId),
-        )
-      ).map((product) => [product.id, product]),
+    // Приховані («видалені») товари з гостьового кошика пропускаємо
+    const purchasable = new Set(
+      await this.productService.findPurchasableIds(
+        items.map((item) => item.productId),
+      ),
     );
 
     for (const item of items) {
-      const product = purchasable.get(item.productId);
-      if (!product) continue;
-      const size = item.size ?? '';
+      if (!purchasable.has(item.productId)) continue;
 
       const existing = await this.basketRepository.findOne({
-        where: { userId: idUser, productId: item.productId, size },
+        where: { userId: idUser, productId: item.productId, size: item.size ?? '' },
       });
 
-      const available = availableFor(product, size);
-      const wanted = (existing?.quantity ?? 0) + item.quantity;
-      const quantity = available === null ? wanted : Math.min(wanted, available);
-
       if (existing) {
-        if (quantity === existing.quantity) continue;
-        // Розмір розпродали, поки товар лежав у кошику — прибираємо позицію
-        if (quantity <= 0) {
-          await this.basketRepository.delete({ id: existing.id });
-          continue;
-        }
-        existing.quantity = quantity;
+        existing.quantity += item.quantity;
         await this.basketRepository.save(existing);
       } else {
-        if (quantity <= 0) continue;
         const basketItem = this.basketRepository.create({
           userId: idUser,
           productId: item.productId,
-          size,
-          quantity,
+          size: item.size ?? '',
+          quantity: item.quantity,
         });
         await this.basketRepository.save(basketItem);
       }

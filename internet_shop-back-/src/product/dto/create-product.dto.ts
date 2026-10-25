@@ -5,11 +5,9 @@ import {
   IsArray,
   IsString,
   IsInt,
-  ValidateBy,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Gender, Category, Season, ProductStatus } from '../entities/product.entity';
-import { isValidSizeStock, parseSizeStock, SizeStock } from '../stock';
 
 // Створення товару йде через FormData, де числа приходять рядками ("1000"),
 // тому рядки конвертуємо у числа. Решту значень не чіпаємо: нечислові дані
@@ -39,15 +37,6 @@ export class CreateProductDto {
   })
   @IsArray({ message: 'Розміри мають бути списком' })
   sizes: string[];
-
-  // Якщо задано, sizes і count сервіс виводить із нього
-  @IsOptional()
-  @Transform(({ value }) => parseSizeStock(value))
-  @ValidateBy(
-    { name: 'isSizeStock', validator: { validate: isValidSizeStock } },
-    { message: 'Залишок по розмірах має бути об\'єктом «розмір: ціле число ≥ 0»' },
-  )
-  sizeStock: SizeStock | null;
 
   @IsOptional()
   weight: string;

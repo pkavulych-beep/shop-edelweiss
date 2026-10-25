@@ -13,7 +13,6 @@ interface IProductInfo {
   id: number;
   name: string;
   sizes: string[];
-  sizeStock?: Record<string, number> | null;
   colors: string[];
   material: string;
   price: number;
@@ -39,11 +38,6 @@ const ProductInfo: FC<IProductInfo> = (props) => {
     : [];
 
   const hasSizes = sizes.length > 0;
-  const { sizeStock } = infoDataProduct;
-  // Розмір без залишку показуємо, але обрати його не можна
-  const isSizeSoldOut = (size: string) => sizeStock != null && (sizeStock[size] ?? 0) <= 0;
-  const selectedStock =
-    sizeStock != null && typeof props.selectedSize === 'string' ? sizeStock[props.selectedSize] ?? 0 : null;
   const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
 
   return (
@@ -112,8 +106,6 @@ const ProductInfo: FC<IProductInfo> = (props) => {
               <Button
                 key={size}
                 variant="outlined"
-                disabled={isSizeSoldOut(size)}
-                title={isSizeSoldOut(size) ? 'Немає в наявності' : undefined}
                 onClick={() => props.setSelectedSize(size)}
                 sx={{
                   minWidth: 48,
@@ -128,22 +120,12 @@ const ProductInfo: FC<IProductInfo> = (props) => {
                     borderColor: 'primary.main',
                     bgcolor: props.selectedSize === size ? 'primary.main' : 'transparent',
                   },
-                  '&.Mui-disabled': {
-                    textDecoration: 'line-through',
-                    color: 'text.disabled',
-                    borderColor: 'rgba(175, 179, 179, 0.3)',
-                  },
                 }}
               >
                 {size}
               </Button>
             ))}
           </Box>
-          {selectedStock != null && selectedStock > 0 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1, fontSize: '0.75rem' }}>
-              В наявності: {selectedStock} шт.
-            </Typography>
-          )}
         </Box>
       )}
 

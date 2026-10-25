@@ -3,7 +3,6 @@ import { hydrate } from '../hydrate';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
 import { CartItem, CartProductDetails } from '../Types/ProductType';
-import { outOfStockMessage } from '../../utils/stock';
 
 const CART_LOCAL_STORAGE_KEY = 'guest_cart';
 
@@ -97,8 +96,7 @@ export default cartSlice.reducer;
 
 // ======== Thunks ========
 
-// Довантажити деталі товарів для корзини. force — оновити й ті, що вже
-// завантажені: залишок міг зменшитися, поки товар лежав у кошику
+// Довантажити деталі товарів для корзини
 export const fetchCartProductDetails =
   (force = false): AppThunk => async (dispatch, getState) => {
     const cartItems = getState().cart.data;
@@ -124,11 +122,9 @@ export const fetchCartProductDetails =
     }
   };
 
-// Додати товар в корзину. Повертає текст помилки або null, якщо товар додано.
-// available — залишок обраного розміру (null — без обмеження); для гостя
-// перевіряємо його тут, для залогіненого перевіряє бек.
+// Додати товар в корзину
 export const addPositionsToCart =
-  (dto: { idProduct: number; size?: string; available?: number | null }): AppThunk<Promise<string | null>> =>
+  (dto: { idProduct: number; size?: string }): AppThunk =>
   async (dispatch, getState) => {
     const idUser = getState().user.userData?.id;
     const newItem: CartItem = { idProduct: dto.idProduct, size: dto.size ?? "", quantity: 1 };
@@ -140,8 +136,8 @@ export const addPositionsToCart =
           size: dto.size ?? "",
         });
       } catch (e) {
-        const message = e?.response?.data?.message;
-        return (Array.isArray(message) ? message[0] : message) || 'Не вдалося додати товар у кошик';
+        console.error('Failed to add product to cart:', e);
+        return;
       }
       dispatch(addItem(newItem));
     } else {
@@ -150,12 +146,8 @@ export const addPositionsToCart =
       const existing = currentCart.find(
         (el) => el.idProduct === dto.idProduct && (el.size ?? "") === (dto.size ?? ""),
       );
-      const nextQuantity = (existing?.quantity ?? 0) + 1;
-      if (dto.available != null && nextQuantity > dto.available) {
-        return outOfStockMessage(dto.available);
-      }
       if (existing) {
-        existing.quantity = nextQuantity;
+        existing.quantity += 1;
       } else {
         currentCart.push(newItem);
       }
@@ -163,7 +155,6 @@ export const addPositionsToCart =
       // localStorage — єдине джерело правди для гостей
       dispatch(setCartData(currentCart));
     }
-    return null;
   };
 
 // Видалити товар з корзини

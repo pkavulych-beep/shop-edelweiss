@@ -5,7 +5,6 @@ import DishForm from './DishForm';
 import { Alert, Box, Button, Dialog, Snackbar } from '@mui/material';
 import { saveNewProduct } from '../../redux/slices/product-reducer';
 import { useAppDispatch } from '../../redux/hooks';
-import { rowsToSizeStock } from './sizeStock';
 
 const CreateNewDish = () => {
   const dispatch = useAppDispatch();
@@ -36,13 +35,7 @@ const CreateNewDish = () => {
     for (let x = 0; x < photoFiles.length; x++) {
       formData.append('photos', photoFiles[x]);
     }
-    // З розмірами залишок іде в sizeStock, а sizes і count бек виводить із нього сам
-    const sizeStock = rowsToSizeStock(values.sizeStock);
-    if (sizeStock) {
-      formData.append('sizeStock', JSON.stringify(sizeStock));
-    }
     for (let key in values) {
-      if (key === 'sizeStock' || (sizeStock && key === 'count')) continue;
       if (values[key] !== null && values[key] !== '' && values[key] !== undefined) {
         formData.append(key, values[key]);
       }
@@ -78,7 +71,7 @@ const CreateNewDish = () => {
               count: 0,
               description: '',
               weight: null,
-              sizeStock: [],
+              sizes: '',
               colors: '',
               material: null,
               price: null,

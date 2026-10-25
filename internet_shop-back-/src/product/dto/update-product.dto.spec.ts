@@ -23,14 +23,6 @@ describe('UpdateProductDto', () => {
     });
   });
 
-  it('accepts the stock per size as an object', async () => {
-    await expect(validate({ sizeStock: { S: 1 } })).resolves.toEqual({ sizeStock: { S: 1 } });
-  });
-
-  it('rejects a negative stock per size', async () => {
-    await expect(validate({ sizeStock: { S: -1 } })).rejects.toBeInstanceOf(BadRequestException);
-  });
-
   it('drops unknown fields', async () => {
     await expect(validate({ name: 'Куртка', id: 1 })).resolves.toEqual({ name: 'Куртка' });
   });

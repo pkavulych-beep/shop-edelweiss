@@ -17,26 +17,7 @@ export const Validatione = yup.object().shape({
   count: yup.number().typeError('Має бути числом').transform(emptyToNull).max(10000, 'Забагато').nullable(),
   description: yupStringStandard(10, 900),
   gender: yup.string().typeError('Оберіть стать').required('Оберіть стать'),
-  sizeStock: yup
-    .array()
-    .of(
-      yup.object({
-        size: yup.string().trim().required('Вкажіть розмір'),
-        count: yup
-          .number()
-          .typeError('Має бути числом')
-          .transform(emptyToNull)
-          .nullable()
-          .required('Вкажіть кількість')
-          .integer('Має бути цілим числом')
-          .min(0, 'Не менше 0')
-          .max(10000, 'Забагато'),
-      }),
-    )
-    .test('unique-sizes', 'Розміри не мають повторюватися', (rows) => {
-      const sizes = (rows ?? []).map((row) => row.size?.trim()).filter(Boolean);
-      return new Set(sizes).size === sizes.length;
-    }),
+  sizes: yup.string().typeError('Вкажіть розміри через кому').nullable(),
   weight: yup.string().nullable(),
   colors: yup.string().typeError('Вкажіть кольори через кому').nullable(),
   material: yup.string().nullable(),
