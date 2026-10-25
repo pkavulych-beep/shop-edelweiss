@@ -99,24 +99,27 @@ export default cartSlice.reducer;
 
 // Довантажити деталі товарів для корзини
 export const fetchCartProductDetails =
-  (): AppThunk => async (dispatch, getState) => {
+  (force = false): AppThunk => async (dispatch, getState) => {
     const cartItems = getState().cart.data;
     if (!cartItems || cartItems.length === 0) return;
 
     const ids = Array.from(new Set(cartItems.map((item) => item.idProduct)));
     const existingDetails = getState().cart.productDetails;
-    const missingIds = ids.filter((id) => !existingDetails[id]);
+    const missingIds = force ? ids : ids.filter((id) => !existingDetails[id]);
 
     if (missingIds.length === 0) return;
 
-    dispatch(setLoading(true));
+    // Спінер — лише коли деталей ще немає. Фонове оновлення (force) не має
+    // розмонтовувати сторінку з формою оформлення, бо її стан тоді скинеться
+    const showSpinner = missingIds.some((id) => !existingDetails[id]);
+    if (showSpinner) dispatch(setLoading(true));
     try {
       const products = await Api().product.findByIds(missingIds);
       dispatch(setProductDetails(products));
     } catch (e) {
       console.error('Failed to fetch cart product details:', e);
     } finally {
-      dispatch(setLoading(false));
+      if (showSpinner) dispatch(setLoading(false));
     }
   };
 

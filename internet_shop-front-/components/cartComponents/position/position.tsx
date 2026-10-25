@@ -17,6 +17,8 @@ export interface IPositionProps {
   price: number;
   salePrice: number;
   quantity: number;
+  // Залишок обраного розміру; null — залишок не ведеться (без обмеження)
+  available?: number | null;
 }
 
 const shouldShowSize = (size: string) => size && size.trim() !== '';
@@ -29,6 +31,7 @@ export const Position: FC<IPositionProps> = ({
   size,
   salePrice,
   quantity,
+  available,
 }) => {
   const dispatch = useAppDispatch();
   const idUser = useAppSelector((store) => store.user.userData?.id);
@@ -37,80 +40,90 @@ export const Position: FC<IPositionProps> = ({
     dispatch(pickUpFromTheCart({ idProduct: id, size, idUser }));
   };
 
+  // Залишок зменшився після того, як товар уже лежав у кошику
+  const stockShortage = available != null && quantity > available;
+
   return (
     <Box
       sx={{
-        display: 'flex',
-        gap: 3,
         py: 3,
         borderBottom: '1px solid',
         borderColor: 'rgba(175, 179, 179, 0.1)',
         '&:last-child': { borderBottom: 'none' },
       }}
     >
-      {/* Product thumbnail */}
-      <Box
-        sx={{
-          width: 80,
-          height: 96,
-          flexShrink: 0,
-          borderRadius: 2,
-          overflow: 'hidden',
-          bgcolor: '#eceeee',
-        }}
-      >
-        <Link href={'/product/' + id}>
-          <img
-            src={cover}
-            alt={name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </Link>
-      </Box>
-
-      {/* Product info */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 0.5 }}>
-        <Box>
-          <Link href={'/product/' + id} style={{ textDecoration: 'none' }}>
-            <Typography
-              sx={{
-                fontWeight: 700,
-                fontSize: '0.8125rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'text.primary',
-                lineHeight: 1.3,
-              }}
-            >
-              {name}
-            </Typography>
+      <Box sx={{ display: 'flex', gap: 3 }}>
+        {/* Product thumbnail */}
+        <Box
+          sx={{
+            width: 80,
+            height: 96,
+            flexShrink: 0,
+            borderRadius: 2,
+            overflow: 'hidden',
+            bgcolor: '#eceeee',
+          }}
+        >
+          <Link href={'/product/' + id}>
+            <img
+              src={cover}
+              alt={name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </Link>
-          {shouldShowSize(size) && (
-            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
-              Розмір: {size}
+        </Box>
+
+        {/* Product info */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 0.5 }}>
+          <Box>
+            <Link href={'/product/' + id} style={{ textDecoration: 'none' }}>
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.8125rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'text.primary',
+                  lineHeight: 1.3,
+                }}
+              >
+                {name}
+              </Typography>
+            </Link>
+            {shouldShowSize(size) && (
+              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
+                Розмір: {size}
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: '0.75rem', color: '#777b7c' }}>
+              Кількість: {quantity}
             </Typography>
-          )}
+            <PriceBox salePrice={salePrice} price={price} />
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography sx={{ fontSize: '0.75rem', color: '#777b7c' }}>
-            Кількість: {quantity}
-          </Typography>
-          <PriceBox salePrice={salePrice} price={price} />
-        </Box>
+
+        {/* Remove button */}
+        <IconButton
+          onClick={pickUpProduct}
+          size="small"
+          sx={{
+            alignSelf: 'flex-start',
+            color: '#afb3b3',
+            '&:hover': { color: '#a73b21' },
+          }}
+        >
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </Box>
 
-      {/* Remove button */}
-      <IconButton
-        onClick={pickUpProduct}
-        size="small"
-        sx={{
-          alignSelf: 'flex-start',
-          color: '#afb3b3',
-          '&:hover': { color: '#a73b21' },
-        }}
-      >
-        <CloseIcon sx={{ fontSize: 18 }} />
-      </IconButton>
+      {/* Позиції більше немає в потрібній кількості на складі */}
+      {stockShortage && (
+        <Typography sx={{ fontSize: '0.75rem', color: '#a73b21', mt: 1 }}>
+          {available === 0 ? 'Немає в наявності' : `Доступно: ${available}`}
+        </Typography>
+      )}
     </Box>
   );
 };
