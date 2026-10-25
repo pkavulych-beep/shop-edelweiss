@@ -224,6 +224,14 @@ export class ProductService {
     return products.map((product) => product.id);
   }
 
+  // Отримати товар за id з count і status (не кидає 404 для прихованих)
+  async findByIdWithStock(id: number): Promise<ProductEntity | null> {
+    return this.repository.findOne({
+      where: { id },
+      select: ['id', 'count', 'status', 'sizes'],
+    });
+  }
+
   // Товари, які існують і не приховані, з даними для розрахунку замовлення
   // count = NULL означає "без обліку залишку" — товар завжди доступний
   async findPurchasable(ids: number[]): Promise<ProductEntity[]> {

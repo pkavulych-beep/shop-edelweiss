@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProductService } from '../product/product.service';
+import { ProductStatus } from '../product/entities/product.entity';
 import { CreateQuickOrderDto } from './dto/create-quick-order.dto';
 import { QuickOrderEntity } from './entities/quick-order.entity';
 import { normalizePhone } from '../common/phone';
@@ -16,8 +17,14 @@ export class QuickOrderService {
   ) {}
 
   async create({ phoneNumber, productId, size }: CreateQuickOrderDto) {
-    await this.productService.assertPurchasable([productId]);
-    const [product] = await this.productService.findProductsMain([productId]);
+    const product = await this.productService.findByIdWithStock(productId);
+    if (!product || product.status === ProductStatus.Hidden) {
+      throw new NotFoundException(null, 'Товар не знайдено');
+    }
+    if (product.count !== null && product.count <= 0) {
+      throw new BadRequestException('Товару немає в наявності');
+    }
+    const [fullProduct] = await this.productService.findProductsMain([productId]);
 
     // Якщо в товару є розміри, клієнт мусить обрати один із них
     if (product.sizes?.length) {
@@ -37,7 +44,7 @@ export class QuickOrderService {
     const normalizedPhone = normalizePhone(phoneNumber) as string;
     const { id, createdAt } = await this.repository.save({
       phoneNumber: normalizedPhone,
-      product,
+      product: fullProduct,
       size: size ?? null,
     });
     return { id, createdAt };

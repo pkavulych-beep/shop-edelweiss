@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { QuickOrderService } from './quick-order.service';
+import { ProductStatus } from '../product/entities/product.entity';
 
 describe('QuickOrderService', () => {
   const product = { id: 7, name: 'Сукня', sizes: ['S', 'M'] };
@@ -14,7 +15,7 @@ describe('QuickOrderService', () => {
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     productService = {
-      assertPurchasable: jest.fn().mockResolvedValue(undefined),
+      findByIdWithStock: jest.fn().mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Active, sizes: ['S', 'M'] }),
       findProductsMain: jest.fn().mockResolvedValue([product]),
     };
     service = new QuickOrderService(repository, productService);
@@ -22,13 +23,15 @@ describe('QuickOrderService', () => {
 
   describe('create', () => {
     const dto = { phoneNumber: '380991234567', productId: 7, size: 'M' };
+    const fullProduct = { id: 7, name: 'Сукня', sizes: ['S', 'M'], price: 100, cover: '', salePrice: null };
 
     it('saves phone, product and size and returns only id and date', async () => {
+      productService.findProductsMain.mockResolvedValue([fullProduct]);
       await expect(service.create(dto)).resolves.toEqual({ id: 1, createdAt: new Date(0) });
-      expect(productService.assertPurchasable).toHaveBeenCalledWith([7]);
+      expect(productService.findByIdWithStock).toHaveBeenCalledWith(7);
       expect(repository.save).toHaveBeenCalledWith({
         phoneNumber: '380991234567',
-        product,
+        product: fullProduct,
         size: 'M',
       });
     });
@@ -42,6 +45,8 @@ describe('QuickOrderService', () => {
       ];
       for (const { phoneNumber, expected } of rawDtos) {
         jest.clearAllMocks();
+        productService.findByIdWithStock.mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Active, sizes: ['S', 'M'] });
+        productService.findProductsMain.mockResolvedValue([fullProduct]);
         await service.create({ ...dto, phoneNumber });
         expect(repository.save).toHaveBeenCalledWith(
           expect.objectContaining({ phoneNumber: expected }),
@@ -49,11 +54,33 @@ describe('QuickOrderService', () => {
       }
     });
 
-    it('does not save a request for a hidden or missing product', async () => {
-      productService.assertPurchasable.mockRejectedValue(new NotFoundException());
+    it('throws 404 for a missing product', async () => {
+      productService.findByIdWithStock.mockResolvedValue(null);
 
       await expect(service.create(dto)).rejects.toBeInstanceOf(NotFoundException);
       expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 for a hidden product', async () => {
+      productService.findByIdWithStock.mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Hidden, sizes: ['S', 'M'] });
+
+      await expect(service.create(dto)).rejects.toBeInstanceOf(NotFoundException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 when product exists but count is 0', async () => {
+      productService.findByIdWithStock.mockResolvedValue({ id: 7, count: 0, status: ProductStatus.Active, sizes: ['S', 'M'] });
+
+      await expect(service.create(dto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(dto)).rejects.toThrow('Товару немає в наявності');
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('allows purchase when count is null (no stock tracking)', async () => {
+      productService.findByIdWithStock.mockResolvedValue({ id: 7, count: null, status: ProductStatus.Active, sizes: ['S', 'M'] });
+
+      await expect(service.create(dto)).resolves.toEqual({ id: 1, createdAt: new Date(0) });
+      expect(repository.save).toHaveBeenCalled();
     });
 
     it.each([
@@ -83,7 +110,8 @@ describe('QuickOrderService', () => {
     });
 
     it('accepts a request without size for a product without sizes', async () => {
-      productService.findProductsMain.mockResolvedValue([{ ...product, sizes: [] }]);
+      productService.findByIdWithStock.mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Active, sizes: [] });
+      productService.findProductsMain.mockResolvedValue([{ ...fullProduct, sizes: [] }]);
 
       await service.create({ ...dto, size: undefined });
       expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ size: null }));
