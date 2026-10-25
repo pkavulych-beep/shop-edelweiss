@@ -97,15 +97,16 @@ export default cartSlice.reducer;
 
 // ======== Thunks ========
 
-// Довантажити деталі товарів для корзини
+// Довантажити деталі товарів для корзини. force — оновити й ті, що вже
+// завантажені: залишок міг зменшитися, поки товар лежав у кошику
 export const fetchCartProductDetails =
-  (): AppThunk => async (dispatch, getState) => {
+  (force = false): AppThunk => async (dispatch, getState) => {
     const cartItems = getState().cart.data;
     if (!cartItems || cartItems.length === 0) return;
 
     const ids = Array.from(new Set(cartItems.map((item) => item.idProduct)));
     const existingDetails = getState().cart.productDetails;
-    const missingIds = ids.filter((id) => !existingDetails[id]);
+    const missingIds = force ? ids : ids.filter((id) => !existingDetails[id]);
 
     if (missingIds.length === 0) return;
 

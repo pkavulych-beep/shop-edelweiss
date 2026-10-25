@@ -32,9 +32,13 @@ import { isUkrposhtaIndexValid } from './delivery/UkrposhtaDelivery';
 
 interface OrderingComponentProps {
   items: CreateOrderItemDto[];
+  hasStockIssue?: boolean;
 }
 
-const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
+const OrderingComponent: NextPage<OrderingComponentProps> = ({
+  items,
+  hasStockIssue = false,
+}) => {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
@@ -118,8 +122,14 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
       }}
       validationSchema={ValidateOrder}
       onSubmit={async (values) => {
-        changeLoading(true);
         changeError(null);
+        if (hasStockIssue) {
+          changeError(
+            'Деяких товарів у кошику не вистачає на складі. Зменште кількість або приберіть їх, щоб оформити замовлення.'
+          );
+          return;
+        }
+        changeLoading(true);
         let redirecting = false;
         try {
           const saved = await checkUserData(values.fullName, values.phoneNumber);
@@ -349,9 +359,16 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({ items }) => {
         </Box>
 
         {/* Submit */}
+        {hasStockIssue && (
+          <Alert severity="warning" sx={{ mb: 2, fontSize: '0.85rem' }}>
+            Деяких товарів у кошику не вистачає на складі. Зменште кількість
+            або приберіть їх, щоб оформити замовлення.
+          </Alert>
+        )}
+
         <LoadingButton
           loading={loading}
-          disabled={!deliveryFilled}
+          disabled={!deliveryFilled || hasStockIssue}
           type="submit"
           variant="contained"
           fullWidth

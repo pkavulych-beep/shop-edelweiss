@@ -48,6 +48,7 @@ export type CartProductDetails = {
   cover: string;
   sizes: string[];
   sizeStock?: Record<string, number> | null;
+  count?: number | null;
   price: number;
   salePrice: number;
 };
