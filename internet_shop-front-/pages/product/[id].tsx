@@ -29,6 +29,7 @@ export default function Product() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const currentProduct = useAppSelector(({ product }) => product.currentProduct);
+  const error = useAppSelector(({ product }) => product.error);
   const userPhone = useAppSelector(({ user }) => user.userData?.phoneNumber);
 
   const [selectedSize, setSelectedSize] = useState<null | string>(null);
@@ -41,12 +42,13 @@ export default function Product() {
   const [isQuickOrderSending, setIsQuickOrderSending] = useState(false);
   const [isQuickOrderDone, setIsQuickOrderDone] = useState(false);
 
-  if (!currentProduct || !currentProduct.photos) {
+  const isLoadingError = !currentProduct && error;
+  if (!currentProduct) {
     return (
-      <MainLayout title="Товар не знайдено">
+      <MainLayout title={isLoadingError ? 'Помилка' : 'Товар не знайдено'}>
         <Box sx={{ textAlign: 'center', py: 10 }}>
           <Typography variant="h4" sx={{ fontSize: '1.25rem', color: 'text.secondary', mb: 3 }}>
-            Товар не знайдено
+            {isLoadingError ? 'Не вдалося завантажити товар. Спробуйте ще раз' : 'Товар не знайдено'}
           </Typography>
           <Button variant="contained" onClick={() => router.push('/')}>
             На головну
@@ -57,7 +59,7 @@ export default function Product() {
   }
 
   const { cover, photos, ...productInfo } = currentProduct;
-  const photosArr = [{ id: 0, url: cover }, ...photos];
+  const photosArr = photos?.length ? [{ id: 0, url: cover }, ...photos] : [];
 
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
   const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count != null && currentProduct.count <= 0);
@@ -467,6 +469,9 @@ export const getServerSideProps = wrapper.getServerSideProps(store =>
   // @ts-ignore
   async ({ params: { id: idProduct } }) => {
     // @ts-ignore
-    await store.dispatch(fetchProduct(idProduct));
+    const result = await store.dispatch(fetchProduct(idProduct));
+    if (result?.notFound) {
+      return { notFound: true };
+    }
   }
 );
