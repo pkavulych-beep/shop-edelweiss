@@ -341,6 +341,41 @@ export class OrderService {
     return manager.save(OrderEntity, orderWithItems);
   }
 
+  // Скасовує CARD-замовлення, оплата якого не пройшла (paymentStatus = FAILED),
+  // а рахунок invoiceId уже прострочений. Повертає товар на склад, paymentStatus
+  // лишається FAILED. Якщо покупець тим часом створив новий інвойс чи
+  // замовлення вже не «обробляється», нічого не змінює.
+  async cancelFailedOrder(
+    manager: EntityManager,
+    id: number,
+    invoiceId: string,
+  ): Promise<OrderEntity | null> {
+    const order = await manager.findOne(OrderEntity, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (
+      !order ||
+      order.paymentMethod !== PaymentMethod.Card ||
+      order.paymentStatus !== PaymentStatus.Failed ||
+      order.paymentInvoiceId !== invoiceId ||
+      order.status !== Status.Processed
+    ) {
+      return null;
+    }
+
+    const orderWithItems = await manager.findOne(OrderEntity, {
+      where: { id },
+      relations: { items: { product: true } },
+      order: { items: { id: 'ASC' } },
+    });
+
+    await this.restoreProductCounts(manager, orderWithItems.items ?? []);
+    orderWithItems.status = Status.Canceled;
+    return manager.save(OrderEntity, orderWithItems);
+  }
+
   // Для Укрпошти department — індекс відділення (5 цифр). Перевіряємо підсумковий стан замовлення,
   // але лише коли запит змінює спосіб доставки чи відділення: старі замовлення з довільним
   // department мають і далі змінювати статус чи коментар.

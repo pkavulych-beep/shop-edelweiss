@@ -1061,6 +1061,107 @@ describe('OrderService', () => {
     });
   });
 
+  describe('cancelFailedOrder', () => {
+    const failedOrder = () => ({
+      id: 10,
+      status: Status.Processed,
+      paymentMethod: PaymentMethod.Card,
+      paymentStatus: PaymentStatus.Failed,
+      paymentInvoiceId: 'failed-invoice',
+      items: [
+        { productId: 1, quantity: 2 },
+        { productId: 2, quantity: 1 },
+      ],
+    });
+
+    const build = (order: ReturnType<typeof failedOrder> | null) => {
+      const lockedOrder = order ? { ...order } : null;
+      const mockManager = {
+        findOne: jest.fn().mockImplementation((entity, options) => {
+          if (entity === OrderEntity) {
+            return Promise.resolve(lockedOrder);
+          }
+          return Promise.resolve({ id: options.where.id, count: 5, status: 'active' });
+        }),
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+      };
+      const service = new OrderService({} as any, {} as any, {} as any);
+      return { service, mockManager };
+    };
+
+    it('cancels a FAILED order, keeps payment FAILED and returns stock', async () => {
+      const { service, mockManager } = build(failedOrder());
+
+      const result = await service.cancelFailedOrder(mockManager as any, 10, 'failed-invoice');
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: Status.Canceled,
+          paymentStatus: PaymentStatus.Failed,
+        }),
+      );
+      expect(mockManager.findOne).toHaveBeenCalledWith(OrderEntity, {
+        where: { id: 10 },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const productSaves = mockManager.save.mock.calls.filter(
+        ([entity]: [unknown]) => entity === ProductEntity,
+      );
+      expect(productSaves).toHaveLength(2);
+      expect(productSaves.find(([, data]: [unknown, any]) => data.id === 1)[1].count).toBe(7);
+      expect(productSaves.find(([, data]: [unknown, any]) => data.id === 2)[1].count).toBe(6);
+    });
+
+    it('does not touch an order that moved to a new PENDING invoice', async () => {
+      const { service, mockManager } = build({
+        ...failedOrder(),
+        paymentStatus: PaymentStatus.Pending,
+        paymentInvoiceId: 'new-invoice',
+      });
+
+      const result = await service.cancelFailedOrder(mockManager as any, 10, 'failed-invoice');
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch a paid order', async () => {
+      const { service, mockManager } = build({
+        ...failedOrder(),
+        paymentStatus: PaymentStatus.Paid,
+      });
+
+      const result = await service.cancelFailedOrder(mockManager as any, 10, 'failed-invoice');
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an already canceled order', async () => {
+      const { service, mockManager } = build({
+        ...failedOrder(),
+        status: Status.Canceled,
+      });
+
+      const result = await service.cancelFailedOrder(mockManager as any, 10, 'failed-invoice');
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an order the admin already moved past processing', async () => {
+      const { service, mockManager } = build({
+        ...failedOrder(),
+        status: Status.Sent,
+      });
+
+      const result = await service.cancelFailedOrder(mockManager as any, 10, 'failed-invoice');
+
+      expect(result).toBeNull();
+      expect(mockManager.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('deletes an existing order', async () => {
       const mockManager = {
