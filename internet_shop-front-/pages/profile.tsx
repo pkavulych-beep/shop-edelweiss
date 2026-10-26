@@ -19,6 +19,8 @@ import { toLogOut, updateUserData } from '../redux/slices/auth-reducer';
 import { useRouter } from 'next/router';
 import { MyOrders } from '../components/MyOrders/MyOrders';
 import { maskPhoneInput } from '../utils/phone';
+import { DialogLogin } from '../components/Header/DialogAuth/DialogLogin';
+import { DialogRegister } from '../components/Header/DialogAuth/DialogRegister';
 
 type Tab = 'info' | 'orders';
 
@@ -27,7 +29,17 @@ export default function ProfilePage() {
   const router = useRouter();
   const { userData } = useAppSelector((state) => state.user);
 
-  const [activeTab, setActiveTab] = useState<Tab>('info');
+  // Вкладка живе в URL (?tab=orders), щоб на неї можна було послатися з меню.
+  // До router.isReady query порожній, тоді показуємо «Особисті дані».
+  const activeTab: Tab = router.query.tab === 'orders' ? 'orders' : 'info';
+  const selectTab = (tab: Tab) => {
+    router.replace(
+      { pathname: router.pathname, query: tab === 'orders' ? { tab } : {} },
+      undefined,
+      { shallow: true },
+    );
+  };
+
   const [fullName, setFullName] = useState(userData?.fullName || '');
   const [phone, setPhone] = useState(userData?.phoneNumber || '');
   const [email, setEmail] = useState(userData?.email || '');
@@ -35,6 +47,8 @@ export default function ProfilePage() {
   const [snackOpen, setSnackOpen] = useState(false);
   const [snackMessage, setSnackMessage] = useState('');
   const [snackSeverity, setSnackSeverity] = useState<'success' | 'error'>('success');
+  const [dialogLoginOpen, setDialogLogin] = useState(false);
+  const [dialogRegisterOpen, setDialogRegister] = useState(false);
 
   // Коли дані користувача змінилися (вхід, збереження), заповнюємо форму наново
   const [prevUserData, setPrevUserData] = useState(userData);
@@ -58,9 +72,33 @@ export default function ProfilePage() {
           <Typography sx={{ color: 'text.secondary', mb: 4, fontSize: '0.9rem' }}>
             Щоб переглянути профіль, увійдіть або зареєструйтесь
           </Typography>
-          <Button variant="contained" onClick={() => router.push('/')}>
-            На головну
-          </Button>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'center',
+              gap: 2,
+              mx: 'auto',
+              maxWidth: 360,
+            }}
+          >
+            <Button fullWidth variant="contained" onClick={() => setDialogLogin(true)}>
+              Увійти
+            </Button>
+            <Button fullWidth variant="outlined" onClick={() => setDialogRegister(true)}>
+              Зареєструватися
+            </Button>
+          </Box>
+          <DialogLogin
+            open={dialogLoginOpen}
+            setLogin={setDialogLogin}
+            setRegister={setDialogRegister}
+          />
+          <DialogRegister
+            open={dialogRegisterOpen}
+            setRegister={setDialogRegister}
+            setLogin={setDialogLogin}
+          />
         </Box>
       </MainLayout>
     );
@@ -139,7 +177,7 @@ export default function ProfilePage() {
             <ListItemButton
               key={item.key}
               selected={activeTab === item.key}
-              onClick={() => setActiveTab(item.key)}
+              onClick={() => selectTab(item.key)}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
