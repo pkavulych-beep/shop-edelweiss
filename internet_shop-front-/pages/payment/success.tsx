@@ -1,5 +1,5 @@
 import { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -10,9 +10,30 @@ import Link from 'next/link';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import { MainLayout } from '../../layouts/MainLayout';
 import { Api } from '../../api/Api';
-import { PaymentStatus, PaymentMethod, Status } from '../../redux/Types/orderType';
+import { Order, PaymentStatus, PaymentMethod, Status } from '../../redux/Types/orderType';
 import { getPaymentChipLabel, isCardUnpaid } from '../../components/MyOrders/MyOrders';
 import { useCardPaymentAvailable } from '../../hooks/useCardPaymentAvailable';
+
+// mono повертає покупця до оплати раніше, ніж приходить вебхук,
+// тож статус перевіряємо самі, поки не мине час очікування.
+const POLL_INTERVAL_MS = 2500;
+const POLL_TIMEOUT_MS = 30000;
+
+type PaymentOrder = Pick<Order, 'id' | 'status' | 'paymentStatus' | 'paymentMethod'>;
+
+const toPaymentOrder = (data: Order): PaymentOrder => ({
+  id: data.id,
+  status: data.status,
+  paymentStatus: data.paymentStatus,
+  paymentMethod: data.paymentMethod,
+});
+
+// Оплата карткою ще може підтвердитися: рахунок створено (PENDING)
+// або замовлення чекає на перший інвойс (NOT_REQUIRED для CARD).
+const isAwaitingPayment = (order: PaymentOrder): boolean =>
+  order.paymentMethod === PaymentMethod.Card &&
+  (order.paymentStatus === PaymentStatus.Pending ||
+    order.paymentStatus === PaymentStatus.NotRequired);
 
 export const PaymentSuccess: NextPage = () => {
   const router = useRouter();
@@ -21,44 +42,101 @@ export const PaymentSuccess: NextPage = () => {
   const id = typeof orderId === 'string' ? Number(orderId) : NaN;
   const validId = Number.isInteger(id) && id >= 1;
 
-  const [loading, setLoading] = useState(validId);
-  const [error, setError] = useState<string | null>(validId ? null : 'Не знайдено або невірний ідентифікатор замовлення');
-  const [order, setOrder] = useState<{
+  // Стан прив'язаний до id, щоб відповідь на попереднє замовлення
+  // не показалася для нового.
+  const [loaded, setLoaded] = useState<{
     id: number;
-    status: Status;
-    paymentStatus: PaymentStatus;
-    paymentMethod: PaymentMethod;
+    order?: PaymentOrder;
+    error?: string;
+    expired?: boolean;
   } | null>(null);
+  const deadlineRef = useRef<{ id: number; at: number } | null>(null);
+
+  const current = loaded?.id === id ? loaded : null;
+  const order = current?.order ?? null;
+  const error = !router.isReady
+    ? null
+    : !validId
+    ? 'Не знайдено або невірний ідентифікатор замовлення'
+    : current?.error ?? null;
+  const waitingExpired = current?.expired === true;
+  const loading = !router.isReady || (validId && !current);
 
   useEffect(() => {
-    if (!validId) return;
+    if (!router.isReady || !validId) return;
+    // Відповідь на попередній id може прийти пізніше за нову
     let cancelled = false;
+    // Кожен захід на сторінку починає новий відлік очікування
+    deadlineRef.current = null;
     Api()
       .orders.findById(id)
       .then((data) => {
         if (!cancelled) {
-          setOrder({
-            id: data.id,
-            status: data.status,
-            paymentStatus: data.paymentStatus,
-            paymentMethod: data.paymentMethod,
-          });
+          setLoaded({ id, order: toPaymentOrder(data) });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setError('Не вдалося перевірити статус оплати. Спробуйте пізніше.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
+          setLoaded({
+            id,
+            error: 'Не вдалося перевірити статус оплати. Спробуйте пізніше.',
+          });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [validId, id]);
+  }, [router.isReady, validId, id]);
+
+  useEffect(() => {
+    if (!order || !isAwaitingPayment(order)) return;
+
+    const orderId = order.id;
+    if (!deadlineRef.current || deadlineRef.current.id !== orderId) {
+      deadlineRef.current = { id: orderId, at: Date.now() + POLL_TIMEOUT_MS };
+    }
+    const deadline = deadlineRef.current.at;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const markExpired = () =>
+      setLoaded((prev) =>
+        prev && prev.id === orderId ? { ...prev, expired: true } : prev
+      );
+
+    function schedule() {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        markExpired();
+        return;
+      }
+      timer = setTimeout(check, Math.min(POLL_INTERVAL_MS, remaining));
+    }
+
+    async function check() {
+      if (Date.now() >= deadline) {
+        markExpired();
+        return;
+      }
+      try {
+        const data = await Api().orders.findById(orderId);
+        if (cancelled) return;
+        const next = toPaymentOrder(data);
+        setLoaded({ id: orderId, order: next });
+        if (isAwaitingPayment(next)) schedule();
+      } catch {
+        // Тимчасова помилка мережі не привід лякати покупця: пробуємо до дедлайну
+        if (!cancelled) schedule();
+      }
+    }
+
+    timer = setTimeout(check, Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [order, id]);
 
   if (loading) {
     return (
@@ -66,7 +144,7 @@ export const PaymentSuccess: NextPage = () => {
         <Box sx={{ maxWidth: 500, mx: 'auto', px: 2, py: 6, textAlign: 'center' }}>
           <CircularProgress size={48} />
           <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>
-            Перевіряємо статус оплати…
+            Перевіряємо оплату…
           </Typography>
         </Box>
       </MainLayout>
@@ -88,16 +166,36 @@ export const PaymentSuccess: NextPage = () => {
     );
   }
 
-  const isPaid = order?.paymentStatus === PaymentStatus.Paid;
-  // Скасоване замовлення бек оплатити не дасть
+  if (!order) {
+    return null;
+  }
+
+  const isPaid = order.paymentStatus === PaymentStatus.Paid;
+  const isFailed = order.paymentStatus === PaymentStatus.Failed;
+  const isChecking = isAwaitingPayment(order) && !waitingExpired;
+
+  if (isChecking) {
+    return (
+      <MainLayout title='Оплата'>
+        <Box sx={{ maxWidth: 500, mx: 'auto', px: 2, py: 6, textAlign: 'center' }}>
+          <CircularProgress size={48} />
+          <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>
+            Перевіряємо оплату…
+          </Typography>
+        </Box>
+      </MainLayout>
+    );
+  }
+
+  // «Повторити оплату» — лише коли оплата точно не пройшла
+  // або коли час очікування на вебхук минув, а не під час перевірки.
   const showRetry =
     cardPaymentAvailable &&
-    !!order &&
     order.status !== Status.Canceled &&
-    isCardUnpaid(order.paymentMethod, order.paymentStatus);
+    isCardUnpaid(order.paymentMethod, order.paymentStatus, order.status) &&
+    (isFailed || waitingExpired);
 
   const handleRetryPayment = async () => {
-    if (!order) return;
     try {
       const { pageUrl } = await Api().payment.createInvoice(order.id);
       window.location.href = pageUrl;
@@ -106,13 +204,21 @@ export const PaymentSuccess: NextPage = () => {
       const details = String(Array.isArray(message) ? message.join('. ') : message || '')
         .trim()
         .replace(/\.$/, '');
-      setError(
-        'Не вдалося перейти до оплати.' +
-          (details ? ` ${details}.` : '') +
-          ' Спробуйте пізніше.'
+      setLoaded((prev) =>
+        prev && prev.id === id
+          ? {
+              ...prev,
+              error:
+                'Не вдалося перейти до оплати.' +
+                (details ? ` ${details}.` : '') +
+                ' Спробуйте пізніше.',
+            }
+          : prev
       );
     }
   };
+
+  const statusLabel = getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status);
 
   return (
     <MainLayout title={isPaid ? 'Оплата успішна' : 'Оплата не підтверджена'}>
@@ -126,16 +232,18 @@ export const PaymentSuccess: NextPage = () => {
               Дякуємо за оплату!
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-              Ваше замовлення №{order?.id} оплачено. Статус: <strong>Оплачено</strong>.
+              Ваше замовлення №{order.id} оплачено. Статус: <strong>Оплачено</strong>.
             </Typography>
           </>
         ) : (
           <>
-            <Alert severity="warning" sx={{ mb: 3 }}>
-              Оплата ще не підтверджена. Статус: {order ? getPaymentChipLabel(order.paymentMethod, order.paymentStatus, order.status) : 'невідомо'}.
+            <Alert severity={isFailed ? 'error' : 'warning'} sx={{ mb: 3 }}>
+              {isFailed ? 'Оплата не пройшла.' : 'Оплата ще не підтверджена.'} Статус: {statusLabel}.
             </Alert>
             <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-              Якщо ви оплатили замовлення, статус оновиться протягом декілька хвилин.
+              {isFailed
+                ? 'Спробуйте ще раз або оберіть інший спосіб оплати.'
+                : 'Якщо ви оплатили замовлення, статус оновиться протягом кількох хвилин.'}
             </Typography>
           </>
         )}

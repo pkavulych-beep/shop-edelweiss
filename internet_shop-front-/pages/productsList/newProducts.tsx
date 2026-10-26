@@ -2,14 +2,18 @@ import * as React from 'react';
 import { Api } from '../../api/Api';
 import { AdminWrapper } from '../../components/adminWrapper/AdminWrapper';
 import CreateNewDish from '../../components/CreateNewDish/CreateNewDish';
-import { ProductsList } from '../../components/ProductList';
+import { PaginatedProducts, PRODUCT_LIST_LIMIT } from '../../components/ProductList/PaginatedProducts';
 import { MainLayout } from '../../layouts/MainLayout';
 import { wrapper } from '../../redux/redux-store';
+import { useAppSelector } from '../../redux/hooks';
 import { addDataProducts, setTotal, setErrorMessage, setFilters } from '../../redux/slices/product-reducer';
+import { pluralizeProduct } from '../../utils/plural';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 
 export default function NewProducts() {
+  const total = useAppSelector((store) => store.product.total);
+
   return (
     <MainLayout title="Нове — Edelweiss">
       <AdminWrapper>
@@ -22,9 +26,12 @@ export default function NewProducts() {
         <Typography variant="h2" sx={{ fontSize: { xs: '1.5rem', md: '2.25rem' } }}>
           Нові надходження
         </Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+          {total > 0 ? `${total} ${pluralizeProduct(total)}` : 'Нічого не знайдено'}
+        </Typography>
       </Box>
       <Box sx={{ maxWidth: 1440, mx: 'auto', px: { xs: 2, md: 6 }, py: 4 }}>
-        <ProductsList />
+        <PaginatedProducts />
       </Box>
     </MainLayout>
   );
@@ -32,11 +39,14 @@ export default function NewProducts() {
 
 export const getServerSideProps = wrapper.getServerSideProps((store) =>
   // @ts-ignore
-  async (ctx) => {
+  async ({ query }) => {
     try {
+      const rawPage = Number(query.page);
+      const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
       const filters = {
         sort: 'newest',
-        limit: 20,
+        limit: PRODUCT_LIST_LIMIT,
+        page,
       };
       const result = await Api().product.findFiltered(filters);
       store.dispatch(setFilters(filters));

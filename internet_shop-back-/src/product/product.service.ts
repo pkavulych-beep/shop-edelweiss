@@ -15,7 +15,7 @@ import {
 } from 'typeorm';
 import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
-import { baseUrl, FileService, FileType } from 'src/file/file.service';
+import { FileService, FileType } from 'src/file/file.service';
 import { PhotosService } from '../photos/photos.service';
 import { fromSizeStock } from './stock';
 
@@ -68,12 +68,16 @@ export class ProductService {
     }
     applySizeStock(dto);
 
-    return this.repository.save({
-      cover: coverUrl,
-      photos: photos.length > 1 ? picturePathArr : null,
-      status: ProductStatus.Active,
-      ...dto,
-    });
+    // repository.create, а не звичайний об'єкт: save поверне сутність, і cover
+    // та url фото серіалізуються у повні URL із поточного BASE_URL.
+    return this.repository.save(
+      this.repository.create({
+        cover: coverUrl,
+        photos: photos.length > 1 ? picturePathArr : null,
+        status: ProductStatus.Active,
+        ...dto,
+      }),
+    );
   }
 
   // Новий метод фільтрації з QueryBuilder
@@ -340,9 +344,7 @@ export class ProductService {
     }
 
     try {
-      await this.fileService.deleteFile(
-        product.cover.replace(baseUrl, ''),
-      );
+      await this.fileService.deleteFile(product.cover);
     } catch (e) {
       console.warn('Cover file not found, skipping:', e.message);
     }
@@ -350,9 +352,7 @@ export class ProductService {
     if (product.photos) {
       for (const photo of product.photos) {
         try {
-          await this.fileService.deleteFile(
-            photo.url.replace(baseUrl, ''),
-          );
+          await this.fileService.deleteFile(photo.url);
         } catch (e) {
           console.warn('Photo file not found, skipping:', e.message);
         }
