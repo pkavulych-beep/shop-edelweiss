@@ -7,12 +7,13 @@ import React, { useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { Api } from "../../api/Api";
 import { setCurrentProduct } from "../../redux/slices/product-reducer";
+import { productToRows, rowsToSizeStock } from "../CreateNewDish/sizeStock";
 
 interface IUpdateProductProps {
   idProduct: number | null;
 }
 
-// У БД sizes/colors — масиви, а у формі це рядок "S, M, L"
+// У БД colors — масив, а у формі це рядок "S, M, L"
 const arrayToString = (value: string[] | string | null | undefined) =>
   Array.isArray(value) ? value.join(", ") : value ?? "";
 
@@ -44,7 +45,7 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
     count: currentProduct.count,
     description: currentProduct.description,
     weight: currentProduct.weight,
-    sizes: arrayToString(currentProduct.sizes),
+    sizeStock: productToRows(currentProduct),
     colors: arrayToString(currentProduct.colors),
     material: currentProduct.material,
     price: currentProduct.price,
@@ -80,7 +81,11 @@ export const UpdateProduct: NextPage<IUpdateProductProps> = ({ idProduct }) => {
               setErrorMessage(null);
               try {
                 // cast перетворює порожні числові поля ('') на null перед відправкою
-                const res = await Api().product.update(idProduct, Validatione.cast(values));
+                const { sizeStock: rows, ...rest } = Validatione.cast(values);
+                const sizeStock = rowsToSizeStock(rows);
+                // З розмірами sizes і count бек виводить із sizeStock; без них розміри очищаємо
+                const dto = sizeStock ? { ...rest, count: undefined, sizeStock } : { ...rest, sizeStock: null, sizes: [] };
+                const res = await Api().product.update(idProduct, dto);
                 dispatch(setCurrentProduct({ ...res, photos: currentProduct.photos }));
                 handleClose();
               } catch (e) {

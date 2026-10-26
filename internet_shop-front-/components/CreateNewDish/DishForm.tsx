@@ -1,9 +1,11 @@
 import React from 'react';
-import { Field, Form } from 'formik';
-import { Alert, Button, Grid, MenuItem, TextField } from '@mui/material';
+import { Field, FieldArray, Form, useFormikContext } from 'formik';
+import { Alert, Box, Button, Grid, IconButton, MenuItem, TextField } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CustomizedInputBase from '../CustomizedInputBase/CustomizedInputBase';
 import { Gender, Category, Season } from '../../redux/Types/ProductType';
 import { categoryLabels, seasonLabels } from '../FilterSidebar/filterLabels';
+import { ISizeStockRow } from './sizeStock';
 
 interface IDishFormProps {
   handleClose: () => void;
@@ -14,6 +16,11 @@ interface IDishFormProps {
 }
 
 const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishFormProps) => {
+  const { values, errors } = useFormikContext<{ sizeStock: ISizeStockRow[] }>();
+  const rows = values.sizeStock ?? [];
+  // Помилка всього масиву (наприклад, повтор розміру) — рядок, помилки рядків — масив
+  const sizeStockError = typeof errors.sizeStock === 'string' ? errors.sizeStock : null;
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotos(e.target.files);
   };
@@ -71,11 +78,36 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
         </Field>
       </div>
 
-      <CustomizedInputBase type="text" name="sizes" placeholder="Розміри (через кому: S, M, L)" />
       <CustomizedInputBase type="text" name="colors" placeholder="Кольори (через кому: Чорний, Білий)" />
       <CustomizedInputBase type="text" name="material" placeholder="Матеріал" />
       <CustomizedInputBase type="text" name="weight" placeholder="Вага" />
-      <CustomizedInputBase type="number" name="count" placeholder="Кількість" />
+
+      {/* Розміри й залишок: без жодного розміру кількість вказується одним полем */}
+      <p style={{ margin: '8px 0 4px' }}>Розміри та кількість</p>
+      <FieldArray name="sizeStock">
+        {({ push, remove }) => (
+          <>
+            {rows.map((_, index) => (
+              <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                <Box sx={{ flex: 1 }}>
+                  <CustomizedInputBase type="text" name={`sizeStock.${index}.size`} placeholder="Розмір" />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <CustomizedInputBase type="number" name={`sizeStock.${index}.count`} placeholder="Кількість" />
+                </Box>
+                <IconButton aria-label="Видалити розмір" onClick={() => remove(index)} sx={{ mt: 1 }}>
+                  <DeleteOutlineIcon />
+                </IconButton>
+              </Box>
+            ))}
+            {sizeStockError && <Alert severity="error" sx={{ mb: 1 }}>{sizeStockError}</Alert>}
+            <Button onClick={() => push({ size: '', count: '' })} sx={{ mb: 1 }}>
+              Додати розмір
+            </Button>
+          </>
+        )}
+      </FieldArray>
+      {rows.length === 0 && <CustomizedInputBase type="number" name="count" placeholder="Кількість" />}
       <CustomizedInputBase type="number" name="price" placeholder="Ціна" />
       <CustomizedInputBase type="number" name="salePrice" placeholder="Ціна зі знижкою" />
 

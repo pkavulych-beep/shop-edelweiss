@@ -17,6 +17,20 @@ import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
 import { baseUrl, FileService, FileType } from 'src/file/file.service';
 import { PhotosService } from '../photos/photos.service';
+import { fromSizeStock } from './stock';
+
+// Залишок по розмірах — джерело правди: sizes і count виводимо з нього.
+// Якщо змінили лише sizes (старий формат), залишок по розмірах скидаємо, щоб
+// він не розійшовся з розмірами. sizeStock = null — товар без розмірів
+const applySizeStock = (dto: CreateProductDto | UpdateProductDto) => {
+  if (dto.sizeStock) {
+    Object.assign(dto, fromSizeStock(dto.sizeStock));
+  } else if (dto.sizeStock === null) {
+    dto.sizes = dto.sizes ?? [];
+  } else if (dto.sizes !== undefined) {
+    dto.sizeStock = null;
+  }
+};
 
 @Injectable()
 export class ProductService {
@@ -52,6 +66,7 @@ export class ProductService {
     if (typeof dto.colors === 'string') {
       dto.colors = (dto.colors as string).split(',').map((s) => s.trim()).filter(Boolean);
     }
+    applySizeStock(dto);
 
     return this.repository.save({
       cover: coverUrl,
@@ -209,6 +224,14 @@ export class ProductService {
     return products.map((product) => product.id);
   }
 
+  // Отримати товар за id з count, status і залишком по розмірах
+  async findByIdWithStock(id: number): Promise<ProductEntity | null> {
+    return this.repository.findOne({
+      where: { id },
+      select: ['id', 'count', 'status', 'sizes', 'sizeStock'],
+    });
+  }
+
   // Товари, які існують і не приховані, з даними для розрахунку замовлення
   // count = NULL означає "без обліку залишку" — товар завжди доступний
   async findPurchasable(ids: number[]): Promise<ProductEntity[]> {
@@ -219,7 +242,7 @@ export class ProductService {
         status: Or(Not(ProductStatus.Hidden), IsNull()),
         count: Or(MoreThan(0), IsNull()),
       },
-      select: ['id', 'sizes', 'price', 'salePrice', 'count', 'status'],
+      select: ['id', 'sizes', 'sizeStock', 'price', 'salePrice', 'count', 'status'],
     });
   }
 
@@ -240,7 +263,7 @@ export class ProductService {
     if (uniqueIds.length === 0) return [];
     const products = await manager.find(ProductEntity, {
       where: { id: In(uniqueIds) },
-      select: ['id', 'name', 'sizes', 'price', 'cover', 'salePrice'],
+      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'salePrice'],
     });
     if (products.length !== uniqueIds.length) {
       throw new NotFoundException(null, 'Товар не знайдено');
@@ -252,7 +275,7 @@ export class ProductService {
     if (!ids || ids.length === 0) return [];
     return this.repository.find({
       where: { id: In(ids) },
-      select: ['id', 'name', 'sizes', 'price', 'cover', 'salePrice'],
+      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'salePrice'],
     });
   }
 
@@ -280,6 +303,7 @@ export class ProductService {
       if (typeof dto.colors === 'string') {
         dto.colors = (dto.colors as string).split(',').map((s) => s.trim()).filter(Boolean);
       }
+      applySizeStock(dto);
       await this.repository.update(id, {
         ...dto,
         updateAt: new Date(),

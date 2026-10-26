@@ -15,6 +15,7 @@
   "needsInputMinutes": 20,
   "limitPauseMinutes": { "claude": 60, "codex": 360, "opencode": 60 },
   "releaseAfterHours": { "claude": 12, "codex": 12, "opencode": 1 },
+  "modelDownHours": 6,
   "coders": {
     "opus": {
       "provider": "claude",
@@ -36,17 +37,17 @@
       "takes": ["easy", "medium"],
       "ports": { "back": 7780, "front": 3003, "db": "Edelweiss_zen" }
     },
-    "nemotron": {
+    "deepseek": {
       "provider": "opencode",
-      "model": "opencode/nemotron-3-ultra-free",
+      "model": "opencode/deepseek-v4.1-flash-free",
       "takes": ["easy", "medium"],
-      "ports": { "back": 7781, "front": 3005, "db": "Edelweiss_nemotron" }
+      "ports": { "back": 7781, "front": 3005, "db": "Edelweiss_deepseek" }
     },
-    "longcat": {
+    "glm": {
       "provider": "opencode",
-      "model": "opencode/longcat-2.5-preview-free",
+      "model": "opencode/glm-5.3-flash-free",
       "takes": ["easy"],
-      "ports": { "back": 7782, "front": 3006, "db": "Edelweiss_longcat" }
+      "ports": { "back": 7782, "front": 3006, "db": "Edelweiss_glm" }
     }
   },
   "reviewer": { "provider": "claude", "model": "opus", "effort": "high" },

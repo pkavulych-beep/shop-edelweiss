@@ -15,6 +15,7 @@ import {
   fetchCartProductDetails,
   loadCartFromLocalStorage,
 } from '../redux/slices/cart-reducer';
+import { availableStock } from '../utils/stock';
 
 const Cart: NextPage = () => {
   const dispatch = useAppDispatch();
@@ -29,9 +30,10 @@ const Cart: NextPage = () => {
 
   useEffect(() => {
     if (data && data.length > 0) {
-      dispatch(fetchCartProductDetails());
+      // Завжди беремо свіжий залишок: він міг зменшитися, поки товар у кошику
+      dispatch(fetchCartProductDetails(true));
     }
-  }, [data?.length]);
+  }, [data?.length, isLoggedIn]);
 
   const enrichedProducts = data
     ? data
@@ -42,12 +44,19 @@ const Cart: NextPage = () => {
             ...details,
             selectedSize: item.size,
             quantity: item.quantity,
+            available: availableStock(details, item.size),
           };
         })
         .filter(Boolean)
     : [];
 
   const allDetailsLoaded = data ? enrichedProducts.length === data.length : true;
+
+  // Залишок міг зменшитися, поки товар лежав у кошику: тоді замовлення
+  // оформлювати не можна, доки покупець не прибере або не зменшить позицію
+  const hasStockIssue = enrichedProducts.some(
+    (product) => product.available != null && product.quantity > product.available
+  );
 
   return (
     <MainLayout title="Кошик — Edelweiss">
@@ -83,6 +92,7 @@ const Cart: NextPage = () => {
                     size: product.selectedSize,
                     quantity: product.quantity,
                   }))}
+                  hasStockIssue={hasStockIssue}
                 />
               </LoginRequired>
             </Box>
@@ -122,6 +132,7 @@ const Cart: NextPage = () => {
                     cover={product.cover}
                     salePrice={product.salePrice}
                     quantity={product.quantity}
+                    available={product.available}
                   />
                 ))}
 

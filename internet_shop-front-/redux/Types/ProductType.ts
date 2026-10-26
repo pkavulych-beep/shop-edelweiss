@@ -13,6 +13,8 @@ export interface IProduct {
   name: string;
   cover: string;
   sizes: string[];
+  // Залишок по розмірах ({ S: 3, M: 0 }); null — товар без розмірів, залишок у count
+  sizeStock?: Record<string, number> | null;
   colors: string[];
   count: number;
   description: string;
@@ -45,6 +47,8 @@ export type CartProductDetails = {
   name: string;
   cover: string;
   sizes: string[];
+  sizeStock?: Record<string, number> | null;
+  count?: number | null;
   price: number;
   salePrice: number;
 };

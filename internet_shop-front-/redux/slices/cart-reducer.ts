@@ -3,6 +3,7 @@ import { hydrate } from '../hydrate';
 import { AppThunk } from '../redux-store';
 import { Api } from '../../api/Api';
 import { CartItem, CartProductDetails } from '../Types/ProductType';
+import { outOfStockMessage } from '../../utils/stock';
 
 const CART_LOCAL_STORAGE_KEY = 'guest_cart';
 
@@ -98,30 +99,35 @@ export default cartSlice.reducer;
 
 // Довантажити деталі товарів для корзини
 export const fetchCartProductDetails =
-  (): AppThunk => async (dispatch, getState) => {
+  (force = false): AppThunk => async (dispatch, getState) => {
     const cartItems = getState().cart.data;
     if (!cartItems || cartItems.length === 0) return;
 
     const ids = Array.from(new Set(cartItems.map((item) => item.idProduct)));
     const existingDetails = getState().cart.productDetails;
-    const missingIds = ids.filter((id) => !existingDetails[id]);
+    const missingIds = force ? ids : ids.filter((id) => !existingDetails[id]);
 
     if (missingIds.length === 0) return;
 
-    dispatch(setLoading(true));
+    // Спінер — лише коли деталей ще немає. Фонове оновлення (force) не має
+    // розмонтовувати сторінку з формою оформлення, бо її стан тоді скинеться
+    const showSpinner = missingIds.some((id) => !existingDetails[id]);
+    if (showSpinner) dispatch(setLoading(true));
     try {
       const products = await Api().product.findByIds(missingIds);
       dispatch(setProductDetails(products));
     } catch (e) {
       console.error('Failed to fetch cart product details:', e);
     } finally {
-      dispatch(setLoading(false));
+      if (showSpinner) dispatch(setLoading(false));
     }
   };
 
-// Додати товар в корзину
+// Додати товар в корзину. Повертає текст помилки або null, якщо товар додано.
+// available — залишок обраного розміру (null — без обмеження); для гостя
+// перевіряємо його тут, для залогіненого перевіряє бек.
 export const addPositionsToCart =
-  (dto: { idProduct: number; size?: string }): AppThunk =>
+  (dto: { idProduct: number; size?: string; available?: number | null }): AppThunk<Promise<string | null>> =>
   async (dispatch, getState) => {
     const idUser = getState().user.userData?.id;
     const newItem: CartItem = { idProduct: dto.idProduct, size: dto.size ?? "", quantity: 1 };
@@ -133,8 +139,8 @@ export const addPositionsToCart =
           size: dto.size ?? "",
         });
       } catch (e) {
-        console.error('Failed to add product to cart:', e);
-        return;
+        const message = e?.response?.data?.message;
+        return (Array.isArray(message) ? message[0] : message) || 'Не вдалося додати товар у кошик';
       }
       dispatch(addItem(newItem));
     } else {
@@ -143,8 +149,12 @@ export const addPositionsToCart =
       const existing = currentCart.find(
         (el) => el.idProduct === dto.idProduct && (el.size ?? "") === (dto.size ?? ""),
       );
+      const nextQuantity = (existing?.quantity ?? 0) + 1;
+      if (dto.available != null && nextQuantity > dto.available) {
+        return outOfStockMessage(dto.available);
+      }
       if (existing) {
-        existing.quantity += 1;
+        existing.quantity = nextQuantity;
       } else {
         currentCart.push(newItem);
       }
@@ -152,6 +162,7 @@ export const addPositionsToCart =
       // localStorage — єдине джерело правди для гостей
       dispatch(setCartData(currentCart));
     }
+    return null;
   };
 
 // Видалити товар з корзини

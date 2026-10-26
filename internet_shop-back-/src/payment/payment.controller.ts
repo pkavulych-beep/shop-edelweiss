@@ -56,6 +56,13 @@ export class PaymentController {
     return this.paymentService.createInvoice(req.user.id, orderId);
   }
 
+  @Get('order/:orderId')
+  @Roles('ADMIN')
+  @UseGuards(RolesGuard)
+  async getOrderPayment(@Param('orderId', ORDER_NOT_FOUND) orderId: number) {
+    return this.paymentService.getOrderPayment(orderId);
+  }
+
   @Post(':invoiceId/refund')
   @Roles('ADMIN')
   @UseGuards(RolesGuard)

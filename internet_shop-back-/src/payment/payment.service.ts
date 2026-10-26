@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { EntityManager, LessThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, LessThanOrEqual, Repository, IsNull } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentMethod, PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
@@ -42,6 +42,26 @@ const ALLOWED_TRANSITIONS: Partial<Record<PaymentStatus, PaymentStatus[]>> = {
   [PaymentStatus.Failed]: [PaymentStatus.Paid],
   [PaymentStatus.Paid]: [PaymentStatus.Refunded],
 };
+
+// Один запис журналу для адмінки. Сирий payload провайдера не віддаємо:
+// лише статус mono і причину відмови, якщо вони там є.
+export interface PaymentHistoryEntry {
+  at: Date;
+  kind: PaymentLogKind;
+  status: string;
+  amount: number;
+  monoStatus?: string;
+  failureReason?: string;
+}
+
+export interface OrderPaymentDetails {
+  invoiceId: string | null;
+  paidAt: Date | null;
+  amount: number | null;
+  refundedAmount: number;
+  refundableAmount: number;
+  history: PaymentHistoryEntry[];
+}
 
 @Injectable()
 export class PaymentService {
@@ -101,6 +121,20 @@ export class PaymentService {
       }
 
       throw new BadRequestException('Інвойс для цього замовлення вже створено');
+    }
+
+    // Захист від гонки з reconcileOrdersWithoutInvoice:
+    // CARD-замовлення без інвойсу, яке старше за paymentTimeoutMinutes,
+    // може бути скасоване кроном у будь-який момент. Відхиляємо створення
+    // інвойсу, щоб не «оживити» уже скасоване замовлення. Повторна оплата
+    // після FAILED (інвойс уже є) крон не чіпає, тож її не обмежуємо.
+    const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / 60_000;
+    if (
+      !order.paymentInvoiceId &&
+      order.paymentStatus === PaymentStatus.NotRequired &&
+      orderAgeMinutes > paymentTimeoutMinutes()
+    ) {
+      throw new BadRequestException('Час на оплату минув');
     }
 
     const amount = Math.round(order.total * 100);
@@ -197,6 +231,61 @@ export class PaymentService {
     }
   }
 
+  // Деталі оплати для адмінки: рахунок, час оплати, повернення й журнал подій.
+  // Замовлення без рахунку (COD або інвойс ще не створювали) — не помилка.
+  async getOrderPayment(orderId: number): Promise<OrderPaymentDetails> {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException('Замовлення не знайдено');
+    }
+
+    const invoiceLog = order.paymentInvoiceId
+      ? await this.paymentRepository.findOne({
+          where: {
+            invoiceId: order.paymentInvoiceId,
+            kind: PaymentLogKind.Invoice,
+          },
+        })
+      : null;
+
+    // Історія — усі записи журналу замовлення, від старих до нових.
+    const logs = await this.paymentRepository.find({
+      where: { orderId },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+
+    const amount = invoiceLog ? invoiceLog.amount : null;
+    const refundedAmount = Number(invoiceLog?.rawPayload?.refundedAmount) || 0;
+
+    return {
+      invoiceId: order.paymentInvoiceId ?? null,
+      paidAt: order.paidAt ?? null,
+      amount,
+      refundedAmount,
+      refundableAmount: amount === null ? 0 : Math.max(amount - refundedAmount, 0),
+      history: logs.map((log) => this.toHistoryEntry(log)),
+    };
+  }
+
+  private toHistoryEntry(log: PaymentEntity): PaymentHistoryEntry {
+    const raw = log.rawPayload ?? {};
+    const entry: PaymentHistoryEntry = {
+      at: log.createdAt,
+      kind: log.kind,
+      status: log.status,
+      amount: log.amount,
+    };
+
+    if (typeof raw.status === 'string' && raw.status) {
+      entry.monoStatus = raw.status;
+    }
+    if (typeof raw.failureReason === 'string' && raw.failureReason) {
+      entry.failureReason = raw.failureReason;
+    }
+
+    return entry;
+  }
+
   // Єдиний шлях, яким замовлення стає оплаченим. Підпис перевіряє провайдер
   // (400 без змін у базі), далі все — в одній транзакції з блокуванням
   // інвойсу, щоб паралельні повтори одного вебхука не застосувались двічі.
@@ -215,12 +304,7 @@ export class PaymentService {
   // а в Jest (e2e) global crypto недоступний і застосунок не стартує.
   @Cron(CronExpression.EVERY_5_MINUTES, { name: 'reconcile-pending-card-payments' })
   async reconcilePendingCardPayments(): Promise<void> {
-    // Без токена mono перевірка нічого не робить (і не падає).
-    if (!process.env.MONO_ACQUIRING_TOKEN) {
-      return;
-    }
-
-    // Попередній прохід ще не завершився: не дублюємо запити до mono.
+    // Попередній прохід ще не завершився: не дублюємо запити.
     if (this.reconciling) {
       return;
     }
@@ -230,29 +314,85 @@ export class PaymentService {
       const cutoff = new Date(
         Date.now() - (paymentTimeoutMinutes() + STATUS_CHECK_GRACE_MINUTES) * 60_000,
       );
-      const invoiceLogs = await this.paymentRepository.find({
-        where: {
-          kind: PaymentLogKind.Invoice,
-          status: PaymentStatus.Pending,
-          createdAt: LessThanOrEqual(cutoff),
-        },
-      });
 
-      for (const invoiceLog of invoiceLogs) {
-        try {
-          await this.reconcileInvoice(invoiceLog);
-        } catch (error) {
-          // Помилка чи 429 від mono: нічого не змінюємо, повторимо наступного разу.
-          this.logger.warn(
-            `Не вдалося перевірити статус інвойсу ${invoiceLog.invoiceId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+      // 1. Звірка інвойсів, що мають запис у payment (як і раніше).
+      //    Потрібен MONO_ACQUIRING_TOKEN.
+      if (process.env.MONO_ACQUIRING_TOKEN) {
+        const invoiceLogs = await this.paymentRepository.find({
+          where: {
+            kind: PaymentLogKind.Invoice,
+            status: PaymentStatus.Pending,
+            createdAt: LessThanOrEqual(cutoff),
+          },
+        });
+
+        for (const invoiceLog of invoiceLogs) {
+          try {
+            await this.reconcileInvoice(invoiceLog);
+          } catch (error) {
+            this.logger.warn(
+              `Не вдалося перевірити статус інвойсу ${invoiceLog.invoiceId}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
         }
       }
+
+      // 2. Звірка CARD-замовлень БЕЗ інвойсу (paymentInvoiceId порожній,
+      //    paymentStatus = NOT_REQUIRED). mono не потрібен.
+      await this.reconcileOrdersWithoutInvoice(cutoff);
     } finally {
       this.reconciling = false;
     }
+  }
+
+  private async reconcileOrdersWithoutInvoice(cutoff: Date): Promise<void> {
+    const orders = await this.orderRepository.find({
+      where: {
+        paymentMethod: PaymentMethod.Card,
+        paymentInvoiceId: IsNull(),
+        paymentStatus: PaymentStatus.NotRequired,
+        status: Status.Processed,
+        createdAt: LessThanOrEqual(cutoff),
+      },
+    });
+
+    for (const order of orders) {
+      try {
+        await this.cancelOrderWithoutInvoice(order);
+      } catch (error) {
+        this.logger.warn(
+          `Не вдалося скасувати замовлення ${order.id} без інвойсу: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
+  private async cancelOrderWithoutInvoice(order: OrderEntity): Promise<void> {
+    await this.paymentRepository.manager.transaction(async (manager) => {
+      const cancelled = await this.orderService.cancelOrderWithoutInvoice(manager, order.id);
+      if (!cancelled) {
+        return;
+      }
+
+      // Журнал: статус-перевірка, як у reconcileInvoice.
+      await manager.save(
+        PaymentEntity,
+        manager.create(PaymentEntity, {
+          orderId: order.id,
+          provider: 'mono',
+          invoiceId: '',
+          kind: PaymentLogKind.StatusCheck,
+          amount: Math.round(order.total * 100),
+          status: PaymentStatus.Failed,
+          providerModifiedAt: new Date(),
+          rawPayload: { status: 'no_invoice', reason: 'invoice_creation_failed' },
+        }),
+      );
+    });
   }
 
   private async reconcileInvoice(invoiceLog: PaymentEntity): Promise<void> {

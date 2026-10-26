@@ -22,8 +22,32 @@ import {
   CARD_PAYMENT_UNAVAILABLE,
   isCardPaymentAvailable,
 } from '../payment/card-payment';
+import { applyStockDelta, availableFor } from '../product/stock';
 
 type OrderChanges = Omit<UpdateOrderDto, 'id' | 'status'>;
+type StockItem = { productId: number; size?: string | null; quantity: number };
+
+// Скільки одиниць просять з кожного залишку товару: з розміру, якщо залишок
+// ведеться по розмірах, інакше з загального count (ключ '')
+const demandOf = (product: ProductEntity, items: StockItem[]) => {
+  const demand = new Map<string, number>();
+  for (const { size, quantity } of items) {
+    const key = product.sizeStock ? (size ?? '') : '';
+    demand.set(key, (demand.get(key) ?? 0) + quantity);
+  }
+  return demand;
+};
+
+const assertInStock = (product: ProductEntity, demand: Map<string, number>) => {
+  for (const [size, quantity] of demand) {
+    const available = availableFor(product, size);
+    if (available === null || quantity <= available) continue;
+    if (available === 0 && size) {
+      throw new BadRequestException(`Розміру ${size} немає в наявності`);
+    }
+    throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${available}`);
+  }
+};
 
 @Injectable()
 export class OrderService {
@@ -49,11 +73,9 @@ export class OrderService {
       (await this.productService.findPurchasable(ids)).map(product => [product.id, product]),
     );
 
-    // Sum quantities by productId (across all sizes) for stock validation
-    const quantitiesByProduct = new Map<number, number>();
-    for (const item of merged.values()) {
-      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
-      quantitiesByProduct.set(item.productId, total);
+    for (const product of products.values()) {
+      const productItems = [...merged.values()].filter(item => item.productId === product.id);
+      assertInStock(product, demandOf(product, productItems));
     }
 
     return [...merged.values()].map(({ productId, size, quantity }) => {
@@ -66,10 +88,6 @@ export class OrderService {
         if (!effectiveSize || !product.sizes.includes(effectiveSize)) {
           throw new BadRequestException(effectiveSize ? `Розміру ${effectiveSize} немає в наявності` : 'Оберіть розмір товару');
         }
-      }
-      const totalQuantity = quantitiesByProduct.get(productId) ?? quantity;
-      if (product.count !== null && product.count !== undefined && totalQuantity > product.count) {
-        throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
       }
       const price = product.salePrice > 0 ? product.salePrice : product.price;
       return { productId, size: effectiveSize, quantity, price };
@@ -112,13 +130,6 @@ export class OrderService {
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);
 
-    // Sum quantities by productId for stock decrement
-    const quantitiesByProduct = new Map<number, number>();
-    for (const item of orderItems) {
-      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
-      quantitiesByProduct.set(item.productId, total);
-    }
-
     // Use transaction to ensure order creation and stock decrement are atomic
     return this.repository.manager.transaction(async (manager: EntityManager) => {
       // Save the order
@@ -136,27 +147,7 @@ export class OrderService {
         total: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });
 
-      // Decrement product count atomically with pessimistic locking
-      for (const [productId, quantity] of quantitiesByProduct.entries()) {
-        // Lock the product row and check stock
-        const product = await manager.findOne(ProductEntity, {
-          where: { id: productId },
-          lock: { mode: 'pessimistic_write' },
-        });
-
-        if (!product) {
-          throw new NotFoundException(null, 'Товар не знайдено');
-        }
-
-        // Only decrement if count is tracked (not null)
-        if (product.count !== null && product.count !== undefined) {
-          if (product.count < quantity) {
-            throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
-          }
-          product.count -= quantity;
-          await manager.save(ProductEntity, product);
-        }
-      }
+      await this.decrementProductCounts(manager, orderItems);
 
       // Кошик чистимо в межах тієї ж транзакції: товари вже належать
       // створеному замовленню, тож повторне оформлення не дублює їх
@@ -316,6 +307,40 @@ export class OrderService {
     return manager.save(OrderEntity, orderWithItems);
   }
 
+  // Скасовує CARD-замовлення, для якого не вдалося створити інвойс
+  // (paymentInvoiceId порожній, paymentStatus = NOT_REQUIRED).
+  // Повертає товар на склад, ставить status = Canceled, paymentStatus = FAILED.
+  async cancelOrderWithoutInvoice(
+    manager: EntityManager,
+    id: number,
+  ): Promise<OrderEntity | null> {
+    const order = await manager.findOne(OrderEntity, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (
+      !order ||
+      order.paymentMethod !== PaymentMethod.Card ||
+      order.paymentInvoiceId ||
+      order.paymentStatus !== PaymentStatus.NotRequired ||
+      order.status === Status.Canceled
+    ) {
+      return null;
+    }
+
+    const orderWithItems = await manager.findOne(OrderEntity, {
+      where: { id },
+      relations: { items: { product: true } },
+      order: { items: { id: 'ASC' } },
+    });
+
+    await this.restoreProductCounts(manager, orderWithItems.items ?? []);
+    orderWithItems.status = Status.Canceled;
+    orderWithItems.paymentStatus = PaymentStatus.Failed;
+    return manager.save(OrderEntity, orderWithItems);
+  }
+
   // Для Укрпошти department — індекс відділення (5 цифр). Перевіряємо підсумковий стан замовлення,
   // але лише коли запит змінює спосіб доставки чи відділення: старі замовлення з довільним
   // department мають і далі змінювати статус чи коментар.
@@ -328,58 +353,41 @@ export class OrderService {
     }
   }
 
-  private async restoreProductCounts(manager: EntityManager, items: OrderEntity['items']) {
-    // Sum quantities by productId for stock increment
-    const quantitiesByProduct = new Map<number, number>();
-    for (const item of items) {
-      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
-      quantitiesByProduct.set(item.productId, total);
-    }
-
-    // Increment product count atomically with pessimistic locking
-    for (const [productId, quantity] of quantitiesByProduct.entries()) {
-      const product = await manager.findOne(ProductEntity, {
-        where: { id: productId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (!product) {
-        continue; // Product might have been deleted, skip
-      }
-
-      // Only increment if count is tracked (not null)
-      if (product.count !== null && product.count !== undefined) {
-        product.count += quantity;
-        await manager.save(ProductEntity, product);
-      }
-    }
+  private restoreProductCounts(manager: EntityManager, items: StockItem[]) {
+    return this.changeStock(manager, items, 1);
   }
 
-  private async decrementProductCounts(manager: EntityManager, items: OrderEntity['items']) {
-    // Sum quantities by productId for stock decrement
-    const quantitiesByProduct = new Map<number, number>();
+  private decrementProductCounts(manager: EntityManager, items: StockItem[]) {
+    return this.changeStock(manager, items, -1);
+  }
+
+  // Змінює залишки товарів позицій (direction 1 — повернути, -1 — списати).
+  // Рядок товару блокуємо, щоб паралельні замовлення не списали той самий залишок
+  private async changeStock(manager: EntityManager, items: StockItem[], direction: 1 | -1) {
+    const itemsByProduct = new Map<number, StockItem[]>();
     for (const item of items) {
-      const total = (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity;
-      quantitiesByProduct.set(item.productId, total);
+      itemsByProduct.set(item.productId, [...(itemsByProduct.get(item.productId) ?? []), item]);
     }
 
-    // Decrement product count atomically with pessimistic locking
-    for (const [productId, quantity] of quantitiesByProduct.entries()) {
+    for (const [productId, productItems] of itemsByProduct) {
       const product = await manager.findOne(ProductEntity, {
         where: { id: productId },
         lock: { mode: 'pessimistic_write' },
       });
 
       if (!product) {
+        if (direction > 0) continue; // Товар могли видалити — повертати нікуди
         throw new NotFoundException(null, 'Товар не знайдено');
       }
 
-      // Only decrement if count is tracked (not null)
-      if (product.count !== null && product.count !== undefined) {
-        if (product.count < quantity) {
-          throw new BadRequestException(`Недостатньо товару на складі. Доступно: ${product.count}`);
-        }
-        product.count -= quantity;
+      const demand = demandOf(product, productItems);
+      if (direction < 0) assertInStock(product, demand);
+
+      let changed = false;
+      for (const [size, quantity] of demand) {
+        changed = applyStockDelta(product, size, direction * quantity) || changed;
+      }
+      if (changed) {
         await manager.save(ProductEntity, product);
       }
     }
