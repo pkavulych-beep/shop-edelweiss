@@ -79,8 +79,22 @@ const paymentEventLabel: Record<PaymentHistoryKind, string> = {
   status: 'Звірка статусу',
 };
 
-const paymentStatusLabelFor = (status: string) =>
-  paymentStatusLabel[status as PaymentStatus] ?? status;
+// Старі записи журналу зберігали статус mono як є (created, success), тож
+// історія може містити їх поряд зі статусами замовлення. Показуємо українською.
+const monoStatusLabel: Record<string, string> = {
+  created: 'Очікує оплати',
+  processing: 'Обробляється',
+  hold: 'Утримано',
+  success: 'Оплачено',
+  approved: 'Оплачено',
+  failure: 'Не сплачено',
+  expired: 'Термін оплати минув',
+  reversed: 'Повернено',
+  no_invoice: 'Рахунок не створено',
+};
+
+const paymentHistoryStatusLabel = (status: string) =>
+  paymentStatusLabel[status as PaymentStatus] ?? monoStatusLabel[status] ?? status;
 
 // Деталі замовлення для адміна: позиції, покупець, доставка і зміна статусу
 export default function AdminOrderDetailsPage() {
@@ -318,29 +332,37 @@ export default function AdminOrderDetailsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {payment.history.map((entry, index) => (
-                  <TableRow key={`${entry.at}-${index}`}>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(entry.at)}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      {paymentEventLabel[entry.kind] ?? entry.kind}
-                    </TableCell>
-                    <TableCell>
-                      {paymentStatusLabelFor(entry.status)}
-                      {entry.monoStatus && (
-                        <Typography
-                          component='span'
-                          sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary' }}
-                        >
-                          mono: {entry.monoStatus}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
-                      {formatMoney(entry.amount)}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: '0.85rem' }}>{entry.failureReason ?? '—'}</TableCell>
-                  </TableRow>
-                ))}
+                {payment.history.map((entry, index) => {
+                  const statusLabel = paymentHistoryStatusLabel(entry.status);
+                  const monoLabel = entry.monoStatus
+                    ? paymentHistoryStatusLabel(entry.monoStatus)
+                    : null;
+                  return (
+                    <TableRow key={`${entry.at}-${index}`}>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(entry.at)}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        {paymentEventLabel[entry.kind] ?? entry.kind}
+                      </TableCell>
+                      <TableCell>
+                        {statusLabel}
+                        {monoLabel && monoLabel !== statusLabel && (
+                          <Typography
+                            component='span'
+                            sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary' }}
+                          >
+                            mono: {monoLabel}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell align='right' sx={{ whiteSpace: 'nowrap' }}>
+                        {formatMoney(entry.amount)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.85rem' }}>
+                        {entry.failureReason ?? '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
