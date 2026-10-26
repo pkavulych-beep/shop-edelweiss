@@ -15,6 +15,7 @@ import { RefreshTokenEntity } from '../src/auth/entities/refresh-token.entity';
 import { ProductStatus } from '../src/product/entities/product.entity';
 import { Status } from '../src/order/statusEnum';
 import { DataSource } from 'typeorm';
+import { resolveCorsOrigin } from '../src/config/security';
 
 function generatePhone(): string {
   return `38066${Date.now().toString().slice(-7)}`;
@@ -65,12 +66,12 @@ describe('Order flow (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    // Ті самі опції, що й у main.ts
     app.enableCors({
-      origin: '*',
+      origin: resolveCorsOrigin(),
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       preflightContinue: false,
       optionsSuccessStatus: 200,
-      credentials: true,
       allowedHeaders:
         'Origin,X-Requested-With,Content-Type,Accept,Authorization,authorization,X-Forwarded-for',
     });

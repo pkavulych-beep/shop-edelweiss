@@ -8,12 +8,13 @@ import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { JwtStrategy } from './strategy/jwt.strategy';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { resolveJwtSecret } from '../config/security';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET,
+      secret: resolveJwtSecret(),
       signOptions: {
         // Значення з env — рядок на кшталт '15m'; тип jsonwebtoken очікує формат ms
         expiresIn: (process.env.JWT_ACCESS_EXPIRES_IN || '15m') as JwtSignOptions['expiresIn'],
