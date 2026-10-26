@@ -22,6 +22,12 @@ describe('UpdateUserDto', () => {
     await expect(validate(valid)).resolves.toEqual(valid);
   });
 
+  it('drops the password: it cannot be changed through the profile', async () => {
+    await expect(validate({ ...valid, password: 'hacked123' })).resolves.toEqual(
+      valid,
+    );
+  });
+
   it.each([
     ['380991112233', '380991112233'],
     ['+380991112233', '380991112233'],

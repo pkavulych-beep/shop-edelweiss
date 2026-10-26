@@ -228,30 +228,6 @@ describe('UsersService passwords', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('hashes a new password on update', async () => {
-    await service.update(3, {
-      fullName: 'Тест Тестович',
-      phoneNumber: '380991112233',
-      email: undefined,
-      password: 'newpass123',
-    });
-
-    const [id, changes] = repository.update.mock.calls[0];
-    expect(id).toBe(3);
-    await expect(verifyPassword('newpass123', changes.password)).resolves.toBe(true);
-  });
-
-  it('leaves the password alone when the update does not change it', async () => {
-    await service.update(3, {
-      fullName: 'Тест Тестович',
-      phoneNumber: '380991112233',
-      email: undefined,
-      password: undefined,
-    });
-
-    expect(repository.update.mock.calls[0][1].password).toBeUndefined();
-  });
-
   it('normalizes email on update and does not pass empty email to changes', async () => {
     const repository = {
       findOne: jest.fn().mockResolvedValue(null),
@@ -264,7 +240,6 @@ describe('UsersService passwords', () => {
       fullName: 'Тест Тестович',
       phoneNumber: '380991112233',
       email: ' Test@Example.com ',
-      password: undefined,
     } as any);
 
     expect(repository.findOne).toHaveBeenCalledWith({ where: { phoneNumber: '380991112233' } });
@@ -286,7 +261,6 @@ describe('UsersService passwords', () => {
       fullName: 'Тест Тестович',
       phoneNumber: '380991112233',
       email: '   ',
-      password: undefined,
     } as any);
 
     const [id, changes] = repository.update.mock.calls[0];
@@ -303,7 +277,6 @@ describe('UsersService passwords', () => {
         fullName: 'Тест Тестович',
         phoneNumber: '380991112233',
         email: undefined,
-        password: undefined,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(repository.update).not.toHaveBeenCalled();
@@ -319,7 +292,6 @@ describe('UsersService passwords', () => {
         fullName: 'Тест Тестович',
         phoneNumber: '380991112233',
         email: 'taken@example.com',
-        password: undefined,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(repository.update).not.toHaveBeenCalled();
@@ -340,7 +312,6 @@ describe('UsersService passwords', () => {
         fullName: 'Тест Тестович',
         phoneNumber: '380991112233',
         email: undefined,
-        password: undefined,
       }),
     ).resolves.toBe(profile);
     expect(repository.findOne).toHaveBeenLastCalledWith({

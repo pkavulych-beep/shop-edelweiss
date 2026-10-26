@@ -3,6 +3,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { AuthService } from './auth.service';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AUTH_ATTEMPTS_LIMIT, AUTH_ATTEMPTS_TTL } from './throttling';
@@ -47,5 +48,15 @@ export class AuthController {
   @Post('logout')
   logout(@Body() dto: RefreshTokenDto) {
     return this.authService.logout(dto.refreshToken);
+  }
+
+  @UseGuards(ThrottlerGuard, JwtAuthGuard)
+  @Throttle({
+    default: { limit: AUTH_ATTEMPTS_LIMIT, ttl: AUTH_ATTEMPTS_TTL },
+  })
+  @HttpCode(200)
+  @Post('change-password')
+  changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.id, dto);
   }
 }
