@@ -18,6 +18,10 @@ import { PaymentMethod, PaymentStatus } from './paymentEnum';
 import { DeliveryMethod, ukrposhtaIndexMessage } from './deliveryEnum';
 import { ProductEntity } from '../product/entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
+import {
+  CARD_PAYMENT_UNAVAILABLE,
+  isCardPaymentAvailable,
+} from '../payment/card-payment';
 import { applyStockDelta, availableFor } from '../product/stock';
 
 type OrderChanges = Omit<UpdateOrderDto, 'id' | 'status'>;
@@ -116,6 +120,12 @@ export class OrderService {
   }
 
   async create(userId: number, createOrderDto: CreateOrderDto) {
+    // Без налаштованого еквайрингу карткове замовлення неможливо оплатити,
+    // тож не створюємо його: інакше покупець застрягне на сторінці помилки.
+    if (createOrderDto.paymentMethod === PaymentMethod.Card && !isCardPaymentAvailable()) {
+      throw new BadRequestException(CARD_PAYMENT_UNAVAILABLE);
+    }
+
     const { items, ...restDto } = createOrderDto;
     const orderItems = await this.buildItems(items);
     const user = await this.userService.findOne(userId);

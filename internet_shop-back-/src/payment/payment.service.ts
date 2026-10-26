@@ -14,6 +14,7 @@ import { PaymentMethod, PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
 import { Status } from 'src/order/statusEnum';
 import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
+import { isCardPaymentAvailable } from './card-payment';
 import {
   CreateInvoiceInput,
   InvoiceStatusResult,
@@ -76,6 +77,12 @@ export class PaymentService {
     @Inject('PAYMENT_PROVIDER')
     private paymentProvider: PaymentProvider,
   ) {}
+
+  // Публічний перелік доступних способів оплати: фронт за ним ховає варіант
+  // «Карткою онлайн», поки еквайринг не налаштований.
+  getMethods(): { card: boolean } {
+    return { card: isCardPaymentAvailable() };
+  }
 
   async createInvoice(userId: number, orderId: number): Promise<{ pageUrl: string }> {
     const order = await this.orderService.findOneForUser(orderId, {

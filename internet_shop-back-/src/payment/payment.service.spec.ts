@@ -73,6 +73,38 @@ describe('PaymentService', () => {
     );
   });
 
+  describe('getMethods', () => {
+    afterEach(() => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+    });
+
+    it('reports card payment available when mono token and URLs are configured', () => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+
+      expect(service.getMethods()).toEqual({ card: true });
+    });
+
+    it('reports card payment unavailable without mono token', () => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+
+      expect(service.getMethods()).toEqual({ card: false });
+    });
+
+    it('reports card payment unavailable without BASE_URL', () => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+      delete process.env.BASE_URL;
+
+      expect(service.getMethods()).toEqual({ card: false });
+    });
+
+    it('reports card payment unavailable without FRONTEND_URL', () => {
+      process.env.MONO_ACQUIRING_TOKEN = 'test-token';
+      delete process.env.FRONTEND_URL;
+
+      expect(service.getMethods()).toEqual({ card: false });
+    });
+  });
+
   describe('createInvoice', () => {
     it('creates invoice and returns pageUrl', async () => {
       const result = await service.createInvoice(3, 10);

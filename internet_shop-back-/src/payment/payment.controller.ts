@@ -28,6 +28,12 @@ const ORDER_NOT_FOUND = new ParseIdPipe('Замовлення не знайде�
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  // Без авторизації: покупець має знати ще до входу, чи можна платити карткою
+  @Get('methods')
+  methods() {
+    return this.paymentService.getMethods();
+  }
+
   // Без guard'ів: справжність перевіряється підписом X-Sign над сирим тілом
   // (rawBody у main.ts), а не розпарсеним @Body(), який ValidationPipe ще й
   // обрізав би. Не 200 — mono повторить вебхук.

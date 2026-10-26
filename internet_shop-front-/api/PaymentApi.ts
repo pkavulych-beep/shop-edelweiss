@@ -4,6 +4,10 @@ export interface CreateInvoiceResponse {
   pageUrl: string;
 }
 
+export interface PaymentMethodsResponse {
+  card: boolean;
+}
+
 // Подія з журналу payment: invoice — рахунок створено, webhook — сповіщення
 // від mono, status — звірка статусу.
 export type PaymentHistoryKind = 'invoice' | 'webhook' | 'status';
@@ -31,6 +35,11 @@ export interface OrderPaymentDetails {
 }
 
 export const paymentApi = (instance: AxiosInstance) => ({
+  async getMethods(): Promise<PaymentMethodsResponse> {
+    const { data } = await instance.get<PaymentMethodsResponse>('payment/methods');
+    return data;
+  },
+
   async createInvoice(orderId: number): Promise<CreateInvoiceResponse> {
     const { data } = await instance.post<CreateInvoiceResponse>(`payment/${orderId}/invoice`);
     return data;

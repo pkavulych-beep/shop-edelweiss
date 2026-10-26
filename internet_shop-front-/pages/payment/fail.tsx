@@ -12,9 +12,11 @@ import { MainLayout } from '../../layouts/MainLayout';
 import { Api } from '../../api/Api';
 import { PaymentStatus, PaymentMethod, Status } from '../../redux/Types/orderType';
 import { getPaymentChipLabel, isCardUnpaid } from '../../components/MyOrders/MyOrders';
+import { useCardPaymentAvailable } from '../../hooks/useCardPaymentAvailable';
 
 export const PaymentFail: NextPage = () => {
   const router = useRouter();
+  const cardPaymentAvailable = useCardPaymentAvailable();
   const { orderId } = router.query;
   const id = typeof orderId === 'string' ? Number(orderId) : NaN;
   const validId = Number.isInteger(id) && id >= 1;
@@ -89,6 +91,7 @@ export const PaymentFail: NextPage = () => {
   const isPaid = order?.paymentStatus === PaymentStatus.Paid;
   // Скасоване замовлення бек оплатити не дасть
   const showRetry =
+    cardPaymentAvailable &&
     !!order &&
     order.status !== Status.Canceled &&
     isCardUnpaid(order.paymentMethod, order.paymentStatus);
