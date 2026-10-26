@@ -7,8 +7,10 @@ import { JwtStrategy } from 'src/auth/strategy/jwt.strategy';
 import { UsersService } from 'src/user/user.service';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
+import { IMAGE_FORMAT_ERROR, IMAGE_SIZE_ERROR, MAX_IMAGE_SIZE_BYTES } from 'src/file/image';
 
 const SECRET = 'product-http-spec-secret';
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 
 const usersService = { findById: jest.fn() };
 const productService = {
@@ -140,7 +142,7 @@ describe('ProductController over HTTP', () => {
         .field('gender', 'man')
         .field('price', '1000')
         .field('count', '5')
-        .attach('photos', Buffer.from('photo'), 'photo.png')
+        .attach('photos', PNG, { filename: 'photo.png', contentType: 'image/png' })
         .expect(201);
 
       expect(productService.create).toHaveBeenCalledWith(
@@ -157,8 +159,68 @@ describe('ProductController over HTTP', () => {
         .field('description', 'Тепла куртка для зимових прогулянок містом')
         .field('gender', 'man')
         .field('price', 'abc')
-        .attach('photos', Buffer.from('photo'), 'photo.png')
+        .attach('photos', PNG, { filename: 'photo.png', contentType: 'image/png' })
         .expect(400);
+
+      expect(productService.create).not.toHaveBeenCalled();
+    });
+
+    it('POST /product answers 400 for an html file', async () => {
+      await request(app.getHttpServer())
+        .post('/product')
+        .set(adminHeaders)
+        .field('name', 'Куртка')
+        .field('description', 'Тепла куртка для зимових прогулянок містом')
+        .field('gender', 'man')
+        .field('price', '1000')
+        .attach('photos', Buffer.from('<html><script>alert(1)</script>'), {
+          filename: 'photo.html',
+          contentType: 'text/html',
+        })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe(IMAGE_FORMAT_ERROR);
+        });
+
+      expect(productService.create).not.toHaveBeenCalled();
+    });
+
+    it('POST /product answers 400 for html renamed to png', async () => {
+      await request(app.getHttpServer())
+        .post('/product')
+        .set(adminHeaders)
+        .field('name', 'Куртка')
+        .field('description', 'Тепла куртка для зимових прогулянок містом')
+        .field('gender', 'man')
+        .field('price', '1000')
+        .attach('photos', Buffer.from('<html><script>alert(1)</script>'), {
+          filename: 'photo.png',
+          contentType: 'image/png',
+        })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe(IMAGE_FORMAT_ERROR);
+        });
+
+      expect(productService.create).not.toHaveBeenCalled();
+    });
+
+    it('POST /product answers 400 for a photo larger than 10 MB', async () => {
+      const oversized = Buffer.alloc(MAX_IMAGE_SIZE_BYTES + 1);
+      PNG.copy(oversized);
+
+      await request(app.getHttpServer())
+        .post('/product')
+        .set(adminHeaders)
+        .field('name', 'Куртка')
+        .field('description', 'Тепла куртка для зимових прогулянок містом')
+        .field('gender', 'man')
+        .field('price', '1000')
+        .attach('photos', oversized, { filename: 'photo.png', contentType: 'image/png' })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.message).toBe(IMAGE_SIZE_ERROR);
+        });
 
       expect(productService.create).not.toHaveBeenCalled();
     });
