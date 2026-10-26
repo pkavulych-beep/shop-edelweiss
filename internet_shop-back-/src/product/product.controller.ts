@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   BadRequestException,
+  UseFilters,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -21,6 +22,13 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { FindByIdsDto } from './dto/find-by-ids.dto';
 import { ParseIdPipe } from '../common/parse-id.pipe';
+import {
+  IMAGE_FORMAT_ERROR,
+  IMAGE_MIME_TYPES,
+  MAX_IMAGE_SIZE_BYTES,
+  validateImageFile,
+} from '../file/image';
+import { ImageTooLargeFilter } from '../file/image-upload.filter';
 
 const PRODUCT_NOT_FOUND = new ParseIdPipe('Товар не знайдено');
 
@@ -31,12 +39,25 @@ export class ProductController {
   @Post()
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
-  @UseInterceptors(FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }]))
+  @UseFilters(ImageTooLargeFilter)
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'photos', maxCount: 10 }], {
+      limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+      fileFilter: (_req, file, callback) => {
+        if (IMAGE_MIME_TYPES.includes(file.mimetype)) {
+          callback(null, true);
+          return;
+        }
+        callback(new BadRequestException(IMAGE_FORMAT_ERROR), false);
+      },
+    }),
+  )
   create(@UploadedFiles() files, @Body() createProductDto: CreateProductDto) {
     const photos = files?.photos;
     if (!photos?.length) {
       throw new BadRequestException('Додайте хоча б одне фото товару');
     }
+    photos.forEach((photo) => validateImageFile(photo));
     return this.productService.create(createProductDto, photos);
   }
 
