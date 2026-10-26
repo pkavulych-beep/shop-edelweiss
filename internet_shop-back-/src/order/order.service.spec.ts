@@ -50,6 +50,12 @@ describe('OrderService', () => {
       service = new OrderService(repository, productService, userService);
     });
 
+    afterEach(() => {
+      delete process.env.MONO_ACQUIRING_TOKEN;
+      delete process.env.BASE_URL;
+      delete process.env.FRONTEND_URL;
+    });
+
     it('saves items with size, quantity and the price from the database', async () => {
       await service.create(3, {
         ...delivery,
@@ -119,10 +125,6 @@ describe('OrderService', () => {
         paymentMethod: PaymentMethod.Card,
         paymentStatus: PaymentStatus.NotRequired,
       });
-
-      delete process.env.MONO_ACQUIRING_TOKEN;
-      delete process.env.BASE_URL;
-      delete process.env.FRONTEND_URL;
     });
 
     it('rejects card payment and creates no order without mono token', async () => {
@@ -156,7 +158,6 @@ describe('OrderService', () => {
       ).rejects.toThrow('Оплата карткою зараз недоступна');
 
       expect(mockManager.transaction).not.toHaveBeenCalled();
-      delete process.env.MONO_ACQUIRING_TOKEN;
     });
 
     it('defaults a new order to Nova Poshta', async () => {
