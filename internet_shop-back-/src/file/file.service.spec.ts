@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
-import { baseUrl, FileService, FileType } from './file.service';
+import { FileService, FileType } from './file.service';
 import { getUploadsDir } from './uploads-dir';
 import { IMAGE_FORMAT_ERROR, IMAGE_SIZE_ERROR, MAX_IMAGE_SIZE_BYTES } from './image';
 
@@ -69,25 +69,48 @@ describe('FileService', () => {
     else process.env.UPLOADS_DIR = original;
   });
 
-  it('writes the file into UPLOADS_DIR and returns its public url', () => {
-    const url = service.createFile(FileType.IMAGE, imageFile(PNG, 'image/png', 'photo.png'));
+  it('writes the file into UPLOADS_DIR and returns its relative path', () => {
+    const filePath = service.createFile(FileType.IMAGE, imageFile(PNG, 'image/png', 'photo.png'));
 
-    expect(url.startsWith(baseUrl + 'image/')).toBe(true);
-    expect(url.endsWith('.png')).toBe(true);
-    const saved = path.join(uploadsDir, url.replace(baseUrl, ''));
+    expect(filePath.startsWith('image/')).toBe(true);
+    expect(filePath).not.toContain('://');
+    expect(filePath.endsWith('.png')).toBe(true);
+    const saved = path.join(uploadsDir, filePath);
     expect(fs.readFileSync(saved)).toEqual(PNG);
   });
 
   it('deletes a previously created file from UPLOADS_DIR', async () => {
-    const url = service.createFile(FileType.IMAGE, imageFile(JPEG, 'image/jpeg', 'photo.jpg'));
+    const filePath = service.createFile(FileType.IMAGE, imageFile(JPEG, 'image/jpeg', 'photo.jpg'));
 
-    await service.deleteFile(url);
+    await service.deleteFile(filePath);
 
-    expect(fs.existsSync(path.join(uploadsDir, url.replace(baseUrl, '')))).toBe(false);
+    expect(fs.existsSync(path.join(uploadsDir, filePath))).toBe(false);
+  });
+
+  it('deletes a legacy file saved with a full URL', async () => {
+    const filePath = service.createFile(FileType.IMAGE, imageFile(JPEG, 'image/jpeg', 'old.jpg'));
+
+    await service.deleteFile('http://localhost:7777/' + filePath);
+
+    expect(fs.existsSync(path.join(uploadsDir, filePath))).toBe(false);
+  });
+
+  it('rejects a path that escapes UPLOADS_DIR', async () => {
+    const outside = path.join(uploadsDir, '..', 'outside.png');
+    fs.writeFileSync(outside, PNG);
+
+    try {
+      const promise = service.deleteFile('../outside.png');
+
+      await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+      expect(fs.existsSync(outside)).toBe(true);
+    } finally {
+      fs.rmSync(outside, { force: true });
+    }
   });
 
   it('deleteFile returns 404 with generic message for non-existent file (no server paths)', async () => {
-    const promise = service.deleteFile(baseUrl + 'image/nonexistent.jpg');
+    const promise = service.deleteFile('image/nonexistent.jpg');
 
     await expect(promise).rejects.toThrow(HttpException);
 
@@ -122,7 +145,7 @@ describe('FileService', () => {
   });
 
   it('deleteFile returns 500 with generic message on filesystem error (no server paths)', async () => {
-    const url = service.createFile(
+    const filePath = service.createFile(
       FileType.IMAGE,
       imageFile(JPEG, 'image/jpeg', 'photo-perm.jpg'),
     );
@@ -132,9 +155,9 @@ describe('FileService', () => {
       throw errorWithPath;
     });
 
-    await expect(service.deleteFile(url)).rejects.toThrow(HttpException);
+    await expect(service.deleteFile(filePath)).rejects.toThrow(HttpException);
 
-    const e = await service.deleteFile(url).catch((err) => err);
+    const e = await service.deleteFile(filePath).catch((err) => err);
     expect(e).toBeInstanceOf(HttpException);
     expect(e.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
     const response = e.getResponse();
@@ -172,16 +195,16 @@ describe('FileService', () => {
     });
 
     it('takes the extension from the type, not the uploaded file name', () => {
-      const url = service.createFile(FileType.IMAGE, imageFile(PNG, 'image/png', 'photo.html'));
+      const filePath = service.createFile(FileType.IMAGE, imageFile(PNG, 'image/png', 'photo.html'));
 
-      expect(url.endsWith('.png')).toBe(true);
-      expect(fs.existsSync(path.join(uploadsDir, url.replace(baseUrl, '')))).toBe(true);
+      expect(filePath.endsWith('.png')).toBe(true);
+      expect(fs.existsSync(path.join(uploadsDir, filePath))).toBe(true);
     });
 
     it('accepts webp photos', () => {
-      const url = service.createFile(FileType.IMAGE, imageFile(WEBP, 'image/webp', 'photo.bin'));
+      const filePath = service.createFile(FileType.IMAGE, imageFile(WEBP, 'image/webp', 'photo.bin'));
 
-      expect(url.endsWith('.webp')).toBe(true);
+      expect(filePath.endsWith('.webp')).toBe(true);
     });
 
     it('rejects a photo larger than 10 MB', () => {
