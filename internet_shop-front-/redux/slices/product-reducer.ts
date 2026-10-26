@@ -44,6 +44,7 @@ export const productSlice = createSlice({
       state.data = action.payload.product.data;
       state.total = action.payload.product.total ?? 0;
       state.currentProduct = action.payload.product.currentProduct ?? null;
+      state.error = action.payload.product.error ?? null;
       state.category.gender = action.payload.product.category.gender;
       state.filters = action.payload.product.filters ?? {};
     });
@@ -118,26 +119,35 @@ export const fetchProduct =
   (idProduct: any): AppThunk =>
   async (dispatch, getState) => {
     const dataProduct: IProduct[] = getState().product.data;
-    let product = null;
+    let product: currentProduct | null = null;
     if (!dataProduct) {
       try {
         product = await Api().product.findById(idProduct);
       } catch (e) {
-        dispatch(setErrorMessage(e?.response?.data?.message || 'Товар не знайдено'));
-        return { notFound: true };
+        dispatch(setCurrentProduct(null));
+        if (e?.response?.status === 404) {
+          return { notFound: true };
+        }
+        dispatch(setErrorMessage('Не вдалося завантажити товар'));
+        return;
       }
     } else {
-      product = dataProduct.find((item) => item.id === +idProduct);
+      product = dataProduct.find((item) => item.id === +idProduct) ?? null;
     }
     if (!product) {
       dispatch(setCurrentProduct(null));
-      return;
+      return { notFound: true };
     }
     dispatch(setCurrentProduct(product));
+    // GET /product/:id уже повертає photos — окремий запит потрібен, лише коли товар узято зі списку каталогу
+    if (!dataProduct || product.photos?.length) {
+      return;
+    }
     try {
       const photos = await Api().product.getPhotosProduct(+idProduct);
-      dispatch(getPhotosProduct(photos));
+      dispatch(getPhotosProduct(photos ?? []));
     } catch (e) {
-      // ignore
+      // Без фото показуємо обкладинку, а не «товар не знайдено»
+      dispatch(getPhotosProduct([]));
     }
   };
