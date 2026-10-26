@@ -13,6 +13,7 @@ describe('QuickOrderService', () => {
       save: jest.fn(entity => Promise.resolve({ id: 1, createdAt: new Date(0), ...entity })),
       find: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOne: jest.fn().mockResolvedValue(null),
     };
     productService = {
       findByIdWithStock: jest.fn().mockResolvedValue({ id: 7, count: 10, status: ProductStatus.Active, sizes: ['S', 'M'] }),
@@ -129,6 +130,43 @@ describe('QuickOrderService', () => {
 
       await service.create({ ...dto, size: undefined });
       expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ size: null }));
+    });
+
+    it('returns the existing request instead of saving a duplicate within 10 minutes', async () => {
+      const existing = { id: 42, createdAt: new Date('2026-01-01T00:00:00Z') };
+      repository.findOne = jest.fn().mockResolvedValue(existing) as any;
+
+      await expect(service.create(dto)).resolves.toEqual(existing);
+      expect(repository.save).not.toHaveBeenCalled();
+      expect(repository.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            phoneNumber: '380991234567',
+            product: { id: 7 },
+            size: 'M',
+          }),
+        }),
+      );
+    });
+
+    it('saves a new request when only the size differs', async () => {
+      repository.findOne = jest.fn().mockImplementation(({ where }) => {
+        return Promise.resolve(where.size === 'M' ? { id: 42, createdAt: new Date(0) } : null) as any;
+      }) as any;
+
+      await service.create({ ...dto, size: 'S' });
+      expect(repository.save).toHaveBeenCalled();
+    });
+
+    it('saves a new request for a different phone number', async () => {
+      repository.findOne = jest.fn().mockImplementation(({ where }) => {
+        return Promise.resolve(
+          where.phoneNumber === '380991234567' ? { id: 42, createdAt: new Date(0) } : null,
+        ) as any;
+      }) as any;
+
+      await service.create({ ...dto, phoneNumber: '380990000000' });
+      expect(repository.save).toHaveBeenCalled();
     });
   });
 
