@@ -29,7 +29,15 @@ export default function ProfilePage() {
   const router = useRouter();
   const { userData } = useAppSelector((state) => state.user);
 
-  const [activeTab, setActiveTab] = useState<Tab>('info');
+  const tabFromQuery = router.query.tab;
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (tabFromQuery === 'orders') return 'orders';
+    if (tabFromQuery === 'info') return 'info';
+    return 'info';
+  });
+  const currentTab: Tab = tabFromQuery === 'orders' ? 'orders' : tabFromQuery === 'info' ? 'info' : activeTab;
+
+  // removed effect to satisfy lint rules
   const [fullName, setFullName] = useState(userData?.fullName || '');
   const [phone, setPhone] = useState(userData?.phoneNumber || '');
   const [email, setEmail] = useState(userData?.email || '');
@@ -49,6 +57,12 @@ export default function ProfilePage() {
       setPhone(userData.phoneNumber || '');
       setEmail(userData.email || '');
     }
+  }
+
+  // sync with query without calling setState in effect body
+  const computedTab: Tab = tabFromQuery === 'orders' ? 'orders' : tabFromQuery === 'info' ? 'info' : activeTab;
+  if (computedTab !== activeTab) {
+    setActiveTab(computedTab);
   }
 
   if (!userData) {
@@ -166,7 +180,7 @@ export default function ProfilePage() {
           {menuItems.map((item) => (
             <ListItemButton
               key={item.key}
-              selected={activeTab === item.key}
+              selected={currentTab === item.key}
               onClick={() => setActiveTab(item.key)}
               sx={{
                 borderRadius: 2,
@@ -206,7 +220,7 @@ export default function ProfilePage() {
         <Divider sx={{ mb: 4 }} />
 
         {/* Tab content */}
-        {activeTab === 'info' && (
+        {currentTab === 'info' && (
           <Box>
             <Typography
               sx={{

@@ -312,7 +312,7 @@ export default function Header() {
                     fontSize: '0.85rem',
                     letterSpacing: '0.15em',
                     textTransform: 'uppercase',
-                    color: isActive('/profile') ? 'primary.main' : 'text.primary',
+                    color: isActive('/profile') && router.query.tab !== 'orders' ? 'primary.main' : 'text.primary',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     cursor: 'pointer',
@@ -322,7 +322,7 @@ export default function Header() {
                 </Typography>
               </Link>
               <Link
-                href="/profile"
+                href="/profile?tab=orders"
                 onClick={() => setMobileMenuOpen(false)}
                 style={{ textDecoration: 'none' }}
               >
@@ -333,7 +333,7 @@ export default function Header() {
                     fontSize: '0.85rem',
                     letterSpacing: '0.15em',
                     textTransform: 'uppercase',
-                    color: 'text.primary',
+                    color: router.query.tab === 'orders' ? 'primary.main' : 'text.primary',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     cursor: 'pointer',
