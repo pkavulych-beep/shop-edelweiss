@@ -333,7 +333,7 @@ export default function Header() {
                     fontSize: '0.85rem',
                     letterSpacing: '0.15em',
                     textTransform: 'uppercase',
-                    color: router.query.tab === 'orders' ? 'primary.main' : 'text.primary',
+                    color: isActive('/profile') && router.query.tab === 'orders' ? 'primary.main' : 'text.primary',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     cursor: 'pointer',

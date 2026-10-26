@@ -29,15 +29,17 @@ export default function ProfilePage() {
   const router = useRouter();
   const { userData } = useAppSelector((state) => state.user);
 
-  const tabFromQuery = router.query.tab;
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    if (tabFromQuery === 'orders') return 'orders';
-    if (tabFromQuery === 'info') return 'info';
-    return 'info';
-  });
-  const currentTab: Tab = tabFromQuery === 'orders' ? 'orders' : tabFromQuery === 'info' ? 'info' : activeTab;
+  // Вкладка живе в URL (?tab=orders), щоб на неї можна було послатися з меню.
+  // До router.isReady query порожній, тоді показуємо «Особисті дані».
+  const activeTab: Tab = router.query.tab === 'orders' ? 'orders' : 'info';
+  const selectTab = (tab: Tab) => {
+    router.replace(
+      { pathname: router.pathname, query: tab === 'orders' ? { tab } : {} },
+      undefined,
+      { shallow: true },
+    );
+  };
 
-  // removed effect to satisfy lint rules
   const [fullName, setFullName] = useState(userData?.fullName || '');
   const [phone, setPhone] = useState(userData?.phoneNumber || '');
   const [email, setEmail] = useState(userData?.email || '');
@@ -57,12 +59,6 @@ export default function ProfilePage() {
       setPhone(userData.phoneNumber || '');
       setEmail(userData.email || '');
     }
-  }
-
-  // sync with query without calling setState in effect body
-  const computedTab: Tab = tabFromQuery === 'orders' ? 'orders' : tabFromQuery === 'info' ? 'info' : activeTab;
-  if (computedTab !== activeTab) {
-    setActiveTab(computedTab);
   }
 
   if (!userData) {
@@ -180,8 +176,8 @@ export default function ProfilePage() {
           {menuItems.map((item) => (
             <ListItemButton
               key={item.key}
-              selected={currentTab === item.key}
-              onClick={() => setActiveTab(item.key)}
+              selected={activeTab === item.key}
+              onClick={() => selectTab(item.key)}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
@@ -220,7 +216,7 @@ export default function ProfilePage() {
         <Divider sx={{ mb: 4 }} />
 
         {/* Tab content */}
-        {currentTab === 'info' && (
+        {activeTab === 'info' && (
           <Box>
             <Typography
               sx={{
