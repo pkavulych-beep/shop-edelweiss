@@ -59,6 +59,9 @@ const LIMIT_TEXT = /hit your (?:[\w']+ ){0,2}limit|usage limit reached|limit rea
 const FREE_LIMIT_RETRY = /free usage exceeded[^\n]*retrying in/i;
 // Claude Code's limits counted over a week: their reset can be up to a day away even when it shows only the time.
 const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
+// What OpenCode prints when a free model is down ("Upstream request failed: Model is unavailable.") or was taken off
+// the list ("Model not found: opencode/longcat-2.5-preview-free"). The agent can't do anything on it, retrying included.
+const MODEL_DOWN = /upstream request failed: model is unavailable|model not found: [\w.-]+\/[\w.-]+|ProviderModelNotFoundError/i;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 // Generated files and tests: their lines don't count towards a pull request's size. Tests only make a change safer,
 // so they shouldn't be what sends it to a person; risky code goes to one by merge.protectedPaths instead.
@@ -261,6 +264,9 @@ function usageLimit(workerId, from) {
   return LIMIT_TEXT.test(text) ? { until: resetTime(text, Date.now()), selfResumes: FREE_LIMIT_RETRY.test(text) } : null;
 }
 
+/** Whether a worker's terminal, from byte `from` on, says its model is down or gone. */
+const modelDown = (workerId, from) => MODEL_DOWN.test(terminalTail(workerId, from));
+
 // ── Docker ───────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -317,6 +323,9 @@ const pauseMinutes = (provider) =>
 /** How long a job may wait for its agent's limit to lift before the agent goes home and the work goes back. */
 const releaseHours = (provider) =>
   typeof config.releaseAfterHours === 'number' ? config.releaseAfterHours : config.releaseAfterHours[provider] ?? 12;
+
+/** How long a model that was down or gone stays out of the work before it is tried again. */
+const modelDownHours = () => config.modelDownHours ?? 6;
 
 /** Whom a usage limit holds back: a plan's limit holds every agent on it, while each OpenCode free model has its own. */
 const limitKeyOf = (agent) => (agent.provider === 'opencode' ? agent.model : agent.provider);
@@ -480,6 +489,10 @@ function needsHuman(kind, n, reason, next = 'Щоб повернути це в �
     notify('Потрібна людина', `QA: ${reason}`);
     return;
   }
+  const s = (kind === 'pr' ? state.prs : state.issues)[n];
+  // Already asked while the label is on: once is enough. A PR with `merge-ok` goes on working under the label, so it
+  // can come back here every tick. Holds from before the reason was kept count as asked.
+  if (s?.held && (s.heldWhy ?? reason) === reason) return;
   const cmd = kind === 'pr' ? 'pr' : 'issue';
   const what = `${kind === 'pr' ? 'PR' : 'issue'} #${n}`;
   const done = act(`${what} → needs-human: ${reason}`, () => {
@@ -488,8 +501,10 @@ function needsHuman(kind, n, reason, next = 'Щоб повернути це в �
       `🤖 Конвеєр зупинився: ${reason}.\n\nПотрібне рішення людини. ${next}`);
   });
   if (done !== undefined) notify('Потрібна людина', `${what}: ${reason}`);
-  const s = (kind === 'pr' ? state.prs : state.issues)[n];
-  if (done !== undefined && s) s.held = true;
+  if (done !== undefined && s) {
+    s.held = true;
+    s.heldWhy = reason;
+  }
 }
 
 // What the conveyor counts per PR and per issue to know when to give up.
@@ -506,7 +521,7 @@ function onHold(item, s, counts) {
     return true;
   }
   if (s.held) {
-    for (const key of ['held', ...counts]) delete s[key];
+    for (const key of ['held', 'heldWhy', ...counts]) delete s[key];
     if (s.job) delete s.job.escalated;
     log(`#${item.number}: мітку needs-human знято, лічильники скинуто`);
   }
@@ -589,7 +604,13 @@ function tick() {
       if (limit.selfResumes) job.selfResumes = true;
       return true;
     }
-    if (workers) sendHome([job.worker], `ліміт ${key} до ${when(until)}`);
+    giveBack(s, job, `ліміт ${key} до ${when(until)}`);
+    return false;
+  };
+
+  /** Sends a job's agent home, unless it is gone, and gives the work back for another agent, as if it never started. */
+  const giveBack = (s, job, why, home = true) => {
+    if (workers && home) sendHome([job.worker], why);
     delete s.job;
     if (job.kind === 'code') s.checked = true; // not a failed attempt
     if (job.kind === 'fix') {
@@ -600,6 +621,33 @@ function tick() {
       s.reviewRounds = Math.max(0, (s.reviewRounds ?? 1) - 1);
       delete s.reviewedSha;
     }
+  };
+
+  /**
+   * A job's model is down or gone, so nothing its agent tries gets through, and OpenCode stops at the error as if
+   * waiting for an answer. Rather than a person, the model sits out modelDownHours and the work goes to another agent.
+   */
+  const dropDownModel = (s, kind, n, home) => {
+    const job = s.job;
+    const what = kind === 'qa' ? 'перевірка QA' : `${kind === 'pr' ? 'PR' : 'issue'} #${n}`;
+    if (job.coder && !config.coders[job.coder]) {
+      // Its coder has since left config.json: there is no model of its to pause.
+      log(`модель кодера ${job.coder} недоступна, а його вже немає в config.json: ${what} повертається в чергу`);
+    } else {
+      const key = limitKeyOfJob(job);
+      const until = now + modelDownHours() * 60 * MINUTE;
+      state.paused[key] = Math.max(state.paused[key] ?? 0, until);
+      log(`модель ${key} недоступна: пауза для агентів ${key} до ${when(until)}, ${what} повертається в чергу`);
+      notify('Модель недоступна', `${key} не відповідає. Агентів ${key} не наймаю до ${when(until)}`);
+    }
+    // Its wait for an answer may already have called a person, but it was the model: the label comes off again.
+    if (job.escalated && kind !== 'qa') {
+      const cmd = kind === 'pr' ? 'pr' : 'issue';
+      const unheld = act(`${what}: зняти needs-human, бо агент не чекав відповіді, а стояв на недоступній моделі`, () =>
+        gh(cmd, 'edit', String(n), '--repo', REPO, '--remove-label', 'needs-human'));
+      if (unheld !== undefined) for (const k of ['held', 'heldWhy']) delete s[k];
+    }
+    giveBack(s, job, 'модель недоступна', home);
     return false;
   };
 
@@ -623,6 +671,8 @@ function tick() {
       }
     } else if (limit) return waitOutLimit(s, kind, n, limit);
     if (where === 'running') return true;
+    // Also for an agent that is gone: its terminal stays, and tells why it stopped.
+    if (modelDown(job.workerId, job.scrollFrom)) return dropDownModel(s, kind, n, where !== 'gone');
     if (where === 'needs_input') {
       job.waitingSince ??= now;
       if (now - job.waitingSince > config.needsInputMinutes * MINUTE && !job.escalated) {
@@ -719,9 +769,23 @@ function tick() {
     // second go is a new agent's: the author may be stuck where nothing typed to it gets through (a dialog). So is a
     // fix that goes to another coder.
     const other = config.coders[escalateTo] && escalateTo !== s.coder ? escalateTo : undefined;
-    const author = again || other ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
+    let author = again || other ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
-    const name = other ?? s.coder;
+    let name = other ?? s.coder;
+    // Its coder's model is paused (a usage limit, or it is down), maybe for hours: a free coder that takes the issue's
+    // difficulty does the fix instead, as a new agent in the PR's branch.
+    let instead = '';
+    if (!other && pausedFor(config.coders[name])) {
+      const issue = issueOfPr(pr);
+      const takes = issue ? [difficultyOf(issue)] : config.coders[name].takes;
+      const sub = Object.keys(config.coders).find((k) =>
+        !busyCoders.has(k) && !pausedFor(config.coders[k]) && config.coders[k].takes.some((d) => takes.includes(d)));
+      if (sub) {
+        instead = ` замість ${name}: ${limitKeyOf(config.coders[name])} на паузі`;
+        name = sub;
+        author = undefined;
+      }
+    }
     const coder = config.coders[name];
     if (busyCoders.has(name) || pausedFor(coder)) return; // waits for its coder
     if (author && !FINISHED.has(author.status)) return; // its author is already at it
@@ -738,7 +802,7 @@ function tick() {
         worker = { name: author.name, id: author.id, scrollFrom: terminalSize(author.id) };
       }
     } else {
-      worker = hire(coder, `кодера ${name}`, `доопрацювати PR #${n}${other ? " замість автора: останнє коло рев'ю" : ''} (${reasons.join(', ')})`, text);
+      worker = hire(coder, `кодера ${name}`, `доопрацювати PR #${n}${other ? " замість автора: останнє коло рев'ю" : instead} (${reasons.join(', ')})`, text);
     }
     if (!worker) return;
     if (again) s.fixRetried = key;
@@ -791,26 +855,16 @@ function tick() {
   for (const pr of [...pulls].sort((a, b) => a.number - b.number)) {
     const n = pr.number;
     const s = (state.prs[n] ??= {});
+    // A person's `merge-ok` stands in for what holds an approved PR back (its size, protected files) and for nothing
+    // else. Under the label the PR goes on like any other: a conflict or red CI goes back to its coder, new commits to
+    // the reviewer, and it merges once the reviewer approves what it now is and CI is green, with no second label.
     const okByPerson = Boolean(config.merge.okLabel) && labelsOf(pr).includes(config.merge.okLabel);
-    if ((!okByPerson && onHold(pr, s, PR_COUNTS)) || s.job) continue;
+    if ((onHold(pr, s, PR_COUNTS) && !okByPerson) || s.job) continue;
     if (pr.mergeable === 'UNKNOWN') continue; // GitHub is still working it out
     const ci = ciState(pr);
     // A verdict still holds after main was merged into the branch, as long as nothing else was pushed.
     const v = latestVerdict(n);
     const current = v && onlyMainMergedSince(n, v.sha, pr.headRefOid);
-
-    // A person's `merge-ok` on an approved PR stands in for whatever held it (its size, protected files): it is brought
-    // up to date with main and merged once CI is green. It counts only for the commits the reviewer approved, and the
-    // agents have nothing more to do here: no approval, a conflict or red CI wait for the person.
-    if (okByPerson) {
-      if (!current || v.verdict !== 'approve' || pr.mergeable === 'CONFLICTING' || ci === 'failed' || ci === 'pending') continue;
-      if (pr.mergeStateStatus === 'BEHIND' || ci === 'none') {
-        if (s.updatedFor !== pr.headRefOid) updateBranch(pr, s);
-        continue;
-      }
-      if (config.merge.enabled && !mergedNow) merge(pr, s, `, бо людина поставила ${config.merge.okLabel}`);
-      continue;
-    }
 
     // Requested changes go back straight away, along with anything else that's wrong:
     // no point updating the branch or waiting for CI on code that is about to change.
@@ -855,12 +909,12 @@ function tick() {
       setReviewLabel(pr, 'approve');
       if (!config.merge.enabled || mergedNow) continue;
       const blockers = mergeBlockers(pr);
-      if (blockers.length) {
+      if (blockers.length && !okByPerson) {
         needsHuman('pr', n, `рев'ю пройдено, але автоматично не мерджу: ${blockers.join('; ')}`,
           config.merge.okLabel ? `Якщо PR можна мерджити, поставте мітку \`${config.merge.okLabel}\`: конвеєр сам підтягне main і змерджить, щойно CI позеленіє.` : undefined);
         continue;
       }
-      merge(pr, s);
+      merge(pr, s, blockers.length ? `, бо людина поставила ${config.merge.okLabel}` : '');
       continue;
     }
     // The reviewer stopped without a verdict on this commit. Its work may have been cut short, so another one gets
@@ -896,7 +950,7 @@ function tick() {
 
   // New work: the next issue for each free coder, while not too much waits for review. Higher priority goes
   // first; an issue whose difficulty no coder takes waits for one.
-  const inFlight = pulls.filter((p) => !labelsOf(p).includes('needs-human')).length;
+  const inFlight = pulls.filter((p) => !labelsOf(p).includes('needs-human') || labelsOf(p).includes(config.merge.okLabel)).length;
   const taken = new Set(pulls.flatMap((p) => [...(p.body ?? '').matchAll(CLOSES)].map((m) => Number(m[1]))));
   const rank = (issue) => {
     const i = config.priorityLabels.findIndex((l) => labelsOf(issue).includes(l));
