@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as uuid from 'uuid';
@@ -9,12 +15,12 @@ export enum FileType {
   IMAGE = 'image',
 }
 
-export const baseUrl = process.env.BASE_URL || 'http://localhost:7777/';
-
 @Injectable()
 export class FileService {
   private readonly logger = new Logger(FileService.name);
 
+  // Повертає відносний шлях (`image/<uuid>.png`): домен і порт API можуть
+  // змінитися, тому повний URL збираємо з поточного BASE_URL під час відповіді.
   createFile(type: FileType, file): string {
     try {
       const fileExtension = validateImageFile(file);
@@ -24,7 +30,7 @@ export class FileService {
         fs.mkdirSync(filePath, { recursive: true });
       }
       fs.writeFileSync(path.resolve(filePath, fileName), file.buffer);
-      return baseUrl + type + '/' + fileName;
+      return type + '/' + fileName;
     } catch (e) {
       if (e instanceof HttpException) {
         throw e;
@@ -34,13 +40,9 @@ export class FileService {
     }
   }
 
-  async deleteFile(fileUrl: string) {
+  async deleteFile(filePath: string) {
     try {
-      // Видаляємо baseUrl, якщо він присутній
-      const filePath = fileUrl.replace(baseUrl, '');
-
-      // Отримуємо абсолютний шлях до файлу
-      const absolutePath = path.resolve(getUploadsDir(), filePath);
+      const absolutePath = this.resolveFilePath(filePath);
 
       // Перевіряємо, чи існує файл
       if (!fs.existsSync(absolutePath)) {
@@ -57,5 +59,23 @@ export class FileService {
       this.logger.error('Failed to delete file', e);
       throw new HttpException('Не вдалося видалити файл', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  // Шлях із бази відносний, але приймаємо й старий повний URL, щоб видалення
+  // не зламалося на даних, які ще не пройшли міграцію.
+  private resolveFilePath(filePath: string): string {
+    const relativePath = (filePath || '').replace(/^https?:\/\/[^/]+\//i, '');
+    const uploadsDir = getUploadsDir();
+    const absolutePath = path.resolve(uploadsDir, relativePath);
+
+    if (
+      !relativePath ||
+      absolutePath === uploadsDir ||
+      !absolutePath.startsWith(uploadsDir + path.sep)
+    ) {
+      throw new BadRequestException('Некоректний шлях до файлу');
+    }
+
+    return absolutePath;
   }
 }

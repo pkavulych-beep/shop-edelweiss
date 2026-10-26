@@ -62,6 +62,8 @@ describe('ProductService', () => {
 
       expect(basketRepository.delete).toHaveBeenCalledWith({ productId: 5 });
       expect(fileService.deleteFile).toHaveBeenCalledTimes(2);
+      expect(fileService.deleteFile).toHaveBeenNthCalledWith(1, 'cover.jpg');
+      expect(fileService.deleteFile).toHaveBeenNthCalledWith(2, 'photo.jpg');
       expect(photosService.remove).toHaveBeenCalledWith(1);
       expect(repository.delete).toHaveBeenCalledWith(5);
       expect(repository.update).not.toHaveBeenCalled();
