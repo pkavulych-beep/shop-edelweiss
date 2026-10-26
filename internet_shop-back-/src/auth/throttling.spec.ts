@@ -8,6 +8,7 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { AuthController } from './auth.controller';
 import { LocalAuthGuard } from './guards/local-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AUTH_ATTEMPTS_LIMIT, AUTH_ATTEMPTS_TTL, TOO_MANY_ATTEMPTS_MESSAGE } from './throttling';
 
 const THROTTLER_LIMIT = 'THROTTLER:LIMITdefault';
@@ -111,8 +112,12 @@ describe('ліміт спроб входу і реєстрації', () => {
 });
 
 describe('налаштування ліміту на маршрутах', () => {
-  it('обмежує login і register 5 спробами на хвилину', () => {
-    const handlers = [AuthController.prototype.login, AuthController.prototype.register];
+  it('обмежує login, register і change-password 5 спробами на хвилину', () => {
+    const handlers = [
+      AuthController.prototype.login,
+      AuthController.prototype.register,
+      AuthController.prototype.changePassword,
+    ];
 
     handlers.forEach(handler => {
       expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(ThrottlerGuard);
@@ -125,6 +130,12 @@ describe('налаштування ліміту на маршрутах', () => 
     const guards = Reflect.getMetadata(GUARDS_METADATA, AuthController.prototype.login);
 
     expect(guards).toEqual([ThrottlerGuard, LocalAuthGuard]);
+  });
+
+  it('вимагає входу для change-password і лімітує спроби', () => {
+    const guards = Reflect.getMetadata(GUARDS_METADATA, AuthController.prototype.changePassword);
+
+    expect(guards).toEqual([ThrottlerGuard, JwtAuthGuard]);
   });
 
   it('не обмежує перевірку профілю', () => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   HttpException,
   InternalServerErrorException,
@@ -6,7 +7,7 @@ import {
 import { UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
-import { hashPassword, isPasswordHash } from './password';
+import { hashPassword, isPasswordHash, verifyPassword } from './password';
 
 describe('AuthService.validateUser', () => {
   let usersService;
@@ -208,7 +209,11 @@ describe('AuthService refresh tokens', () => {
 
   beforeEach(() => {
     rows = [];
-    usersService = { findById: jest.fn().mockResolvedValue(user) };
+    usersService = {
+      findById: jest.fn().mockResolvedValue(user),
+      findByIdWithPassword: jest.fn(),
+      setPasswordHash: jest.fn(),
+    };
     let nextToken = 0;
     jwtService = { sign: jest.fn(() => `access-${++nextToken}`) };
     refreshTokens = {
@@ -326,5 +331,55 @@ describe('AuthService refresh tokens', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('rejects a wrong current password and keeps the sessions alive', async () => {
+    const stored = {
+      ...user,
+      password: await hashPassword('oldpass123'),
+    };
+    usersService.findByIdWithPassword.mockResolvedValue(stored);
+    const session = await service.issueTokens(user as any);
+
+    const error = await service
+      .changePassword(user.id, {
+        currentPassword: 'wrongpass',
+        newPassword: 'newpass123',
+      })
+      .catch((e) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect(error.message).toBe('Неправильний поточний пароль');
+    expect(usersService.setPasswordHash).not.toHaveBeenCalled();
+    await expect(service.refresh(session.refreshToken)).resolves.toBeDefined();
+  });
+
+  it('changes the password, revokes old sessions and issues a new pair', async () => {
+    const stored = {
+      ...user,
+      password: await hashPassword('oldpass123'),
+    };
+    usersService.findByIdWithPassword.mockResolvedValue(stored);
+    usersService.setPasswordHash.mockImplementation(
+      async (_id: number, hash: string) => {
+        stored.password = hash;
+      },
+    );
+    const oldSession = await service.issueTokens(user as any);
+
+    const current = await service.changePassword(user.id, {
+      currentPassword: 'oldpass123',
+      newPassword: 'newpass123',
+    });
+
+    const [id, hash] = usersService.setPasswordHash.mock.calls[0];
+    expect(id).toBe(user.id);
+    await expect(verifyPassword('newpass123', hash)).resolves.toBe(true);
+    await expect(verifyPassword('oldpass123', hash)).resolves.toBe(false);
+    expect(current.refreshToken).not.toBe(oldSession.refreshToken);
+    await expect(service.refresh(oldSession.refreshToken)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(service.refresh(current.refreshToken)).resolves.toBeDefined();
   });
 });

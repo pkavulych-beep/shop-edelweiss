@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   Injectable,
   InternalServerErrorException,
@@ -14,6 +15,7 @@ import { CreateUserDto } from '../user/dto/create-user.dto';
 import { normalizePhone, UA_PHONE_PATTERN } from '../common/phone';
 import { hashPassword, isPasswordHash, verifyPassword } from './password';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -118,6 +120,26 @@ export class AuthService {
       { tokenHash: hashRefreshToken(refreshToken), revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user || !(await verifyPassword(dto.currentPassword, user.password))) {
+      throw new BadRequestException('Неправильний поточний пароль');
+    }
+
+    await this.usersService.setPasswordHash(
+      userId,
+      await hashPassword(dto.newPassword),
+    );
+
+    // Після зміни пароля всі старі сесії мають завершитися, але поточна
+    // отримує нову пару токенів, щоб користувачу не довелося входити знову
+    await this.refreshTokens.update(
+      { userId, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
+    return this.issueTokens(user);
   }
 
   async login(user: any) {
