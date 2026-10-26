@@ -1,12 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { ProductService } from '../product/product.service';
 import { ProductStatus } from '../product/entities/product.entity';
 import { CreateQuickOrderDto } from './dto/create-quick-order.dto';
 import { QuickOrderEntity } from './entities/quick-order.entity';
 import { normalizePhone } from '../common/phone';
 import { availableFor } from '../product/stock';
+import { QUICK_ORDER_TTL } from './throttling';
+
+const QUICK_ORDER_TTL_MS = QUICK_ORDER_TTL;
 
 @Injectable()
 export class QuickOrderService {
@@ -42,10 +45,26 @@ export class QuickOrderService {
     }
 
     const normalizedPhone = normalizePhone(phoneNumber) as string;
+    const sizeOrNull = size ?? null;
+
+    // Повторне натискання «Замовити» не повинно створювати дублікат заявки
+    const existing = await this.repository.findOne({
+      where: {
+        phoneNumber: normalizedPhone,
+        product: { id: productId },
+        size: sizeOrNull,
+        createdAt: MoreThan(new Date(Date.now() - QUICK_ORDER_TTL_MS)),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (existing) {
+      return { id: existing.id, createdAt: existing.createdAt };
+    }
+
     const { id, createdAt } = await this.repository.save({
       phoneNumber: normalizedPhone,
       product: fullProduct,
-      size: size ?? null,
+      size: sizeOrNull,
     });
     return { id, createdAt };
   }
