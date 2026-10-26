@@ -31,7 +31,12 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
       {setPhotos && (
         <>
           <p>Оберіть фото</p>
-          <input type="file" multiple accept="image/*" onChange={onChange} />
+          <input
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp"
+            onChange={onChange}
+          />
         </>
       )}
       <CustomizedInputBase type="text" name="description" placeholder="Опис" multiline={true} />
