@@ -59,7 +59,8 @@ export type photo = {
 };
 
 export interface currentProduct extends IProduct {
-  photos: photo[];
+  // Можуть бути відсутніми (наприклад, товар узято зі списку каталогу) — тоді показуємо обкладинку
+  photos?: photo[] | null;
 }
 
 export enum Gender {

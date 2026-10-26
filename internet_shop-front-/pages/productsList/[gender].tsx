@@ -32,6 +32,7 @@ export default function Index() {
   const router = useRouter();
   const query = router.query as Record<string, string>;
   const total = useAppSelector((store) => store.product.total);
+  const error = useAppSelector((store) => store.product.error);
   const totalPages = Math.ceil(total / LIMIT);
   const currentPage = Number(query.page) || 1;
   const genderTitle = genderTitles[query.gender as string] || 'Каталог';
@@ -90,6 +91,10 @@ export default function Index() {
         {total > 0 ? (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             {total} {pluralizeProduct(total)}
+          </Typography>
+        ) : error ? (
+          <Typography variant="body2" sx={{ color: 'error.main', mt: 1 }}>
+            {error}
           </Typography>
         ) : (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
@@ -229,6 +234,10 @@ export default function Index() {
 export const getServerSideProps = wrapper.getServerSideProps((store) =>
   // @ts-ignore
   async ({ params: { gender }, query }) => {
+    // Невідома стать (наприклад /productsList/foo) — справжня сторінка 404
+    if (gender !== 'man' && gender !== 'woman') {
+      return { notFound: true };
+    }
     try {
       const filters = {
         gender: gender as string,
@@ -243,7 +252,9 @@ export const getServerSideProps = wrapper.getServerSideProps((store) =>
       // @ts-ignore
       store.dispatch(setGender(gender));
     } catch (e) {
-      store.dispatch(setErrorMessage(e.message));
+      // Помилка бека (5xx, бек недоступний) — не 404, а повідомлення на сторінці
+      store.dispatch(setErrorMessage('Не вдалося завантажити товари'));
+      store.dispatch(setTotal(0));
     }
   },
 );

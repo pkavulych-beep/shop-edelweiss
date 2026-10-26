@@ -13,7 +13,7 @@ export const Pictures: NextPage<IPicturesProps> = ({ photosArr }) => {
   return (
     <>
       <PicturesArr setPhoto={setPhoto} photosArr={photosArr} />
-      <img className={style.img} src={photosArr[selectPhoto].url} alt='' />
+      <img className={style.img} src={photosArr[selectPhoto]?.url} alt='' />
     </>
   );
 };
