@@ -57,6 +57,14 @@ App.getInitialProps = wrapper.getInitialAppProps((store) =>
       ? await Component.getInitialProps(ctx)
       : {};
 
+    // Next викликає App.getInitialProps на кожному переході: на сервері — для
+    // /_next/data сторінок з getServerSideProps, у браузері — для решти.
+    // Профіль потрібен один раз: під час першого серверного рендеру, а в
+    // браузері — лише якщо користувача в store ще немає. Серверний store без
+    // користувача не затре клієнтського (див. hydrate у auth- і cart-reducer).
+    if (ctx.req?.url?.startsWith("/_next/data/")) return { pageProps };
+    if (store.getState().user.userData) return { pageProps };
+
     try {
       const { token, refreshToken } = nookies.get(ctx);
       if (!token && !refreshToken) return { pageProps };
