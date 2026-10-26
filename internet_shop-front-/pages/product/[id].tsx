@@ -59,7 +59,7 @@ export default function Product() {
   }
 
   const { cover, photos, ...productInfo } = currentProduct;
-  const photosArr = photos?.length ? [{ id: 0, url: cover }, ...photos] : [];
+  const photosArr = [{ id: 0, url: cover }, ...(photos ?? [])].filter((p) => Boolean(p.url));
 
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
   const isOutOfStock = currentProduct.status === 'out-of-stock' || (currentProduct.count != null && currentProduct.count <= 0);
