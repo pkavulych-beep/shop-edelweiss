@@ -278,6 +278,72 @@ export default function Header() {
               </Typography>
             </Link>
           ))}
+          {userData === null ? (
+            <Typography
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setDialogLogin(true);
+              }}
+              sx={{
+                py: 2,
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                color: 'text.primary',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                cursor: 'pointer',
+              }}
+            >
+              Увійти
+            </Typography>
+          ) : (
+            <>
+              <Link
+                href="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ textDecoration: 'none' }}
+              >
+                <Typography
+                  sx={{
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    letterSpacing: '0.15em',
+                    textTransform: 'uppercase',
+                    color: isActive('/profile') ? 'primary.main' : 'text.primary',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Профіль
+                </Typography>
+              </Link>
+              <Link
+                href="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{ textDecoration: 'none' }}
+              >
+                <Typography
+                  sx={{
+                    py: 2,
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    letterSpacing: '0.15em',
+                    textTransform: 'uppercase',
+                    color: 'text.primary',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Мої замовлення
+                </Typography>
+              </Link>
+            </>
+          )}
         </Box>
       </Drawer>
 
