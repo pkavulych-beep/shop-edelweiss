@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   Column,
   CreateDateColumn,
@@ -8,6 +9,7 @@ import {
 } from 'typeorm';
 import { PhotoEntity } from '../../photos/entities/photo.entity';
 import { OrderItemEntity } from '../../order/entities/order-item.entity';
+import { toPublicFileUrl } from '../../file/public-url';
 
 export enum Gender {
   Man = 'man',
@@ -49,7 +51,9 @@ export class ProductEntity {
   @Column()
   name: string;
 
+  // У базі відносний шлях; у JSON — повний URL із поточного BASE_URL
   @Column({ nullable: true })
+  @Transform(({ value }) => toPublicFileUrl(value), { toPlainOnly: true })
   cover: string;
 
   @OneToMany(() => PhotoEntity, (photo) => photo.product)
