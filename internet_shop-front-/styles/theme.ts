@@ -1,5 +1,6 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { ukUA } from '@mui/material/locale';
+import { manropeFontFamily } from './fonts';
 
 declare module '@mui/material/styles' {
   interface Theme {
@@ -61,7 +62,7 @@ const themeOptions: ThemeOptions = {
     },
   },
   typography: {
-    fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: manropeFontFamily,
     h1: {
       fontWeight: 700,
       textTransform: 'uppercase' as const,

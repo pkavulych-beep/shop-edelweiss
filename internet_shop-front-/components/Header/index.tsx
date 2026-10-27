@@ -159,7 +159,6 @@ export default function Header() {
           >
             <Typography
               sx={{
-                fontFamily: "'Manrope', sans-serif",
                 fontWeight: 800,
                 fontSize: { xs: '0.75rem', sm: '1rem', md: '1.4rem' },
                 letterSpacing: { xs: '0.12em', sm: '0.2em', md: '0.25em' },

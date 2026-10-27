@@ -44,7 +44,6 @@ const SaleBanner: React.FC = () => {
           </Typography>
           <Typography
             sx={{
-              fontFamily: "'Manrope', sans-serif",
               fontWeight: 800,
               fontSize: { xs: '2.5rem', md: '4rem' },
               lineHeight: 1,
@@ -87,7 +86,6 @@ const SaleBanner: React.FC = () => {
         {/* Decorative SALE text */}
         <Typography
           sx={{
-            fontFamily: "'Manrope', sans-serif",
             fontWeight: 900,
             fontSize: { xs: '6rem', md: '10rem' },
             lineHeight: 1,

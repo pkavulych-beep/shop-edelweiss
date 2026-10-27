@@ -23,8 +23,10 @@ const Hero: React.FC = () => {
       {/* Background image */}
       <Box
         component="img"
-        src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1920&q=80&fit=crop"
+        src="/images/hero.webp"
         alt=""
+        fetchPriority="high"
+        decoding="async"
         sx={{
           position: 'absolute',
           inset: 0,
