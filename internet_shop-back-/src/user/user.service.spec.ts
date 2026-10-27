@@ -163,6 +163,31 @@ describe('UsersService cart', () => {
     expect(basketRepository.save).not.toHaveBeenCalled();
   });
 
+  it.each([2, 1])(
+    'allows reducing the quantity to %i even above the current stock',
+    async (quantity) => {
+      productService.findProductsMain.mockResolvedValueOnce([
+        { id: 5, sizes: ['S'], sizeStock: { S: 1 }, count: 1 },
+      ]);
+      basketRepository.findOne.mockResolvedValueOnce({
+        userId: 1,
+        productId: 5,
+        size: 'S',
+        quantity: 3,
+      });
+
+      await service.changeBasketQuantity(1, {
+        idProduct: 5,
+        size: 'S',
+        quantity,
+      });
+
+      expect(basketRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ quantity }),
+      );
+    },
+  );
+
   it('does not change a basket item of another user', async () => {
     basketRepository.findOne.mockResolvedValueOnce({
       userId: 2,

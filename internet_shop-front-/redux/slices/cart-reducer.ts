@@ -217,7 +217,12 @@ export const changeCartItemQuantity =
         (el) => el.idProduct === dto.idProduct && (el.size ?? '') === size,
       );
       if (!existing) return 'Товару немає в кошику';
-      if (dto.available != null && dto.quantity > dto.available) {
+      // Зменшувати можна завжди, навіть якщо залишок уже впав нижче
+      if (
+        dto.quantity > existing.quantity &&
+        dto.available != null &&
+        dto.quantity > dto.available
+      ) {
         return outOfStockMessage(dto.available);
       }
       existing.quantity = dto.quantity;

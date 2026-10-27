@@ -221,7 +221,13 @@ export class UsersService {
     }
 
     const available = availableFor(product, effectiveSize);
-    if (available !== null && quantity > available) {
+    // Зменшувати позицію можна завжди, навіть якщо залишок уже впав нижче:
+    // інакше покупець застрягне й зможе лише видалити товар
+    if (
+      available !== null &&
+      quantity > existing.quantity &&
+      quantity > available
+    ) {
       throw new BadRequestException(
         `Недостатньо товару на складі. Доступно: ${available}`,
       );

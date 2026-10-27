@@ -65,6 +65,16 @@ export const Position: FC<IPositionProps> = ({
     if (message) setQuantityError(message);
   };
 
+  // Якщо залишок упав одразу на кілька одиниць, «−» одразу зменшує до
+  // доступної кількості, щоб не доводилося кілька разів натикатися на 400
+  const decreaseQuantity = () => {
+    const nextQuantity =
+      available != null && quantity > available
+        ? Math.max(1, Math.min(quantity - 1, available))
+        : quantity - 1;
+    changeQuantity(nextQuantity);
+  };
+
   // Залишок зменшився після того, як товар уже лежав у кошику
   const stockShortage = available != null && quantity > available;
 
@@ -138,7 +148,7 @@ export const Position: FC<IPositionProps> = ({
                   aria-label="Зменшити кількість"
                   size="small"
                   disabled={!canDecrease}
-                  onClick={() => changeQuantity(quantity - 1)}
+                  onClick={decreaseQuantity}
                   sx={{ width: 28, height: 28, borderRadius: 0 }}
                 >
                   <RemoveIcon sx={{ fontSize: 16 }} />
