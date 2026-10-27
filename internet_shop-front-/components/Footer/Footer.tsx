@@ -4,6 +4,12 @@ import Typography from '@mui/material/Typography';
 import Link from 'next/link';
 import { Gender } from '../../redux/Types/ProductType';
 
+const socialLinks = [
+  { label: 'Instagram', env: process.env.NEXT_PUBLIC_INSTAGRAM_URL },
+  { label: 'Telegram', env: process.env.NEXT_PUBLIC_TELEGRAM_URL },
+].filter((social): social is { label: string; env: string } => Boolean(social.env))
+  .map((social) => ({ label: social.label, href: social.env }));
+
 const footerLinks = {
   'Каталог': [
     { label: 'Жінкам', href: `/productsList/${Gender.Woman}` },
@@ -12,12 +18,11 @@ const footerLinks = {
     { label: 'Знижки', href: '/productsList/discounts' },
   ],
   'Інформація': [
-    { label: 'Доставка та оплата', href: '/info' },
-    { label: 'Обмін та повернення', href: '/info' },
+    { label: 'Доставка та оплата', href: '/info#delivery' },
+    { label: 'Обмін та повернення', href: '/info#returns' },
   ],
   'Контакти': [
-    { label: 'Instagram', href: '#' },
-    { label: 'Telegram', href: '#' },
+    ...socialLinks,
     { label: 'info@edelweiss.ua', href: 'mailto:info@edelweiss.ua' },
   ],
 };
@@ -75,6 +80,7 @@ const Footer: React.FC = () => {
               {title}
             </Typography>
             {links.map((link) => {
+              const isExternal = /^https?:\/\//.test(link.href);
               const content = (
                 <Typography
                   variant="body2"
@@ -91,12 +97,17 @@ const Footer: React.FC = () => {
               );
               // Next Link рахує відносні href від поточного маршруту, тож '#' на 404
               // на сервері стає '/404#', а на клієнті — '/doesnotexist#' (hydration).
-              return link.href.startsWith('/') ? (
+              return link.href.startsWith('/') && !link.href.startsWith('//') ? (
                 <Link key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
                   {content}
                 </Link>
               ) : (
-                <a key={link.label} href={link.href} style={{ textDecoration: 'none' }}>
+                <a
+                  key={link.label}
+                  href={link.href}
+                  {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                  style={{ textDecoration: 'none' }}
+                >
                   {content}
                 </a>
               );
