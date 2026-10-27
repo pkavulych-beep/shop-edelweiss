@@ -13,6 +13,7 @@ import { BasketItemEntity } from './entities/basket-item.entity';
 import { RolesService } from '../roles/roles.service';
 import { ProductService } from '../product/product.service';
 import { productToBasketDto } from './dto/productToBasket.dto';
+import { ChangeBasketQuantityDto } from './dto/change-basket-quantity.dto';
 import { SyncCartItemDto } from './dto/sync-cart.dto';
 import { hashPassword } from '../auth/password';
 import { normalizeEmail } from '../common/email';
@@ -190,6 +191,50 @@ export class UsersService {
     { idProduct, size }: productToBasketDto,
   ) {
     await this.basketRepository.delete({ userId: idUser, productId: idProduct, size: size ?? '' });
+    return await this.getCartItems(idUser);
+  }
+
+  async changeBasketQuantity(
+    idUser: number,
+    { idProduct, size, quantity }: ChangeBasketQuantityDto,
+  ) {
+    const effectiveSize = size ?? '';
+    const existing = await this.basketRepository.findOne({
+      where: { userId: idUser, productId: idProduct, size: effectiveSize },
+    });
+
+    // Власник кошика — з токена: позицію іншого користувача не змінюємо
+    if (!existing || existing.userId !== idUser) {
+      throw new NotFoundException('Позиції немає в кошику');
+    }
+
+    await this.productService.assertPurchasable([idProduct]);
+    const [product] = await this.productService.findProductsMain([idProduct]);
+
+    if (product.sizes?.length) {
+      if (!effectiveSize) {
+        throw new BadRequestException('Оберіть розмір товару');
+      }
+      if (!product.sizes.includes(effectiveSize)) {
+        throw new BadRequestException('Такого розміру немає в цього товару');
+      }
+    }
+
+    const available = availableFor(product, effectiveSize);
+    // Зменшувати позицію можна завжди, навіть якщо залишок уже впав нижче:
+    // інакше покупець застрягне й зможе лише видалити товар
+    if (
+      available !== null &&
+      quantity > existing.quantity &&
+      quantity > available
+    ) {
+      throw new BadRequestException(
+        `Недостатньо товару на складі. Доступно: ${available}`,
+      );
+    }
+
+    existing.quantity = quantity;
+    await this.basketRepository.save(existing);
     return await this.getCartItems(idUser);
   }
 

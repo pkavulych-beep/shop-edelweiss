@@ -121,6 +121,99 @@ describe('UsersService cart', () => {
     await expect(service.addProductToBasket(1, { idProduct: 5 })).rejects.toThrow('Доступно: 1');
   });
 
+  it('changes the quantity of a basket item', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([
+      { id: 5, sizes: ['S'], sizeStock: { S: 5 }, count: 5 },
+    ]);
+    basketRepository.findOne.mockResolvedValueOnce({
+      userId: 1,
+      productId: 5,
+      size: 'S',
+      quantity: 1,
+    });
+
+    await service.changeBasketQuantity(1, { idProduct: 5, size: 'S', quantity: 3 });
+
+    expect(basketRepository.findOne).toHaveBeenCalledWith({
+      where: { userId: 1, productId: 5, size: 'S' },
+    });
+    expect(basketRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, productId: 5, size: 'S', quantity: 3 }),
+    );
+    expect(basketRepository.find).toHaveBeenCalledWith({
+      where: { userId: 1 },
+      relations: ['product'],
+    });
+  });
+
+  it('rejects a quantity above the stock of the size', async () => {
+    productService.findProductsMain.mockResolvedValueOnce([
+      { id: 5, sizes: ['S'], sizeStock: { S: 2 }, count: 2 },
+    ]);
+    basketRepository.findOne.mockResolvedValueOnce({
+      userId: 1,
+      productId: 5,
+      size: 'S',
+      quantity: 1,
+    });
+
+    await expect(
+      service.changeBasketQuantity(1, { idProduct: 5, size: 'S', quantity: 3 }),
+    ).rejects.toThrow('Недостатньо товару на складі. Доступно: 2');
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
+  it.each([2, 1])(
+    'allows reducing the quantity to %i even above the current stock',
+    async (quantity) => {
+      productService.findProductsMain.mockResolvedValueOnce([
+        { id: 5, sizes: ['S'], sizeStock: { S: 1 }, count: 1 },
+      ]);
+      basketRepository.findOne.mockResolvedValueOnce({
+        userId: 1,
+        productId: 5,
+        size: 'S',
+        quantity: 3,
+      });
+
+      await service.changeBasketQuantity(1, {
+        idProduct: 5,
+        size: 'S',
+        quantity,
+      });
+
+      expect(basketRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ quantity }),
+      );
+    },
+  );
+
+  it('does not change a basket item of another user', async () => {
+    basketRepository.findOne.mockResolvedValueOnce({
+      userId: 2,
+      productId: 5,
+      size: 'S',
+      quantity: 1,
+    });
+
+    await expect(
+      service.changeBasketQuantity(1, { idProduct: 5, size: 'S', quantity: 2 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(basketRepository.findOne).toHaveBeenCalledWith({
+      where: { userId: 1, productId: 5, size: 'S' },
+    });
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing a position that is not in the basket', async () => {
+    basketRepository.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.changeBasketQuantity(1, { idProduct: 5, size: 'S', quantity: 2 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(basketRepository.save).not.toHaveBeenCalled();
+  });
+
   it('trims guest cart quantities to the stock of the size', async () => {
     productService.findPurchasable.mockResolvedValue([
       { id: 1, sizes: ['S', 'M'], sizeStock: { S: 3, M: 0 }, count: 3 },

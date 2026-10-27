@@ -12,6 +12,12 @@ export type removeFromCartDto = {
   size?: string;
 };
 
+export type changeCartQuantityDto = {
+  idProduct: number;
+  size?: string;
+  quantity: number;
+};
+
 export type syncCartDto = {
   items: { productId: number; size?: string; quantity: number }[];
 };
@@ -23,6 +29,10 @@ export const cartApi = (instance: AxiosInstance) => ({
   },
   async pickUpFromTheBasket(dto: removeFromCartDto) {
     const { data } = await instance.patch('users/pickUpFromTheBasket', dto);
+    return data;
+  },
+  async changeQuantity(dto: changeCartQuantityDto) {
+    const { data } = await instance.patch('users/basket/quantity', dto);
     return data;
   },
   async syncCart(dto: syncCartDto) {

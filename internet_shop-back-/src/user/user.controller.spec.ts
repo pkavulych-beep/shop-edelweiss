@@ -18,6 +18,7 @@ describe('UserController', () => {
       findOrders: jest.fn().mockResolvedValue([]),
       addProductToBasket: jest.fn(),
       pickUpFromTheBasket: jest.fn(),
+      changeBasketQuantity: jest.fn(),
       syncCart: jest.fn(),
       cleanTheBasket: jest.fn(),
       update: jest.fn(),
@@ -37,10 +38,22 @@ describe('UserController', () => {
 
     controller.addProductToBasket(owner, dto);
     controller.pickUpFromTheBasket(owner, dto);
+    controller.changeBasketQuantity(owner, {
+      idUser: 99,
+      idProduct: 5,
+      size: 'M',
+      quantity: 2,
+    } as any);
     controller.syncCart(owner, { idUser: 99, items: [] } as any);
 
     expect(userService.addProductToBasket).toHaveBeenCalledWith(1, dto);
     expect(userService.pickUpFromTheBasket).toHaveBeenCalledWith(1, dto);
+    expect(userService.changeBasketQuantity).toHaveBeenCalledWith(1, {
+      idUser: 99,
+      idProduct: 5,
+      size: 'M',
+      quantity: 2,
+    });
     expect(userService.syncCart).toHaveBeenCalledWith(1, []);
   });
 
