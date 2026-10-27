@@ -49,6 +49,7 @@
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0",
+    "sharp": "^0.34.5",
     "typeorm": "^0.3.12",
     "uuid": "^8.3.2"
   },
@@ -88,7 +89,8 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "moduleNameMapper": {
-      "^src/(.*)$": "<rootDir>/$1"
+      "^src/(.*)$": "<rootDir>/$1",
+      "^@img/(sharp-[^/]+)/sharp\\.node$": "<rootDir>/../node_modules/@img/$1/lib/$1.node"
     },
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

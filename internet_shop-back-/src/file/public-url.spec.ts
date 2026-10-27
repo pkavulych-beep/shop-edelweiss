@@ -38,6 +38,24 @@ describe('public file urls', () => {
     expect(instanceToPlain(product).cover).toBe('http://localhost:7780/image/cover.png');
   });
 
+  it('serializes the thumbnail url from the current BASE_URL', () => {
+    process.env.BASE_URL = 'https://shop.example/';
+    const product = new ProductEntity();
+    product.cover = 'image/cover.png';
+    product.coverThumb = 'image/cover.thumb.webp';
+
+    expect(instanceToPlain(product).coverThumb).toBe('https://shop.example/image/cover.thumb.webp');
+  });
+
+  it('falls back to the cover for products without a thumbnail', () => {
+    process.env.BASE_URL = 'https://shop.example/';
+    const product = new ProductEntity();
+    product.cover = 'image/cover.png';
+    product.coverThumb = null;
+
+    expect(instanceToPlain(product).coverThumb).toBe('https://shop.example/image/cover.png');
+  });
+
   it('serializes the photo url with the current BASE_URL', () => {
     process.env.BASE_URL = 'https://shop.example/';
     const photo = new PhotoEntity();
