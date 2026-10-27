@@ -17,6 +17,11 @@ import {
 } from '../redux/slices/cart-reducer';
 import { availableStock } from '../utils/stock';
 
+// Прихований («видалений») товар бек віддає для кошика зі status, щоб покупець
+// бачив, що позиція недоступна, а не дізнавався про це під час оформлення
+const isUnavailableStatus = (status?: string | null) =>
+  Boolean(status) && status !== 'active';
+
 const Cart: NextPage = () => {
   const dispatch = useAppDispatch();
   const { data, productDetails, loading } = useAppSelector((store) => store.cart);
@@ -45,6 +50,7 @@ const Cart: NextPage = () => {
             selectedSize: item.size,
             quantity: item.quantity,
             available: availableStock(details, item.size),
+            unavailable: isUnavailableStatus(details.status),
           };
         })
         .filter(Boolean)
@@ -57,6 +63,10 @@ const Cart: NextPage = () => {
   const hasStockIssue = enrichedProducts.some(
     (product) => product.available != null && product.quantity > product.available
   );
+
+  // Прихований адміном товар лишається в гостьовому кошику, але купити його
+  // не можна, доки покупець не прибере позицію
+  const hasUnavailable = enrichedProducts.some((product) => product.unavailable);
 
   return (
     <MainLayout title="Кошик — Edelweiss">
@@ -93,6 +103,7 @@ const Cart: NextPage = () => {
                     quantity: product.quantity,
                   }))}
                   hasStockIssue={hasStockIssue}
+                  hasUnavailable={hasUnavailable}
                 />
               </LoginRequired>
             </Box>
@@ -134,6 +145,7 @@ const Cart: NextPage = () => {
                     salePrice={product.salePrice}
                     quantity={product.quantity}
                     available={product.available}
+                    unavailable={product.unavailable}
                   />
                 ))}
 

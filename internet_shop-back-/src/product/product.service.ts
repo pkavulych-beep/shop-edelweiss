@@ -277,11 +277,24 @@ export class ProductService {
     return products;
   }
 
+  // Товари для кошика, зокрема приховані («видалені»): status потрібен фронту,
+  // щоб показати таку позицію як недоступну, а не як звичайну
   async findByIds(ids: number[]): Promise<ProductEntity[]> {
     if (!ids || ids.length === 0) return [];
     return this.repository.find({
       where: { id: In(ids) },
-      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'coverThumb', 'salePrice'],
+      select: [
+        'id',
+        'name',
+        'sizes',
+        'sizeStock',
+        'count',
+        'price',
+        'cover',
+        'coverThumb',
+        'salePrice',
+        'status',
+      ],
     });
   }
 

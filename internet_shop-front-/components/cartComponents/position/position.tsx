@@ -25,6 +25,9 @@ export interface IPositionProps {
   quantity: number;
   // Залишок обраного розміру; null — залишок не ведеться (без обмеження)
   available?: number | null;
+  // Товар прихований адміном («видалений»): показуємо приглушено й не даємо
+  // змінювати кількість — його можна лише прибрати з кошика
+  unavailable?: boolean;
 }
 
 const shouldShowSize = (size: string) => size && size.trim() !== '';
@@ -39,6 +42,7 @@ export const Position: FC<IPositionProps> = ({
   salePrice,
   quantity,
   available,
+  unavailable = false,
 }) => {
   const dispatch = useAppDispatch();
   const idUser = useAppSelector((store) => store.user.userData?.id);
@@ -49,8 +53,9 @@ export const Position: FC<IPositionProps> = ({
     dispatch(pickUpFromTheCart({ idProduct: id, size, idUser }));
   };
 
-  const canDecrease = quantity > 1 && !updating;
-  const canIncrease = !updating && (available == null || quantity < available);
+  const canDecrease = !unavailable && quantity > 1 && !updating;
+  const canIncrease =
+    !unavailable && !updating && (available == null || quantity < available);
 
   const changeQuantity = async (nextQuantity: number) => {
     setUpdating(true);
@@ -99,6 +104,7 @@ export const Position: FC<IPositionProps> = ({
             borderRadius: 2,
             overflow: 'hidden',
             bgcolor: '#eceeee',
+            opacity: unavailable ? 0.5 : 1,
           }}
         >
           <Link href={'/product/' + id}>
@@ -111,7 +117,7 @@ export const Position: FC<IPositionProps> = ({
         </Box>
 
         {/* Product info */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 0.5 }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 0.5, opacity: unavailable ? 0.55 : 1 }}>
           <Box>
             <Link href={'/product/' + id} style={{ textDecoration: 'none' }}>
               <Typography
@@ -194,8 +200,14 @@ export const Position: FC<IPositionProps> = ({
         </IconButton>
       </Box>
 
+      {/* Товар приховали після того, як його поклали в кошик */}
+      {unavailable && (
+        <Typography sx={{ fontSize: '0.75rem', color: '#a73b21', mt: 1 }}>
+          Товар більше недоступний
+        </Typography>
+      )}
       {/* Позиції більше немає в потрібній кількості на складі */}
-      {stockShortage && (
+      {!unavailable && stockShortage && (
         <Typography sx={{ fontSize: '0.75rem', color: '#a73b21', mt: 1 }}>
           {available === 0 ? 'Немає в наявності' : `Доступно: ${available}`}
         </Typography>
