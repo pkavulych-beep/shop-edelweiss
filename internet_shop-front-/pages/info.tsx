@@ -8,7 +8,7 @@ const Info: React.FC = () => {
     <MainLayout title={'доставка, оплата, повернення'}>
       <div className={css.deliveryPayment}>
         <h1>Доставка, оплата, повернення</h1>
-        <div className={css.deliveryItem}>
+        <div className={css.deliveryItem} id="delivery" style={{ scrollMarginTop: 96 }}>
           <LocalShippingOutlinedIcon sx={{ fontSize: 40, color: '#b3b3b3', alignSelf: 'center' }} />
           <div className={css.deliveryItemTitle}>
             <div className={css.subtitle}>Доставка</div>
@@ -61,7 +61,7 @@ const Info: React.FC = () => {
           </div>
         </div>
 
-        <div className={css.deliveryItem}>
+        <div className={css.deliveryItem} id="returns" style={{ scrollMarginTop: 96 }}>
           <div>
             <svg width="40" height="40" fill="#b3b3b3" viewBox="0 0 1024 1024"
                  style={{ display: 'flex', alignSelf: 'center' }}>

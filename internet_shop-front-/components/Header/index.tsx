@@ -67,6 +67,14 @@ export default function Header() {
 
   const isActive = (href: string) => router.asPath.startsWith(href);
 
+  const cartLabel = (count: number) => {
+    if (count % 10 === 1 && count % 100 !== 11) return `Кошик, ${count} товар`;
+    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+      return `Кошик, ${count} товари`;
+    }
+    return `Кошик, ${count} товарів`;
+  };
+
   return (
     <>
       <AppBar
@@ -102,6 +110,7 @@ export default function Header() {
             {/* Mobile burger */}
             <IconButton
               onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label="Меню"
               sx={{
                 display: { xs: 'flex', md: 'none' },
                 color: 'text.primary',
@@ -187,6 +196,7 @@ export default function Header() {
             {/* Profile — desktop only */}
             <IconButton
               onClick={handleProfileClick}
+              aria-label="Профіль"
               sx={{
                 display: { xs: 'none', md: 'flex' },
                 color: 'text.primary',
@@ -197,30 +207,31 @@ export default function Header() {
               <PersonOutlineOutlinedIcon />
             </IconButton>
 
-            <Link href="/cart">
-              <IconButton
+            <IconButton
+              component={Link}
+              href="/cart"
+              aria-label={cartLabel(cartCount)}
+              sx={{
+                color: 'text.primary',
+                '&:hover': { color: 'primary.main' },
+                transition: 'color 0.3s',
+              }}
+            >
+              <Badge
+                badgeContent={cartCount}
                 sx={{
-                  color: 'text.primary',
-                  '&:hover': { color: 'primary.main' },
-                  transition: 'color 0.3s',
+                  '& .MuiBadge-badge': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    fontSize: '0.6rem',
+                    minWidth: 18,
+                    height: 18,
+                  },
                 }}
               >
-                <Badge
-                  badgeContent={cartCount}
-                  sx={{
-                    '& .MuiBadge-badge': {
-                      bgcolor: 'primary.main',
-                      color: 'primary.contrastText',
-                      fontSize: '0.6rem',
-                      minWidth: 18,
-                      height: 18,
-                    },
-                  }}
-                >
-                  <ShoppingBagOutlinedIcon />
-                </Badge>
-              </IconButton>
-            </Link>
+                <ShoppingBagOutlinedIcon />
+              </Badge>
+            </IconButton>
           </Box>
         </Toolbar>
       </AppBar>
@@ -251,7 +262,7 @@ export default function Header() {
             >
               Edelweiss
             </Typography>
-            <IconButton onClick={() => setMobileMenuOpen(false)}>
+            <IconButton onClick={() => setMobileMenuOpen(false)} aria-label="Закрити меню">
               <CloseIcon />
             </IconButton>
           </Box>
