@@ -218,15 +218,16 @@ describe('UsersService cart', () => {
     productService.findPurchasable.mockResolvedValue([
       { id: 1, sizes: ['S', 'M'], sizeStock: { S: 3, M: 0 }, count: 3 },
     ]);
-    basketRepository.findOne
-      .mockResolvedValueOnce({ userId: 7, productId: 1, size: 'S', quantity: 2 })
-      .mockResolvedValueOnce(null);
+    basketRepository.find.mockResolvedValueOnce([
+      { userId: 7, productId: 1, size: 'S', quantity: 2 },
+    ]);
 
     await service.syncCart(7, [
       { productId: 1, size: 'S', quantity: 5 },
       { productId: 1, size: 'M', quantity: 1 },
     ]);
 
+    expect(basketRepository.findOne).not.toHaveBeenCalled();
     expect(basketRepository.save).toHaveBeenCalledTimes(1);
     expect(basketRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ size: 'S', quantity: 3 }),
@@ -237,7 +238,9 @@ describe('UsersService cart', () => {
     productService.findPurchasable.mockResolvedValue([
       { id: 1, sizes: ['S', 'M'], sizeStock: { S: 3, M: 0 }, count: 3 },
     ]);
-    basketRepository.findOne.mockResolvedValueOnce({ id: 9, userId: 7, productId: 1, size: 'M', quantity: 1 });
+    basketRepository.find.mockResolvedValueOnce([
+      { id: 9, userId: 7, productId: 1, size: 'M', quantity: 1 },
+    ]);
 
     await service.syncCart(7, [{ productId: 1, size: 'M', quantity: 1 }]);
 
@@ -261,6 +264,20 @@ describe('UsersService cart', () => {
       size: 'M',
       quantity: 2,
     });
+  });
+
+  it('adds duplicate items of one request to the position created earlier', async () => {
+    productService.findPurchasable.mockResolvedValue([{ id: 1, sizes: ['M'], count: null }]);
+
+    await service.syncCart(7, [
+      { productId: 1, size: 'M', quantity: 2 },
+      { productId: 1, size: 'M', quantity: 3 },
+    ]);
+
+    expect(basketRepository.findOne).not.toHaveBeenCalled();
+    expect(basketRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ productId: 1, size: 'M', quantity: 5 }),
+    );
   });
 });
 

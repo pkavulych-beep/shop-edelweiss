@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { MAX_INT } from '../../common/constants';
 
@@ -16,12 +16,15 @@ export class SyncCartItemDto {
   size?: string;
 
   @IsNotEmpty({ message: 'Вкажіть кількість' })
-  @IsNumber({}, { message: 'Кількість має бути числом' })
+  @IsInt({ message: 'Кількість має бути цілим числом' })
+  @Min(1, { message: 'Кількість має бути не менше 1' })
+  @Max(100, { message: 'Кількість має бути не більше 100' })
   quantity: number;
 }
 
 export class SyncCartDto {
   @IsArray({ message: 'Товари мають бути передані списком' })
+  @ArrayMaxSize(100, { message: 'У кошику може бути не більше 100 позицій' })
   @ValidateNested({ each: true, message: 'Некоректні дані товару в кошику' })
   @Type(() => SyncCartItemDto)
   items: SyncCartItemDto[];

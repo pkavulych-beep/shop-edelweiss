@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserEntity } from './entities/user.entity';
@@ -254,14 +254,26 @@ export class UsersService {
       ).map((product) => [product.id, product]),
     );
 
+    // Наявні позиції читаємо одним запитом, щоб не робити findOne на кожен товар
+    const existingItems = await this.basketRepository.find({
+      where: {
+        userId: idUser,
+        productId: In(items.map((item) => item.productId)),
+      },
+    });
+    const existingByKey = new Map(
+      existingItems.map((item) => [
+        `${item.productId}\u0000${item.size}`,
+        item,
+      ]),
+    );
+
     for (const item of items) {
       const product = purchasable.get(item.productId);
       if (!product) continue;
       const size = item.size ?? '';
-
-      const existing = await this.basketRepository.findOne({
-        where: { userId: idUser, productId: item.productId, size },
-      });
+      const key = `${item.productId}\u0000${size}`;
+      const existing = existingByKey.get(key);
 
       const available = availableFor(product, size);
       const wanted = (existing?.quantity ?? 0) + item.quantity;
@@ -272,6 +284,7 @@ export class UsersService {
         // Розмір розпродали, поки товар лежав у кошику — прибираємо позицію
         if (quantity <= 0) {
           await this.basketRepository.delete({ id: existing.id });
+          existingByKey.delete(key);
           continue;
         }
         existing.quantity = quantity;
@@ -285,6 +298,8 @@ export class UsersService {
           quantity,
         });
         await this.basketRepository.save(basketItem);
+        // Дубль у запиті має додаватися до позиції, яку ми щойно створили
+        existingByKey.set(key, basketItem);
       }
     }
     return await this.getCartItems(idUser);
