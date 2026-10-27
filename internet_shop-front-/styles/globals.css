@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
-
 :root {
   /* ── Primary ── */
   --color-primary: #745c00;
@@ -34,7 +32,6 @@ html,
 body {
   padding: 0;
   margin: 0;
-  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: var(--color-surface);
   color: var(--color-on-surface);
   -webkit-font-smoothing: antialiased;
@@ -47,7 +44,6 @@ a {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Manrope', sans-serif;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -55,7 +51,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 p, div, span, del {
-  font-family: 'Manrope', sans-serif;
   font-weight: 400;
 }
 
