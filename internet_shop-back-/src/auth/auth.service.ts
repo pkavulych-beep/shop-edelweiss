@@ -108,7 +108,8 @@ export class AuthService {
       throw new UnauthorizedException('Сесія завершилася, увійдіть знову');
     }
 
-    const user = await this.usersService.findById(stored.userId);
+    // Для видачі токенів потрібні лише id і ролі, без кошика
+    const user = await this.usersService.findForAuth(stored.userId);
     if (!user) {
       throw new UnauthorizedException('Сесія завершилася, увійдіть знову');
     }
@@ -121,6 +122,14 @@ export class AuthService {
       { revokedAt: new Date() },
     );
   }
+
+  // Профіль — єдиний захищений запит, якому потрібен кошик: JwtStrategy його
+  // не тягне, тому тут довантажуємо позиції самі
+  async getProfile(user: { id: number }) {
+    const cartItems = await this.usersService.getCartItems(user.id);
+    return { ...user, cartItems };
+  }
+
 
   async changePassword(userId: number, dto: ChangePasswordDto) {
     const user = await this.usersService.findByIdWithPassword(userId);

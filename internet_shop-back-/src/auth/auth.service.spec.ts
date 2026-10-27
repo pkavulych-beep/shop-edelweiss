@@ -210,8 +210,9 @@ describe('AuthService refresh tokens', () => {
   beforeEach(() => {
     rows = [];
     usersService = {
-      findById: jest.fn().mockResolvedValue(user),
+      findForAuth: jest.fn().mockResolvedValue(user),
       findByIdWithPassword: jest.fn(),
+      getCartItems: jest.fn().mockResolvedValue([]),
       setPasswordHash: jest.fn(),
     };
     let nextToken = 0;
@@ -260,7 +261,7 @@ describe('AuthService refresh tokens', () => {
 
     expect(second.token).toBe('access-2');
     expect(second.refreshToken).not.toBe(first.refreshToken);
-    expect(usersService.findById).toHaveBeenCalledWith(user.id);
+    expect(usersService.findForAuth).toHaveBeenCalledWith(user.id);
     await expect(service.refresh(first.refreshToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
@@ -316,7 +317,7 @@ describe('AuthService refresh tokens', () => {
 
   it('rejects the refresh token of a deleted user', async () => {
     const { refreshToken } = await service.issueTokens(user as any);
-    usersService.findById.mockResolvedValue(null);
+    usersService.findForAuth.mockResolvedValue(null);
 
     await expect(service.refresh(refreshToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -381,5 +382,44 @@ describe('AuthService refresh tokens', () => {
       UnauthorizedException,
     );
     await expect(service.refresh(current.refreshToken)).resolves.toBeDefined();
+  });
+});
+
+describe('AuthService.getProfile', () => {
+  let usersService;
+  let service: AuthService;
+
+  beforeEach(() => {
+    usersService = { getCartItems: jest.fn() };
+    service = new AuthService(usersService, {} as any, {} as any);
+  });
+
+  it('appends the cart, which authentication does not load', async () => {
+    const cartItems = [
+      {
+        id: 7,
+        userId: 5,
+        productId: 12,
+        size: 'M',
+        quantity: 2,
+        product: { id: 12, name: 'Джинси', price: 1000 },
+      },
+    ];
+    usersService.getCartItems.mockResolvedValue(cartItems);
+
+    await expect(service.getProfile({ id: 5 })).resolves.toEqual({
+      id: 5,
+      cartItems,
+    });
+    expect(usersService.getCartItems).toHaveBeenCalledWith(5);
+  });
+
+  it('returns an empty cart the same way', async () => {
+    usersService.getCartItems.mockResolvedValue([]);
+
+    await expect(service.getProfile({ id: 5 })).resolves.toEqual({
+      id: 5,
+      cartItems: [],
+    });
   });
 });

@@ -82,6 +82,15 @@ export class UsersService {
     });
   }
 
+  // Для автентифікації (JwtStrategy) потрібні лише ролі: кошик із товарами
+  // щоразу провертати в запиті зайве. Кошик довантажує /auth/profile.
+  async findForAuth(id: number): Promise<UserEntity | null> {
+    return await this.repository.findOne({
+      where: { id: +id },
+      relations: ['roles'],
+    });
+  }
+
   // Пароль має select: false, тож для входу додаємо його в запит явно
   async findByPhoneWithPassword(phoneNumber: string): Promise<UserEntity> {
     return await this.repository

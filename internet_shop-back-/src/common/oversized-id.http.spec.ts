@@ -20,6 +20,7 @@ const HUGE = '99999999999';
 
 const usersService = {
   findById: jest.fn(),
+  findForAuth: jest.fn(),
   findOrders: jest.fn(),
   cleanTheBasket: jest.fn(),
   update: jest.fn(),
@@ -94,7 +95,7 @@ describe('an id bigger than PostgreSQL integer', () => {
       Object.values(mocks).forEach(mock => mock.mockReset()),
     );
     // JwtStrategy читає користувача з бази на кожен запит із токеном
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       id: 1,
       password: 'secret',
       roles: [{ value: 'ADMIN' }],

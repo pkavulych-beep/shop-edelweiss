@@ -11,7 +11,7 @@ describe('JwtStrategy', () => {
     roles: [{ value: 'USER' }, { value: 'ADMIN' }],
   };
 
-  let usersService: { findById: jest.Mock };
+  let usersService: { findForAuth: jest.Mock };
   let strategy: JwtStrategy;
 
   beforeAll(() => {
@@ -23,7 +23,8 @@ describe('JwtStrategy', () => {
   });
 
   beforeEach(() => {
-    usersService = { findById: jest.fn().mockResolvedValue(admin) };
+    // Стратегія читає користувача лише з ролями, без кошика
+    usersService = { findForAuth: jest.fn().mockResolvedValue(admin) };
     strategy = new JwtStrategy(usersService as any);
   });
 
@@ -33,7 +34,7 @@ describe('JwtStrategy', () => {
       phoneNumber: admin.phoneNumber,
       roles: admin.roles,
     });
-    expect(usersService.findById).toHaveBeenCalledWith(1);
+    expect(usersService.findForAuth).toHaveBeenCalledWith(1);
   });
 
   it('accepts an id sent as a numeric string', async () => {
@@ -45,7 +46,7 @@ describe('JwtStrategy', () => {
   });
 
   it('gives 401 when the user has been deleted', async () => {
-    usersService.findById.mockResolvedValue(null);
+    usersService.findForAuth.mockResolvedValue(null);
 
     await expect(
       strategy.validate({ sub: 1, phoneNumber: admin.phoneNumber }),
@@ -63,6 +64,6 @@ describe('JwtStrategy', () => {
     ['the id is not an integer', { sub: 1.5, phoneNumber: admin.phoneNumber }],
   ])('gives 401 when %s', async (_, payload) => {
     await expect(strategy.validate(payload as any)).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(usersService.findById).not.toHaveBeenCalled();
+    expect(usersService.findForAuth).not.toHaveBeenCalled();
   });
 });

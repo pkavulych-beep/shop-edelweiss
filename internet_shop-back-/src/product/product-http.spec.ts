@@ -12,7 +12,7 @@ import { IMAGE_FORMAT_ERROR, IMAGE_SIZE_ERROR, MAX_IMAGE_SIZE_BYTES } from 'src/
 const SECRET = 'product-http-spec-secret';
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 
-const usersService = { findById: jest.fn() };
+const usersService = { findForAuth: jest.fn() };
 const productService = {
   create: jest.fn(),
   findOne: jest.fn(),
@@ -45,7 +45,7 @@ describe('ProductController over HTTP', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = SECRET;
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       id: 1,
       password: 'secret',
       roles: [{ value: 'ADMIN' }],

@@ -19,7 +19,7 @@ class AdminController {
 }
 
 describe('RolesGuard', () => {
-  let usersService: { findById: jest.Mock };
+  let usersService: { findForAuth: jest.Mock };
   let guard: RolesGuard;
   let token: string;
   const originalSecret = process.env.JWT_SECRET;
@@ -59,7 +59,7 @@ describe('RolesGuard', () => {
   });
 
   beforeEach(() => {
-    usersService = { findById: jest.fn().mockResolvedValue(admin) };
+    usersService = { findForAuth: jest.fn().mockResolvedValue(admin) };
     // Реєструє стратегію 'jwt' у passport, як це робить AuthModule
     new JwtStrategy(usersService as any);
     guard = new RolesGuard(new Reflector());
@@ -75,7 +75,7 @@ describe('RolesGuard', () => {
     const { req, context } = adminRequest();
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(usersService.findById).toHaveBeenCalledWith(admin.id);
+    expect(usersService.findForAuth).toHaveBeenCalledWith(admin.id);
     expect(req.user).toEqual({
       id: admin.id,
       phoneNumber: admin.phoneNumber,
@@ -86,7 +86,7 @@ describe('RolesGuard', () => {
   it('gives 403 to the same token right after ADMIN is taken away in the database', async () => {
     await expect(guard.canActivate(adminRequest().context)).resolves.toBe(true);
 
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       ...admin,
       roles: [{ value: 'USER' }],
     });
@@ -97,7 +97,7 @@ describe('RolesGuard', () => {
   });
 
   it('gives 401 when the user has been deleted', async () => {
-    usersService.findById.mockResolvedValue(null);
+    usersService.findForAuth.mockResolvedValue(null);
 
     await expect(guard.canActivate(adminRequest().context)).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -108,7 +108,7 @@ describe('RolesGuard', () => {
     await expect(guard.canActivate(adminRequest({} as any).context)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
-    expect(usersService.findById).not.toHaveBeenCalled();
+    expect(usersService.findForAuth).not.toHaveBeenCalled();
   });
 
   it('gives 401 for a token signed with another secret', async () => {
@@ -117,7 +117,7 @@ describe('RolesGuard', () => {
     await expect(
       guard.canActivate(adminRequest({ authorization: `Bearer ${forged}` }).context),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(usersService.findById).not.toHaveBeenCalled();
+    expect(usersService.findForAuth).not.toHaveBeenCalled();
   });
 
   // super.canActivate має кинути 401, але якщо автентифікація колись поверне
@@ -133,13 +133,13 @@ describe('RolesGuard', () => {
     } finally {
       spy.mockRestore();
     }
-    expect(usersService.findById).not.toHaveBeenCalled();
+    expect(usersService.findForAuth).not.toHaveBeenCalled();
   });
 
   it('does not check anything for a handler without @Roles', async () => {
     const { context } = contextFor(AdminController.prototype.open);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(usersService.findById).not.toHaveBeenCalled();
+    expect(usersService.findForAuth).not.toHaveBeenCalled();
   });
 });
