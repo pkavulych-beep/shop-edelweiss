@@ -15,13 +15,28 @@ const ROLES = [
   { value: 'ADMIN', description: 'Адміністратор' },
 ];
 
+const DEFAULT_ADMIN_PASSWORD = 'admin12345';
+
 // The password is stored as a bcrypt hash, the same way UsersService.create stores it.
 const ADMIN = {
   fullName: process.env.SEED_ADMIN_NAME || 'Адміністратор',
   phoneNumber: process.env.SEED_ADMIN_PHONE || '380990000000',
-  password: process.env.SEED_ADMIN_PASSWORD || 'admin12345',
   email: process.env.SEED_ADMIN_EMAIL || 'admin@example.com',
 };
+
+// In production the known default password would let anyone log in as the first admin,
+// so it is allowed only locally: deployers must pass SEED_ADMIN_PASSWORD explicitly.
+function getAdminPassword() {
+  if (process.env.SEED_ADMIN_PASSWORD) {
+    return process.env.SEED_ADMIN_PASSWORD;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SEED_ADMIN_PASSWORD is required in production: refusing to create the first admin with the default password.',
+    );
+  }
+  return DEFAULT_ADMIN_PASSWORD;
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -73,7 +88,7 @@ async function main() {
       ({ rows } = await client.query(
         `INSERT INTO users ("fullName", email, "phoneNumber", password)
          VALUES ($1, $2, $3, $4) RETURNING id`,
-        [ADMIN.fullName, ADMIN.email, ADMIN.phoneNumber, await bcrypt.hash(ADMIN.password, 10)],
+        [ADMIN.fullName, ADMIN.email, ADMIN.phoneNumber, await bcrypt.hash(getAdminPassword(), 10)],
       ));
       console.log(`Created admin ${ADMIN.phoneNumber}`);
     }
