@@ -711,7 +711,10 @@ describe('OrderService', () => {
         ),
         transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
       };
-      const repository = { manager: mockManager };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue({ id: 10, status: Status.Processed, items }),
+        manager: mockManager,
+      };
       const service = new OrderService(repository as any, {} as any, {} as any);
 
       await service.updateStatus(10, Status.Canceled);
@@ -887,6 +890,69 @@ describe('OrderService', () => {
         call => call[0] === ProductEntity || (call[0] && call[0].name === 'ProductEntity')
       );
       expect(productSaves.length).toBe(0);
+    });
+  });
+
+  describe('updateStatus for a pending CARD order', () => {
+    const pendingCardOrder = {
+      id: 10,
+      status: Status.Processed,
+      paymentMethod: PaymentMethod.Card,
+      paymentStatus: PaymentStatus.Pending,
+      paymentInvoiceId: 'invoice-1',
+      items: [],
+    };
+
+    it('delegates cancellation to PaymentService to invalidate the mono invoice', async () => {
+      const repository = {
+        findOne: jest.fn().mockResolvedValue(pendingCardOrder),
+        manager: { transaction: jest.fn() },
+      };
+      const paymentService = {
+        cancelPendingCardOrder: jest
+          .fn()
+          .mockResolvedValue({ id: 10, status: Status.Canceled }),
+      };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      (service as any).paymentService = paymentService;
+
+      await expect(service.updateStatus(10, Status.Canceled)).resolves.toEqual({
+        id: 10,
+        status: Status.Canceled,
+      });
+
+      expect(paymentService.cancelPendingCardOrder).toHaveBeenCalledWith(
+        10,
+        'invoice-1',
+        {},
+      );
+      expect(repository.manager.transaction).not.toHaveBeenCalled();
+    });
+
+    it('cancels a COD order itself without asking PaymentService', async () => {
+      const codOrder = {
+        ...pendingCardOrder,
+        paymentMethod: PaymentMethod.Cod,
+        paymentStatus: PaymentStatus.NotRequired,
+        paymentInvoiceId: null,
+      };
+      const mockManager = {
+        save: jest.fn().mockImplementation((entity, data) => Promise.resolve({ ...data })),
+        findOne: jest.fn().mockResolvedValue(codOrder),
+        transaction: jest.fn().mockImplementation(async (callback) => callback(mockManager)),
+      };
+      const repository = {
+        findOne: jest.fn().mockResolvedValue(codOrder),
+        manager: mockManager,
+      };
+      const paymentService = { cancelPendingCardOrder: jest.fn() };
+      const service = new OrderService(repository as any, {} as any, {} as any);
+      (service as any).paymentService = paymentService;
+
+      await service.updateStatus(10, Status.Canceled);
+
+      expect(paymentService.cancelPendingCardOrder).not.toHaveBeenCalled();
+      expect(mockManager.transaction).toHaveBeenCalled();
     });
   });
 

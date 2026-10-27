@@ -701,6 +701,22 @@ describe('PaymentService', () => {
       expect(order.paidAt).toEqual(T1);
     });
 
+    it('keeps a payment that came to an already canceled order and logs an error', async () => {
+      order.status = Status.Canceled;
+      order.paymentStatus = PaymentStatus.Failed;
+      const error = jest.spyOn((service as any).logger, 'error').mockImplementation();
+      paymentProvider.verifyWebhook.mockResolvedValueOnce(event());
+
+      await service.handleWebhook(input);
+
+      expect(order.status).toBe(Status.Canceled);
+      expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+      expect(order.paidAt).toEqual(T1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('Оплата надійшла на скасоване замовлення 10'),
+      );
+    });
+
     it('writes every webhook to the journal with its raw payload', async () => {
       paymentProvider.verifyWebhook.mockResolvedValueOnce(event());
 
@@ -852,6 +868,208 @@ describe('PaymentService', () => {
       await service.handleWebhook(input);
 
       expect(manager.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelPendingCardOrder', () => {
+    const INVOICE_ID = 'mono-invoice-123';
+    let invoiceLog: any;
+    let order: any;
+
+    const statusLogs = () =>
+      manager.save.mock.calls.filter(
+        ([entity, data]: [unknown, any]) =>
+          entity === PaymentEntity && data.kind === PaymentLogKind.StatusCheck,
+      );
+
+    beforeEach(() => {
+      invoiceLog = {
+        id: 1,
+        orderId: 10,
+        provider: 'mono',
+        invoiceId: INVOICE_ID,
+        kind: PaymentLogKind.Invoice,
+        amount: 150000,
+        status: PaymentStatus.Pending,
+        providerModifiedAt: null,
+      };
+      order = {
+        ...mockOrder,
+        status: Status.Processed,
+        paymentStatus: PaymentStatus.Pending,
+        paymentInvoiceId: INVOICE_ID,
+      };
+
+      paymentRepository.findOne.mockResolvedValue(invoiceLog);
+      manager.findOne.mockImplementation((entity: unknown) =>
+        Promise.resolve(entity === PaymentEntity ? invoiceLog : order),
+      );
+      paymentProvider.getInvoiceStatus = jest.fn().mockResolvedValue({
+        invoiceId: INVOICE_ID,
+        status: 'created',
+        amount: 150000,
+        ccy: 980,
+      });
+      paymentProvider.invalidateInvoice = jest.fn().mockResolvedValue(undefined);
+      orderService.cancelUnpaidOrder = jest.fn().mockImplementation(async () => {
+        order.status = Status.Canceled;
+        order.paymentStatus = PaymentStatus.Failed;
+        return order;
+      });
+    });
+
+    it('invalidates the invoice before cancelling the order and marks payment FAILED', async () => {
+      const result = await service.cancelPendingCardOrder(10, INVOICE_ID);
+
+      expect(paymentProvider.getInvoiceStatus).toHaveBeenCalledWith(INVOICE_ID);
+      expect(paymentProvider.invalidateInvoice).toHaveBeenCalledWith(INVOICE_ID);
+      // Рахунок анулюємо строго до скасування, щоб його вже не можна було оплатити.
+      expect(paymentProvider.invalidateInvoice.mock.invocationCallOrder[0]).toBeLessThan(
+        orderService.cancelUnpaidOrder.mock.invocationCallOrder[0],
+      );
+      expect(orderService.cancelUnpaidOrder).toHaveBeenCalledWith(
+        manager,
+        10,
+        INVOICE_ID,
+        {},
+      );
+      expect(result).toBe(order);
+      expect(statusLogs()).toHaveLength(1);
+      expect(statusLogs()[0][1]).toEqual(
+        expect.objectContaining({
+          status: PaymentStatus.Failed,
+          rawPayload: {
+            status: 'canceled',
+            reason: 'admin_canceled',
+            monoStatus: 'created',
+          },
+        }),
+      );
+      expect(invoiceLog.status).toBe(PaymentStatus.Failed);
+      expect(invoiceLog.providerModifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('returns 409 instead of 200 when the order changed while mono was called', async () => {
+      orderService.cancelUnpaidOrder.mockResolvedValueOnce(null);
+      order.paymentStatus = PaymentStatus.Failed;
+
+      await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+        'Стан оплати змінився, спробуйте ще раз',
+      );
+
+      expect(statusLogs()).toHaveLength(0);
+      expect(invoiceLog.status).toBe(PaymentStatus.Pending);
+      expect(order.status).toBe(Status.Processed);
+    });
+
+    it('applies the payment and refuses to cancel when mono already paid the invoice', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+        invoiceId: INVOICE_ID,
+        status: 'success',
+        amount: 150000,
+        ccy: 980,
+        modifiedDate: '2026-10-13T11:00:00Z',
+      });
+      manager.findOne.mockImplementation((entity: unknown) =>
+        Promise.resolve(entity === PaymentEntity ? invoiceLog : order),
+      );
+
+      await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+        'Замовлення вже оплачене. Спершу поверніть кошти',
+      );
+
+      expect(invoiceLog.status).toBe(PaymentStatus.Paid);
+      expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+      expect(order.paidAt).toEqual(new Date('2026-10-13T11:00:00Z'));
+      expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+    });
+
+    it('cancels without invalidating an invoice that already expired', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+        invoiceId: INVOICE_ID,
+        status: 'expired',
+        amount: 150000,
+        ccy: 980,
+      });
+
+      await service.cancelPendingCardOrder(10, INVOICE_ID);
+
+      expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+      expect(orderService.cancelUnpaidOrder).toHaveBeenCalledWith(
+        manager,
+        10,
+        INVOICE_ID,
+        {},
+      );
+    });
+
+    it.each(['processing', 'hold'])(
+      'returns 409 and keeps the order while mono is still %s',
+      async (monoStatus) => {
+        paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+          invoiceId: INVOICE_ID,
+          status: monoStatus,
+          amount: 150000,
+          ccy: 980,
+        });
+
+        await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+          'Оплата ще обробляється в mono, спробуйте пізніше',
+        );
+
+        expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+        expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+        expect(statusLogs()).toHaveLength(0);
+        expect(order.status).toBe(Status.Processed);
+        expect(order.paymentStatus).toBe(PaymentStatus.Pending);
+      },
+    );
+
+    it('stores mono modifiedDate on the invoice so a later webhook is not dropped', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+        invoiceId: INVOICE_ID,
+        status: 'created',
+        amount: 150000,
+        ccy: 980,
+        modifiedDate: '2026-10-13T11:00:00Z',
+      });
+
+      await service.cancelPendingCardOrder(10, INVOICE_ID);
+
+      expect(invoiceLog.providerModifiedAt).toEqual(new Date('2026-10-13T11:00:00Z'));
+      expect(statusLogs()[0][1].providerModifiedAt).toEqual(
+        new Date('2026-10-13T11:00:00Z'),
+      );
+    });
+
+    it('keeps the order when mono is unavailable', async () => {
+      paymentProvider.getInvoiceStatus.mockRejectedValueOnce(
+        new InternalServerErrorException('Mono API error: 429'),
+      );
+
+      await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+        'Не вдалося перевірити статус оплати в mono. Замовлення не скасовано',
+      );
+
+      expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+      expect(order.status).toBe(Status.Processed);
+      expect(order.paymentStatus).toBe(PaymentStatus.Pending);
+    });
+
+    it('keeps the order when the invoice cannot be invalidated', async () => {
+      paymentProvider.invalidateInvoice.mockRejectedValueOnce(
+        new InternalServerErrorException('Mono API error: 500'),
+      );
+
+      await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+        'Не вдалося анулювати рахунок у mono. Замовлення не скасовано',
+      );
+
+      expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+      expect(order.status).toBe(Status.Processed);
+      expect(order.paymentStatus).toBe(PaymentStatus.Pending);
     });
   });
 
