@@ -12,6 +12,7 @@ export interface IBasketItemResponse {
     id: number;
     name: string;
     cover: string;
+    coverThumb?: string | null;
     sizes: string[];
     sizeStock?: Record<string, number> | null;
     price: number;

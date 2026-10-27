@@ -12,7 +12,7 @@ export const ProductsList: FC = () => {
   return (
     <div className={s.container}>
       {data.map((product) => {
-        const { id, cover, name, salePrice, price, brand, category, count, status } = product;
+        const { id, cover, coverThumb, name, salePrice, price, brand, category, count, status } = product;
         const categoryLabel = category ? categoryLabels[category] || category : '';
         const isOutOfStock = status === 'out-of-stock' || (count != null && count <= 0);
         return (
@@ -20,7 +20,7 @@ export const ProductsList: FC = () => {
             <div className={s.imageWrapper}>
               <img
                 className={s.image}
-                src={cover}
+                src={coverThumb || cover}
                 alt={name}
                 loading="lazy"
               />

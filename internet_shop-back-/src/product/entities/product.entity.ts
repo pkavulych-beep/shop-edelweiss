@@ -56,6 +56,14 @@ export class ProductEntity {
   @Transform(({ value }) => toPublicFileUrl(value), { toPlainOnly: true })
   cover: string;
 
+  // Зменшена WebP-копія обкладинки для каталогу й кошика. У старих товарів
+  // її немає — тоді віддаємо `cover`, щоб фото не зникло.
+  @Column({ nullable: true })
+  @Transform(({ value, obj }) => toPublicFileUrl(value ?? obj.cover), {
+    toPlainOnly: true,
+  })
+  coverThumb: string;
+
   @OneToMany(() => PhotoEntity, (photo) => photo.product)
   photos: PhotoEntity[];
 

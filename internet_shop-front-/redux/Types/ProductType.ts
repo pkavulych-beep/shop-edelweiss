@@ -12,6 +12,8 @@ export interface IProduct {
   id: number;
   name: string;
   cover: string;
+  // Зменшена WebP-копія для сіток; null у старих товарів — тоді показуємо cover
+  coverThumb?: string | null;
   sizes: string[];
   // Залишок по розмірах ({ S: 3, M: 0 }); null — товар без розмірів, залишок у count
   sizeStock?: Record<string, number> | null;
@@ -46,6 +48,7 @@ export type CartProductDetails = {
   id: number;
   name: string;
   cover: string;
+  coverThumb?: string | null;
   sizes: string[];
   sizeStock?: Record<string, number> | null;
   count?: number | null;
