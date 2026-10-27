@@ -234,9 +234,21 @@ export class PaymentService {
       );
     }
 
+    // processing і hold: платіж ще обробляється і може завершитися успішно,
+    // тож, як і звірка, не чіпаємо ні рахунок, ні замовлення.
+    if (
+      status.status !== 'created' &&
+      status.status !== 'expired' &&
+      status.status !== 'failure'
+    ) {
+      throw new ConflictException(
+        'Оплата ще обробляється в mono, спробуйте пізніше',
+      );
+    }
+
     // Прострочений чи невдалий рахунок уже не можна оплатити, тож remove
     // для нього не потрібен (і mono може відповісти помилкою).
-    if (status.status !== 'expired' && status.status !== 'failure') {
+    if (status.status === 'created') {
       try {
         await this.paymentProvider.invalidateInvoice(invoiceId);
       } catch (error) {
@@ -287,7 +299,9 @@ export class PaymentService {
         throw new ConflictException('Стан оплати змінився, спробуйте ще раз');
       }
 
-      const cancelledAt = new Date();
+      // Дата mono, а не сервера: інакше вебхук із пізнішою датою mono, але
+      // ранішою за наш час, відкинувся б як застарілий.
+      const cancelledAt = this.statusModifiedDate(status) ?? new Date();
       await manager.save(
         PaymentEntity,
         manager.create(PaymentEntity, {

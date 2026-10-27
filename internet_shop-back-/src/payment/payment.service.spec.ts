@@ -1004,6 +1004,45 @@ describe('PaymentService', () => {
       );
     });
 
+    it.each(['processing', 'hold'])(
+      'returns 409 and keeps the order while mono is still %s',
+      async (monoStatus) => {
+        paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+          invoiceId: INVOICE_ID,
+          status: monoStatus,
+          amount: 150000,
+          ccy: 980,
+        });
+
+        await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+          'Оплата ще обробляється в mono, спробуйте пізніше',
+        );
+
+        expect(paymentProvider.invalidateInvoice).not.toHaveBeenCalled();
+        expect(orderService.cancelUnpaidOrder).not.toHaveBeenCalled();
+        expect(statusLogs()).toHaveLength(0);
+        expect(order.status).toBe(Status.Processed);
+        expect(order.paymentStatus).toBe(PaymentStatus.Pending);
+      },
+    );
+
+    it('stores mono modifiedDate on the invoice so a later webhook is not dropped', async () => {
+      paymentProvider.getInvoiceStatus.mockResolvedValueOnce({
+        invoiceId: INVOICE_ID,
+        status: 'created',
+        amount: 150000,
+        ccy: 980,
+        modifiedDate: '2026-10-13T11:00:00Z',
+      });
+
+      await service.cancelPendingCardOrder(10, INVOICE_ID);
+
+      expect(invoiceLog.providerModifiedAt).toEqual(new Date('2026-10-13T11:00:00Z'));
+      expect(statusLogs()[0][1].providerModifiedAt).toEqual(
+        new Date('2026-10-13T11:00:00Z'),
+      );
+    });
+
     it('keeps the order when mono is unavailable', async () => {
       paymentProvider.getInvoiceStatus.mockRejectedValueOnce(
         new InternalServerErrorException('Mono API error: 429'),
