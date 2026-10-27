@@ -25,7 +25,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('У вас немає доступу до цієї сторінки');
     }
 
-    const user = await this.usersService.findById(id);
+    // Автентифікації потрібні лише id і ролі, тому користувача читаємо без
+    // кошика з товарами (їх на кожному запиті провертати зайве)
+    const user = await this.usersService.findForAuth(id);
 
     if (!user) {
       throw new UnauthorizedException('У вас немає доступу до цієї сторінки');

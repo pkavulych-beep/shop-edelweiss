@@ -47,7 +47,7 @@ class PrivateController {
 @Module({
   imports: [PassportModule],
   controllers: [AdminOnlyController, AdminPrivateController, PrivateController],
-  providers: [JwtStrategy, { provide: UsersService, useValue: { findById: jest.fn() } }],
+  providers: [JwtStrategy, { provide: UsersService, useValue: { findForAuth: jest.fn() } }],
 })
 class TestAuthModule {}
 
@@ -74,7 +74,7 @@ describe('Guards over HTTP', () => {
   const malformedToken = jwt.sign({ phoneNumber: user.phoneNumber });
 
   let app: INestApplication;
-  let usersService: { findById: jest.Mock };
+  let usersService: { findForAuth: jest.Mock };
 
   beforeAll(async () => {
     process.env.JWT_SECRET = SECRET;
@@ -82,7 +82,7 @@ describe('Guards over HTTP', () => {
     app = moduleRef.createNestApplication();
     await app.init();
     usersService = moduleRef.get(UsersService);
-    usersService.findById.mockImplementation((id: number) =>
+    usersService.findForAuth.mockImplementation((id: number) =>
       Promise.resolve(id === admin.id ? admin : id === user.id ? user : null),
     );
   });

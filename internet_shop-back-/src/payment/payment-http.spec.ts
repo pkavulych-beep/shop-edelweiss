@@ -10,7 +10,7 @@ import { PaymentService } from './payment.service';
 
 const SECRET = 'payment-http-spec-secret';
 
-const usersService = { findById: jest.fn() };
+const usersService = { findForAuth: jest.fn() };
 const paymentService = {
   createInvoice: jest.fn(),
   refund: jest.fn(),
@@ -41,7 +41,7 @@ describe('PaymentController over HTTP', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = SECRET;
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       id: 1,
       password: 'secret',
       roles: [{ value: 'ADMIN' }],
@@ -57,7 +57,7 @@ describe('PaymentController over HTTP', () => {
   });
 
   beforeEach(() => {
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       id: 1,
       password: 'secret',
       roles: [{ value: 'ADMIN' }],
@@ -96,7 +96,7 @@ describe('PaymentController over HTTP', () => {
   });
 
   it('gives 403 to a regular user', async () => {
-    usersService.findById.mockResolvedValue({
+    usersService.findForAuth.mockResolvedValue({
       id: 2,
       password: 'secret',
       roles: [{ value: 'USER' }],

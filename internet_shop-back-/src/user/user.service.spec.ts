@@ -430,3 +430,29 @@ describe('UsersService passwords', () => {
     });
   });
 });
+
+describe('UsersService.findForAuth', () => {
+  let repository;
+  let service: UsersService;
+
+  beforeEach(() => {
+    repository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 3,
+        roles: [{ value: 'USER' }],
+      }),
+    };
+    service = new UsersService(repository, {} as any, {} as any, {} as any);
+  });
+
+  it('reads the user with roles only, without the cart', async () => {
+    await expect(service.findForAuth(3)).resolves.toEqual({
+      id: 3,
+      roles: [{ value: 'USER' }],
+    });
+    expect(repository.findOne).toHaveBeenCalledWith({
+      where: { id: 3 },
+      relations: ['roles'],
+    });
+  });
+});
