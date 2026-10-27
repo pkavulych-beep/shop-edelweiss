@@ -130,6 +130,7 @@ const Cart: NextPage = () => {
                     size={product.selectedSize}
                     price={product.price}
                     cover={product.cover}
+                    coverThumb={product.coverThumb}
                     salePrice={product.salePrice}
                     quantity={product.quantity}
                     available={product.available}

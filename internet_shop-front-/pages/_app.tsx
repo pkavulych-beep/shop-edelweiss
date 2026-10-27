@@ -88,6 +88,7 @@ App.getInitialProps = wrapper.getInitialAppProps((store) =>
           id: item.product.id,
           name: item.product.name,
           cover: item.product.cover,
+          coverThumb: item.product.coverThumb,
           sizes: item.product.sizes || [],
           price: item.product.price,
           salePrice: item.product.salePrice ?? null,

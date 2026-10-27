@@ -16,6 +16,7 @@ import {
 import { ProductEntity, ProductStatus } from './entities/product.entity';
 import { BasketItemEntity } from '../user/entities/basket-item.entity';
 import { FileService, FileType } from 'src/file/file.service';
+import { thumbnailPath } from 'src/file/thumbnail';
 import { PhotosService } from '../photos/photos.service';
 import { fromSizeStock } from './stock';
 
@@ -47,12 +48,12 @@ export class ProductService {
     const createFile = (photoFile) =>
       this.fileService.createFile(FileType.IMAGE, photoFile);
 
-    const coverUrl = createFile(photos[0]);
+    const coverUrl = await createFile(photos[0]);
 
     const picturePathArr = [];
     if (photos.length > 1) {
       for (let i = 1; i < photos.length; i++) {
-        const photoUrl = createFile(photos[i]);
+        const photoUrl = await createFile(photos[i]);
         const res = await this.photosService.create({ url: photoUrl });
         picturePathArr.push(res);
       }
@@ -73,6 +74,7 @@ export class ProductService {
     return this.repository.save(
       this.repository.create({
         cover: coverUrl,
+        coverThumb: thumbnailPath(coverUrl),
         photos: photos.length > 1 ? picturePathArr : null,
         status: ProductStatus.Active,
         ...dto,
@@ -267,7 +269,7 @@ export class ProductService {
     if (uniqueIds.length === 0) return [];
     const products = await manager.find(ProductEntity, {
       where: { id: In(uniqueIds) },
-      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'salePrice'],
+      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'coverThumb', 'salePrice'],
     });
     if (products.length !== uniqueIds.length) {
       throw new NotFoundException(null, 'Товар не знайдено');
@@ -279,7 +281,7 @@ export class ProductService {
     if (!ids || ids.length === 0) return [];
     return this.repository.find({
       where: { id: In(ids) },
-      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'salePrice'],
+      select: ['id', 'name', 'sizes', 'sizeStock', 'count', 'price', 'cover', 'coverThumb', 'salePrice'],
     });
   }
 
@@ -344,7 +346,7 @@ export class ProductService {
     }
 
     try {
-      await this.fileService.deleteFile(product.cover);
+      await this.fileService.deleteImage(product.cover);
     } catch (e) {
       console.warn('Cover file not found, skipping:', e.message);
     }
@@ -352,7 +354,7 @@ export class ProductService {
     if (product.photos) {
       for (const photo of product.photos) {
         try {
-          await this.fileService.deleteFile(photo.url);
+          await this.fileService.deleteImage(photo.url);
         } catch (e) {
           console.warn('Photo file not found, skipping:', e.message);
         }

@@ -184,13 +184,13 @@ const OrderCard: FC<{ order: Order; cardPaymentAvailable: boolean }> = ({
                 bgcolor: '#eceeee',
               }}
             >
-              {product.cover && (
+              {product.coverThumb || product.cover ? (
                 <img
-                  src={product.cover}
+                  src={product.coverThumb || product.cover}
                   alt={product.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
-              )}
+              ) : null}
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Link href={'/product/' + product.id} style={{ textDecoration: 'none', color: 'inherit' }}>

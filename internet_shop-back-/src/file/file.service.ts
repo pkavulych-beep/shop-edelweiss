@@ -8,8 +8,10 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import * as uuid from 'uuid';
+import * as sharp from 'sharp';
 import { getUploadsDir } from './uploads-dir';
 import { validateImageFile } from './image';
+import { THUMBNAIL_MAX_SIZE, THUMBNAIL_QUALITY, thumbnailPath } from './thumbnail';
 
 export enum FileType {
   IMAGE = 'image',
@@ -21,7 +23,10 @@ export class FileService {
 
   // Повертає відносний шлях (`image/<uuid>.png`): домен і порт API можуть
   // змінитися, тому повний URL збираємо з поточного BASE_URL під час відповіді.
-  createFile(type: FileType, file): string {
+  // Поруч з оригіналом одразу створюємо WebP-мініатюру для списків і кошика.
+  async createFile(type: FileType, file): Promise<string> {
+    let absolutePath: string | null = null;
+
     try {
       const fileExtension = validateImageFile(file);
       const fileName = uuid.v4() + '.' + fileExtension;
@@ -29,9 +34,28 @@ export class FileService {
       if (!fs.existsSync(filePath)) {
         fs.mkdirSync(filePath, { recursive: true });
       }
-      fs.writeFileSync(path.resolve(filePath, fileName), file.buffer);
+      absolutePath = path.resolve(filePath, fileName);
+      fs.writeFileSync(absolutePath, file.buffer);
+
+      const thumbPath = thumbnailPath(type + '/' + fileName);
+      await sharp(file.buffer)
+        .rotate()
+        .resize({
+          width: THUMBNAIL_MAX_SIZE,
+          height: THUMBNAIL_MAX_SIZE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: THUMBNAIL_QUALITY })
+        .toFile(path.resolve(getUploadsDir(), thumbPath));
+
       return type + '/' + fileName;
     } catch (e) {
+      // Оригінал без мініатюри лишати не можна: інакше він назавжди
+      // вантажитиметься в каталозі як фолбек.
+      if (absolutePath) {
+        fs.rmSync(absolutePath, { force: true });
+      }
       if (e instanceof HttpException) {
         throw e;
       }
@@ -58,6 +82,20 @@ export class FileService {
       }
       this.logger.error('Failed to delete file', e);
       throw new HttpException('Не вдалося видалити файл', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // Видаляє оригінал разом з його мініатюрою. Відсутня мініатюра (товари,
+  // завантажені до її появи) не заважає видалити оригінал.
+  async deleteImage(filePath: string) {
+    await this.deleteFile(filePath);
+
+    try {
+      await this.deleteFile(thumbnailPath(filePath));
+    } catch (e) {
+      if (!(e instanceof HttpException) || e.getStatus() !== HttpStatus.NOT_FOUND) {
+        throw e;
+      }
     }
   }
 
