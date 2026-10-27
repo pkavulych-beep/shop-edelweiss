@@ -104,6 +104,27 @@ describe('ProductService', () => {
     });
   });
 
+  describe('findByIds', () => {
+    it('returns the status so the cart can mark hidden products unavailable', async () => {
+      repository.find.mockResolvedValue([
+        { id: 1, status: ProductStatus.Hidden },
+      ]);
+
+      await expect(service.findByIds([1])).resolves.toEqual([
+        { id: 1, status: ProductStatus.Hidden },
+      ]);
+
+      const options = repository.find.mock.calls[0][0];
+      expect(options.select).toContain('status');
+      expect(options.where.id).toBeInstanceOf(FindOperator);
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(service.findByIds([])).resolves.toEqual([]);
+      expect(repository.find).not.toHaveBeenCalled();
+    });
+  });
+
   describe('assertPurchasable', () => {
     it('passes when every product is purchasable', async () => {
       repository.find.mockResolvedValue([{ id: 1 }, { id: 2 }]);

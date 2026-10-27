@@ -54,6 +54,8 @@ export type CartProductDetails = {
   count?: number | null;
   price: number;
   salePrice: number;
+  // active | hidden | out-of-stock; прихований товар у кошику недоступний
+  status?: string | null;
 };
 
 export type photo = {

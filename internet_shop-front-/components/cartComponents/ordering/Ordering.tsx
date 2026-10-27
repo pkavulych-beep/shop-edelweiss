@@ -34,11 +34,13 @@ import { useCardPaymentAvailable } from '../../../hooks/useCardPaymentAvailable'
 interface OrderingComponentProps {
   items: CreateOrderItemDto[];
   hasStockIssue?: boolean;
+  hasUnavailable?: boolean;
 }
 
 const OrderingComponent: NextPage<OrderingComponentProps> = ({
   items,
   hasStockIssue = false,
+  hasUnavailable = false,
 }) => {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -125,6 +127,12 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({
       validationSchema={ValidateOrder}
       onSubmit={async (values) => {
         changeError(null);
+        if (hasUnavailable) {
+          changeError(
+            'Товар більше недоступний. Приберіть недоступні товари з кошика, щоб оформити замовлення.'
+          );
+          return;
+        }
         if (hasStockIssue) {
           changeError(
             'Деяких товарів у кошику не вистачає на складі. Приберіть їх із кошика, щоб оформити замовлення.'
@@ -363,6 +371,13 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({
         </Box>
 
         {/* Submit */}
+        {hasUnavailable && (
+          <Alert severity="warning" sx={{ mb: 2, fontSize: '0.85rem' }}>
+            Товар більше недоступний. Приберіть недоступні товари з кошика, щоб
+            оформити замовлення.
+          </Alert>
+        )}
+
         {hasStockIssue && (
           <Alert severity="warning" sx={{ mb: 2, fontSize: '0.85rem' }}>
             Деяких товарів у кошику не вистачає на складі. Приберіть їх із
@@ -372,7 +387,7 @@ const OrderingComponent: NextPage<OrderingComponentProps> = ({
 
         <LoadingButton
           loading={loading}
-          disabled={!deliveryFilled || hasStockIssue}
+          disabled={!deliveryFilled || hasStockIssue || hasUnavailable}
           type="submit"
           variant="contained"
           fullWidth
