@@ -901,6 +901,9 @@ describe('PaymentService', () => {
       };
 
       paymentRepository.findOne.mockResolvedValue(invoiceLog);
+      manager.findOne.mockImplementation((entity: unknown) =>
+        Promise.resolve(entity === PaymentEntity ? invoiceLog : order),
+      );
       paymentProvider.getInvoiceStatus = jest.fn().mockResolvedValue({
         invoiceId: INVOICE_ID,
         status: 'created',
@@ -942,6 +945,21 @@ describe('PaymentService', () => {
           },
         }),
       );
+      expect(invoiceLog.status).toBe(PaymentStatus.Failed);
+      expect(invoiceLog.providerModifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('returns 409 instead of 200 when the order changed while mono was called', async () => {
+      orderService.cancelUnpaidOrder.mockResolvedValueOnce(null);
+      order.paymentStatus = PaymentStatus.Failed;
+
+      await expect(service.cancelPendingCardOrder(10, INVOICE_ID)).rejects.toThrow(
+        'Стан оплати змінився, спробуйте ще раз',
+      );
+
+      expect(statusLogs()).toHaveLength(0);
+      expect(invoiceLog.status).toBe(PaymentStatus.Pending);
+      expect(order.status).toBe(Status.Processed);
     });
 
     it('applies the payment and refuses to cancel when mono already paid the invoice', async () => {

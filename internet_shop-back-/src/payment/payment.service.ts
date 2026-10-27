@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   forwardRef,
   Inject,
   Injectable,
@@ -250,6 +251,13 @@ export class PaymentService {
     }
 
     return this.paymentRepository.manager.transaction(async (manager) => {
+      // Блокуємо інвойс до замовлення — той самий порядок, що у вебхуку
+      // й applyInvoiceStatusFailed, тому з ними немає дедлоку.
+      const invoiceLog = await manager.findOne(PaymentEntity, {
+        where: { orderId, invoiceId, kind: PaymentLogKind.Invoice },
+        lock: { mode: 'pessimistic_write' },
+      });
+
       const cancelled = await this.orderService.cancelUnpaidOrder(
         manager,
         orderId,
@@ -258,8 +266,8 @@ export class PaymentService {
       );
 
       if (!cancelled) {
-        // Поки ходили в mono, вебхук міг застосувати оплату, а звірка —
-        // скасувати замовлення. Не перезаписуємо цей стан.
+        // Поки ходили в mono, вебхук міг застосувати оплату, звірка —
+        // скасувати замовлення, а покупець — створити новий інвойс.
         const current = await manager.findOne(OrderEntity, {
           where: { id: orderId },
         });
@@ -271,9 +279,15 @@ export class PaymentService {
             'Замовлення вже оплачене. Спершу поверніть кошти',
           );
         }
-        return current;
+        if (current.status === Status.Canceled) {
+          return current;
+        }
+        // Не повертаємо 200 без змін: адмін має повторити скасування,
+        // і тоді новий інвойс (якщо він з'явився) теж буде анульовано.
+        throw new ConflictException('Стан оплати змінився, спробуйте ще раз');
       }
 
+      const cancelledAt = new Date();
       await manager.save(
         PaymentEntity,
         manager.create(PaymentEntity, {
@@ -283,7 +297,7 @@ export class PaymentService {
           kind: PaymentLogKind.StatusCheck,
           amount: Math.round(cancelled.total * 100),
           status: PaymentStatus.Failed,
-          providerModifiedAt: new Date(),
+          providerModifiedAt: cancelledAt,
           rawPayload: {
             status: 'canceled',
             reason: 'admin_canceled',
@@ -291,6 +305,14 @@ export class PaymentService {
           },
         }),
       );
+
+      // Інакше інвойс назавжди лишиться PENDING і звірка щоп'ять хвилин
+      // ходитиме в mono за вже скасованим замовленням.
+      if (invoiceLog) {
+        invoiceLog.status = PaymentStatus.Failed;
+        invoiceLog.providerModifiedAt = cancelledAt;
+        await manager.save(PaymentEntity, invoiceLog);
+      }
 
       return cancelled;
     });
