@@ -152,6 +152,28 @@ describe('PaymentService', () => {
       expect(createInvoiceCall.webHookUrl).toBe('http://localhost:7777/payment/webhook/mono');
     });
 
+    it('redirects to the first address when FRONTEND_URL lists several', async () => {
+      process.env.FRONTEND_URL = 'https://shop.example.com/, https://admin.example.com';
+
+      await service.createInvoice(3, 10);
+
+      const createInvoiceCall = paymentProvider.createInvoice.mock.calls[0][0] as CreateInvoiceInput;
+      expect(createInvoiceCall.redirectUrl).toBe(
+        'https://shop.example.com/payment/success?orderId=10',
+      );
+    });
+
+    it('adds the slash when FRONTEND_URL has no trailing slash', async () => {
+      process.env.FRONTEND_URL = 'https://shop.example.com';
+
+      await service.createInvoice(3, 10);
+
+      const createInvoiceCall = paymentProvider.createInvoice.mock.calls[0][0] as CreateInvoiceInput;
+      expect(createInvoiceCall.redirectUrl).toBe(
+        'https://shop.example.com/payment/success?orderId=10',
+      );
+    });
+
     it('throws ForbiddenException when another user tries to create invoice', async () => {
       orderService.findOneForUser.mockRejectedValueOnce(new ForbiddenException());
 
@@ -245,6 +267,14 @@ describe('PaymentService', () => {
 
     it('throws InternalServerErrorException when FRONTEND_URL is not configured', async () => {
       delete process.env.FRONTEND_URL;
+
+      await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
+        InternalServerErrorException,
+      );
+    });
+
+    it('throws InternalServerErrorException when FRONTEND_URL has no addresses', async () => {
+      process.env.FRONTEND_URL = ' , ';
 
       await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(
         InternalServerErrorException,

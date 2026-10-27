@@ -15,6 +15,7 @@ import { OrderService } from 'src/order/order.service';
 import { Status } from 'src/order/statusEnum';
 import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
 import { isCardPaymentAvailable } from './card-payment';
+import { parseFrontendOrigins } from 'src/config/security';
 import {
   CreateInvoiceInput,
   InvoiceStatusResult,
@@ -152,7 +153,9 @@ export class PaymentService {
 
     const amount = Math.round(order.total * 100);
     const baseUrl = process.env.BASE_URL;
-    const frontendUrl = process.env.FRONTEND_URL;
+    // FRONTEND_URL може містити кілька адрес для CORS: для redirect покупця
+    // беремо першу й самі додаємо слеш, щоб адреса була правильною і без нього.
+    const frontendUrl = parseFrontendOrigins(process.env.FRONTEND_URL)[0];
 
     if (!baseUrl || !frontendUrl) {
       throw new InternalServerErrorException('BASE_URL or FRONTEND_URL not configured');
@@ -162,10 +165,9 @@ export class PaymentService {
       amount,
       ccy: 980,
       webHookUrl: `${baseUrl}payment/webhook/mono`,
-      // FRONTEND_URL, як і BASE_URL, закінчується слешем: без подвійного слеша
-      // ведемо на сторінку результату оплати з orderId, щоб вона могла прочитати
-      // статус з беку.
-      redirectUrl: `${frontendUrl}payment/success?orderId=${orderId}`,
+      // Без подвійного слеша ведемо на сторінку результату оплати з orderId,
+      // щоб вона могла прочитати статус з беку.
+      redirectUrl: `${frontendUrl}/payment/success?orderId=${orderId}`,
       reference: String(orderId),
       // validity — у секундах: стільки рахунок можна оплатити.
       validity: paymentTimeoutMinutes() * 60,
