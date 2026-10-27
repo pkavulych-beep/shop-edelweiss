@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
 export interface IPositionProps {
   id: number;
   cover: string;
+  coverThumb?: string | null;
   name: string;
   size: string;
   price: number;
@@ -32,6 +33,7 @@ export const Position: FC<IPositionProps> = ({
   id,
   price,
   cover,
+  coverThumb,
   name,
   size,
   salePrice,
@@ -101,7 +103,7 @@ export const Position: FC<IPositionProps> = ({
         >
           <Link href={'/product/' + id}>
             <img
-              src={cover}
+              src={coverThumb || cover}
               alt={name}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />

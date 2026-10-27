@@ -58,7 +58,7 @@ export default function Product() {
     );
   }
 
-  const { cover, photos, ...productInfo } = currentProduct;
+  const { cover, coverThumb, photos, ...productInfo } = currentProduct;
   const photosArr = [{ id: 0, url: cover }, ...(photos ?? [])].filter((p) => Boolean(p.url));
 
   const hasSizes = Array.isArray(currentProduct.sizes) ? currentProduct.sizes.length > 0 : false;
@@ -289,7 +289,7 @@ export default function Product() {
             }}
           >
             <img
-              src={cover}
+              src={coverThumb || cover}
               alt={productInfo.name}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -376,7 +376,7 @@ export default function Product() {
             }}
           >
             <img
-              src={cover}
+              src={coverThumb || cover}
               alt={productInfo.name}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />

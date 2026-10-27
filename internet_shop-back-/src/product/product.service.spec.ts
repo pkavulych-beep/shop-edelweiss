@@ -27,7 +27,7 @@ describe('ProductService', () => {
       createQueryBuilder: jest.fn(() => queryBuilder),
     };
     basketRepository = { delete: jest.fn() };
-    fileService = { deleteFile: jest.fn() };
+    fileService = { deleteFile: jest.fn(), deleteImage: jest.fn() };
     photosService = { remove: jest.fn() };
     service = new ProductService(repository, basketRepository, fileService, photosService);
   });
@@ -50,7 +50,7 @@ describe('ProductService', () => {
       expect(repository.update).toHaveBeenCalledWith(5, {
         status: ProductStatus.Hidden,
       });
-      expect(fileService.deleteFile).not.toHaveBeenCalled();
+      expect(fileService.deleteImage).not.toHaveBeenCalled();
       expect(photosService.remove).not.toHaveBeenCalled();
       expect(repository.delete).not.toHaveBeenCalled();
     });
@@ -61,9 +61,9 @@ describe('ProductService', () => {
       await service.remove(5);
 
       expect(basketRepository.delete).toHaveBeenCalledWith({ productId: 5 });
-      expect(fileService.deleteFile).toHaveBeenCalledTimes(2);
-      expect(fileService.deleteFile).toHaveBeenNthCalledWith(1, 'cover.jpg');
-      expect(fileService.deleteFile).toHaveBeenNthCalledWith(2, 'photo.jpg');
+      expect(fileService.deleteImage).toHaveBeenCalledTimes(2);
+      expect(fileService.deleteImage).toHaveBeenNthCalledWith(1, 'cover.jpg');
+      expect(fileService.deleteImage).toHaveBeenNthCalledWith(2, 'photo.jpg');
       expect(photosService.remove).toHaveBeenCalledWith(1);
       expect(repository.delete).toHaveBeenCalledWith(5);
       expect(repository.update).not.toHaveBeenCalled();
