@@ -94,6 +94,16 @@ export class UsersService {
       .getOne();
   }
 
+  // Пароль має select: false, тож для зміни пароля додаємо його в запит явно
+  async findByIdWithPassword(id: number): Promise<UserEntity> {
+    return await this.repository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .where('user.id = :id', { id })
+      .getOne();
+  }
+
   async setPasswordHash(id: number, passwordHash: string) {
     await this.repository.update(id, { password: passwordHash });
   }
@@ -128,9 +138,6 @@ export class UsersService {
       );
     }
 
-    if (changes.password) {
-      changes.password = await hashPassword(changes.password);
-    }
     await this.repository.update(id, changes);
     return await this.findById(id);
   }

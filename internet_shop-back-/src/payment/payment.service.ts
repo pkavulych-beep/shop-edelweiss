@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { EntityManager, LessThanOrEqual, Repository, IsNull } from 'typeorm';
+import { EntityManager, In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentMethod, PaymentStatus } from 'src/order/paymentEnum';
 import { OrderService } from 'src/order/order.service';
@@ -126,8 +126,7 @@ export class PaymentService {
     // Захист від гонки з reconcileOrdersWithoutInvoice:
     // CARD-замовлення без інвойсу, яке старше за paymentTimeoutMinutes,
     // може бути скасоване кроном у будь-який момент. Відхиляємо створення
-    // інвойсу, щоб не «оживити» уже скасоване замовлення. Повторна оплата
-    // після FAILED (інвойс уже є) крон не чіпає, тож її не обмежуємо.
+    // інвойсу, щоб не «оживити» уже скасоване замовлення.
     const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / 60_000;
     if (
       !order.paymentInvoiceId &&
@@ -135,6 +134,20 @@ export class PaymentService {
       orderAgeMinutes > paymentTimeoutMinutes()
     ) {
       throw new BadRequestException('Час на оплату минув');
+    }
+
+    // Те саме для повторної оплати після FAILED: коли строк поточного рахунку
+    // минув, замовлення скасовує reconcileFailedOrders.
+    if (order.paymentInvoiceId && order.paymentStatus === PaymentStatus.Failed) {
+      const failedLog = await this.paymentRepository.findOne({
+        where: { invoiceId: order.paymentInvoiceId, kind: PaymentLogKind.Invoice },
+      });
+      const invoiceAgeMinutes = failedLog
+        ? (Date.now() - new Date(failedLog.createdAt).getTime()) / 60_000
+        : 0;
+      if (invoiceAgeMinutes > paymentTimeoutMinutes()) {
+        throw new BadRequestException('Час на оплату минув');
+      }
     }
 
     const amount = Math.round(order.total * 100);
@@ -342,6 +355,11 @@ export class PaymentService {
       // 2. Звірка CARD-замовлень БЕЗ інвойсу (paymentInvoiceId порожній,
       //    paymentStatus = NOT_REQUIRED). mono не потрібен.
       await this.reconcileOrdersWithoutInvoice(cutoff);
+
+      // 3. CARD-замовлення, оплата яких не пройшла (FAILED після вебхука
+      //    failure), а покупець не повторив її до кінця строку рахунку.
+      //    mono не потрібен.
+      await this.reconcileFailedOrders(cutoff);
     } finally {
       this.reconciling = false;
     }
@@ -390,6 +408,82 @@ export class PaymentService {
           status: PaymentStatus.Failed,
           providerModifiedAt: new Date(),
           rawPayload: { status: 'no_invoice', reason: 'invoice_creation_failed' },
+        }),
+      );
+    });
+  }
+
+  private async reconcileFailedOrders(cutoff: Date): Promise<void> {
+    // Інвойс створюють після замовлення, тож замовлення, молодше за cutoff,
+    // не може мати простроченого рахунку.
+    const orders = await this.orderRepository.find({
+      where: {
+        paymentMethod: PaymentMethod.Card,
+        paymentInvoiceId: Not(IsNull()),
+        paymentStatus: PaymentStatus.Failed,
+        status: Status.Processed,
+        createdAt: LessThanOrEqual(cutoff),
+      },
+    });
+    if (!orders.length) {
+      return;
+    }
+
+    // Строк рахуємо від поточного інвойсу: після повторної спроби покупець
+    // має на оплату весь строк нового рахунку.
+    const expiredInvoiceLogs = await this.paymentRepository.find({
+      where: {
+        kind: PaymentLogKind.Invoice,
+        invoiceId: In(orders.map((order) => order.paymentInvoiceId)),
+        createdAt: LessThanOrEqual(cutoff),
+      },
+    });
+    const expiredLogByInvoice = new Map(
+      expiredInvoiceLogs.map((invoiceLog) => [invoiceLog.invoiceId, invoiceLog]),
+    );
+
+    for (const order of orders) {
+      const invoiceLog = expiredLogByInvoice.get(order.paymentInvoiceId);
+      if (!invoiceLog || invoiceLog.orderId !== order.id) {
+        continue;
+      }
+
+      try {
+        await this.cancelFailedOrder(invoiceLog);
+      } catch (error) {
+        this.logger.warn(
+          `Не вдалося скасувати замовлення ${order.id} з неуспішною оплатою: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
+  private async cancelFailedOrder(invoiceLog: PaymentEntity): Promise<void> {
+    await this.paymentRepository.manager.transaction(async (manager) => {
+      const cancelled = await this.orderService.cancelFailedOrder(
+        manager,
+        invoiceLog.orderId,
+        invoiceLog.invoiceId,
+      );
+      if (!cancelled) {
+        return;
+      }
+
+      // Журнал: причина скасування для адмінки. Строк рахунку минув, а нового
+      // покупець не створив.
+      await manager.save(
+        PaymentEntity,
+        manager.create(PaymentEntity, {
+          orderId: invoiceLog.orderId,
+          provider: invoiceLog.provider,
+          invoiceId: invoiceLog.invoiceId,
+          kind: PaymentLogKind.StatusCheck,
+          amount: invoiceLog.amount,
+          status: PaymentStatus.Failed,
+          providerModifiedAt: new Date(),
+          rawPayload: { status: 'expired', reason: 'payment_failed' },
         }),
       );
     });

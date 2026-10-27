@@ -303,6 +303,49 @@ describe('PaymentService', () => {
       );
       jest.restoreAllMocks();
     });
+
+    it('allows a retry after FAILED while the failed invoice is younger than payment timeout', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: new Date('2026-10-13T10:00:00Z'),
+        paymentInvoiceId: 'failed-invoice',
+        paymentStatus: PaymentStatus.Failed,
+      });
+      paymentRepository.findOne.mockResolvedValueOnce({
+        invoiceId: 'failed-invoice',
+        kind: PaymentLogKind.Invoice,
+        status: PaymentStatus.Failed,
+        createdAt: new Date('2026-10-13T11:30:00Z'),
+      });
+
+      await expect(service.createInvoice(3, 10)).resolves.toEqual({
+        pageUrl: 'https://mono.com/invoice/mono-invoice-123',
+      });
+      expect(paymentProvider.createInvoice).toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
+
+    it('rejects a retry after FAILED once the failed invoice is older than payment timeout', async () => {
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-10-13T12:00:00Z').getTime());
+      orderService.findOneForUser.mockResolvedValueOnce({
+        ...mockOrder,
+        createdAt: new Date('2026-10-13T10:00:00Z'),
+        paymentInvoiceId: 'failed-invoice',
+        paymentStatus: PaymentStatus.Failed,
+      });
+      paymentRepository.findOne.mockResolvedValueOnce({
+        invoiceId: 'failed-invoice',
+        kind: PaymentLogKind.Invoice,
+        status: PaymentStatus.Failed,
+        createdAt: new Date('2026-10-13T10:30:00Z'),
+      });
+
+      await expect(service.createInvoice(3, 10)).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentProvider.createInvoice).not.toHaveBeenCalled();
+      expect(orderRepository.save).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
   });
 
   describe('refund', () => {
@@ -1147,6 +1190,177 @@ describe('PaymentService', () => {
 
         expect(orderService.cancelOrderWithoutInvoice).toHaveBeenCalledWith(manager, 23);
         expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('reconcileFailedOrders', () => {
+      const FAILED_INVOICE_ID = 'inv_test_failed';
+      const expectedCutoff = new Date(
+        NOW.getTime() - (DEFAULT_PAYMENT_TIMEOUT_MINUTES + STATUS_CHECK_GRACE_MINUTES) * 60_000,
+      );
+
+      let failedOrder: any;
+      let failedInvoiceLog: any;
+
+      // Крок 2 (замовлення без інвойсу) у цих тестах нічого не знаходить,
+      // крок 3 бере FAILED-замовлення, а журнал — лише прострочені інвойси.
+      const givenFailed = (invoiceCreatedAt: Date | null) => {
+        orderRepository.find = jest.fn((options: any) =>
+          Promise.resolve(
+            options.where.paymentStatus === PaymentStatus.Failed ? [failedOrder] : [],
+          ),
+        );
+        paymentRepository.find = jest.fn((options: any) =>
+          Promise.resolve(
+            options.where.status === undefined &&
+              invoiceCreatedAt &&
+              invoiceCreatedAt.getTime() <= options.where.createdAt.value.getTime()
+              ? [failedInvoiceLog]
+              : [],
+          ),
+        );
+      };
+
+      beforeEach(() => {
+        delete process.env.MONO_ACQUIRING_TOKEN;
+
+        failedOrder = {
+          id: 30,
+          total: 1500,
+          status: Status.Processed,
+          paymentMethod: PaymentMethod.Card,
+          paymentStatus: PaymentStatus.Failed,
+          paymentInvoiceId: FAILED_INVOICE_ID,
+          createdAt: new Date('2026-10-13T09:50:00Z'),
+        };
+        failedInvoiceLog = {
+          id: 5,
+          orderId: 30,
+          provider: 'mono',
+          invoiceId: FAILED_INVOICE_ID,
+          kind: PaymentLogKind.Invoice,
+          amount: 150000,
+          status: PaymentStatus.Failed,
+          createdAt: new Date('2026-10-13T10:00:00Z'),
+        };
+        orderService.cancelFailedOrder = jest.fn().mockImplementation(async () => {
+          if (
+            failedOrder.status !== Status.Processed ||
+            failedOrder.paymentStatus !== PaymentStatus.Failed ||
+            failedOrder.paymentInvoiceId !== FAILED_INVOICE_ID
+          ) {
+            return null;
+          }
+          failedOrder.status = Status.Canceled;
+          return failedOrder;
+        });
+      });
+
+      it('cancels a FAILED order whose invoice expired and logs the reason, without mono', async () => {
+        givenFailed(failedInvoiceLog.createdAt);
+
+        await service.reconcilePendingCardPayments();
+
+        const orderWhere = orderRepository.find.mock.calls
+          .map(([options]: [any]) => options.where)
+          .find((where: any) => where.paymentStatus === PaymentStatus.Failed);
+        expect(orderWhere).toEqual(
+          expect.objectContaining({
+            paymentMethod: PaymentMethod.Card,
+            status: Status.Processed,
+          }),
+        );
+        const logWhere = paymentRepository.find.mock.calls[0][0].where;
+        expect(logWhere.kind).toBe(PaymentLogKind.Invoice);
+        expect(logWhere.invoiceId.value).toEqual([FAILED_INVOICE_ID]);
+        expect(logWhere.createdAt.value).toEqual(expectedCutoff);
+
+        expect(orderService.cancelFailedOrder).toHaveBeenCalledWith(
+          manager,
+          30,
+          FAILED_INVOICE_ID,
+        );
+        expect(failedOrder.status).toBe(Status.Canceled);
+        expect(failedOrder.paymentStatus).toBe(PaymentStatus.Failed);
+        expect(statusLogs()).toHaveLength(1);
+        expect(statusLogs()[0][1]).toEqual(
+          expect.objectContaining({
+            orderId: 30,
+            invoiceId: FAILED_INVOICE_ID,
+            kind: PaymentLogKind.StatusCheck,
+            status: PaymentStatus.Failed,
+            amount: 150000,
+            rawPayload: expect.objectContaining({ reason: 'payment_failed' }),
+          }),
+        );
+        expect(paymentProvider.getInvoiceStatus).not.toHaveBeenCalled();
+      });
+
+      it('leaves a FAILED order alone while its invoice is younger than the timeout', async () => {
+        givenFailed(new Date('2026-10-13T11:30:00Z'));
+
+        await service.reconcilePendingCardPayments();
+
+        expect(orderService.cancelFailedOrder).not.toHaveBeenCalled();
+        expect(failedOrder.status).toBe(Status.Processed);
+        expect(statusLogs()).toHaveLength(0);
+      });
+
+      it('leaves the order alone when the buyer created a new PENDING invoice meanwhile', async () => {
+        givenFailed(failedInvoiceLog.createdAt);
+        // Між вибіркою і блокуванням рядка покупець встиг повторити оплату.
+        orderService.cancelFailedOrder.mockImplementationOnce(async () => {
+          failedOrder.paymentStatus = PaymentStatus.Pending;
+          failedOrder.paymentInvoiceId = 'inv_new';
+          return null;
+        });
+
+        await service.reconcilePendingCardPayments();
+
+        expect(orderService.cancelFailedOrder).toHaveBeenCalledTimes(1);
+        expect(failedOrder.status).toBe(Status.Processed);
+        expect(failedOrder.paymentStatus).toBe(PaymentStatus.Pending);
+        expect(statusLogs()).toHaveLength(0);
+      });
+
+      it('does not look up invoices when there are no FAILED orders', async () => {
+        orderRepository.find = jest.fn().mockResolvedValue([]);
+        paymentRepository.find = jest.fn().mockResolvedValue([]);
+
+        await service.reconcilePendingCardPayments();
+
+        expect(paymentRepository.find).not.toHaveBeenCalled();
+        expect(orderService.cancelFailedOrder).not.toHaveBeenCalled();
+      });
+
+      it('skips an expired invoice that belongs to another order', async () => {
+        givenFailed(failedInvoiceLog.createdAt);
+        failedInvoiceLog.orderId = 31;
+
+        await service.reconcilePendingCardPayments();
+
+        expect(orderService.cancelFailedOrder).not.toHaveBeenCalled();
+      });
+
+      it('keeps reconciling other orders when one cancellation fails', async () => {
+        const second = { ...failedOrder, id: 32, paymentInvoiceId: 'inv_second' };
+        const secondLog = { ...failedInvoiceLog, id: 6, orderId: 32, invoiceId: 'inv_second' };
+        orderRepository.find = jest.fn((options: any) =>
+          Promise.resolve(
+            options.where.paymentStatus === PaymentStatus.Failed ? [failedOrder, second] : [],
+          ),
+        );
+        paymentRepository.find = jest.fn().mockResolvedValue([failedInvoiceLog, secondLog]);
+        orderService.cancelFailedOrder
+          .mockRejectedValueOnce(new Error('deadlock'))
+          .mockResolvedValueOnce(second);
+
+        await expect(service.reconcilePendingCardPayments()).resolves.toBeUndefined();
+
+        expect(orderService.cancelFailedOrder).toHaveBeenCalledTimes(2);
+        expect(orderService.cancelFailedOrder).toHaveBeenLastCalledWith(manager, 32, 'inv_second');
+        expect(statusLogs()).toHaveLength(1);
+        expect(statusLogs()[0][1]).toEqual(expect.objectContaining({ orderId: 32 }));
       });
     });
   });

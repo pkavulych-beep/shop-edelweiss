@@ -12,7 +12,11 @@ export class PhotosService {
   ) {}
 
   async create(createPhotoDto: CreatePhotoDto) {
-    return await this.PhotoRepository.save(createPhotoDto);
+    // create(), а не звичайний об'єкт: тоді save повертає сутність, і url
+    // серіалізується у повний URL із поточного BASE_URL.
+    return await this.PhotoRepository.save(
+      this.PhotoRepository.create(createPhotoDto),
+    );
   }
 
   async remove(id: number) {
