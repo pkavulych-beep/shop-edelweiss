@@ -13,6 +13,7 @@ import {
 import { UsersService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { productToBasketDto } from './dto/productToBasket.dto';
+import { ChangeBasketQuantityDto } from './dto/change-basket-quantity.dto';
 import { SyncCartDto } from './dto/sync-cart.dto';
 import { Roles } from '../auth/roles-auth.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -57,6 +58,14 @@ export class UserController {
   @Patch('/pickUpFromTheBasket')
   pickUpFromTheBasket(@Request() req, @Body() dto: productToBasketDto) {
     return this.userService.pickUpFromTheBasket(req.user.id, dto);
+  }
+
+  @Patch('/basket/quantity')
+  changeBasketQuantity(
+    @Request() req,
+    @Body() dto: ChangeBasketQuantityDto,
+  ) {
+    return this.userService.changeBasketQuantity(req.user.id, dto);
   }
 
   @Post('/syncCart')

@@ -70,6 +70,17 @@ export const cartSlice = createSlice({
         delete state.productDetails[action.payload.idProduct];
       }
     },
+    setItemQuantity: (
+      state,
+      action: PayloadAction<{ idProduct: number; size?: string; quantity: number }>,
+    ) => {
+      const item = state.data.find(
+        (el) =>
+          el.idProduct === action.payload.idProduct &&
+          (el.size ?? "") === (action.payload.size ?? ""),
+      );
+      if (item) item.quantity = action.payload.quantity;
+    },
     setProductDetails: (state, action: PayloadAction<CartProductDetails[]>) => {
       action.payload.forEach((product) => {
         state.productDetails[product.id] = product;
@@ -90,7 +101,7 @@ export const cartSlice = createSlice({
   },
 });
 
-export const { setCartData, addItem, removeItem, setProductDetails, setLoading } =
+export const { setCartData, addItem, removeItem, setItemQuantity, setProductDetails, setLoading } =
   cartSlice.actions;
 
 export default cartSlice.reducer;
@@ -158,6 +169,58 @@ export const addPositionsToCart =
       } else {
         currentCart.push(newItem);
       }
+      setLocalCart(currentCart);
+      // localStorage — єдине джерело правди для гостей
+      dispatch(setCartData(currentCart));
+    }
+    return null;
+  };
+
+// Змінити кількість позиції в кошику. Повертає текст помилки або null.
+// available — залишок обраного розміру; для гостя перевіряємо його тут,
+// для залогіненого залишок перевіряє бек.
+export const changeCartItemQuantity =
+  (dto: {
+    idProduct: number;
+    size?: string;
+    quantity: number;
+    available?: number | null;
+  }): AppThunk<Promise<string | null>> =>
+  async (dispatch, getState) => {
+    const idUser = getState().user.userData?.id;
+    const size = dto.size ?? '';
+
+    if (idUser) {
+      try {
+        await Api().cart.changeQuantity({
+          idProduct: dto.idProduct,
+          size,
+          quantity: dto.quantity,
+        });
+      } catch (e) {
+        const message = e?.response?.data?.message;
+        return (
+          (Array.isArray(message) ? message[0] : message) ||
+          'Не вдалося змінити кількість товару'
+        );
+      }
+      dispatch(
+        setItemQuantity({
+          idProduct: dto.idProduct,
+          size,
+          quantity: dto.quantity,
+        }),
+      );
+    } else {
+      const currentCart = getLocalCart();
+      const existing = currentCart.find(
+        (el) => el.idProduct === dto.idProduct && (el.size ?? '') === size,
+      );
+      if (!existing) return 'Товару немає в кошику';
+      if (dto.available != null && dto.quantity > dto.available) {
+        return outOfStockMessage(dto.available);
+      }
+      existing.quantity = dto.quantity;
       setLocalCart(currentCart);
       // localStorage — єдине джерело правди для гостей
       dispatch(setCartData(currentCart));

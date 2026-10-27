@@ -30,7 +30,9 @@ const navLinks = [
 export default function Header() {
   const router = useRouter();
   const { userData } = useAppSelector((store) => store.user);
-  const cartCount = useAppSelector((store) => store.cart.data?.length ?? 0);
+  const cartCount = useAppSelector((store) =>
+    (store.cart.data ?? []).reduce((sum, item) => sum + item.quantity, 0),
+  );
 
   const [dialogLoginOpen, setDialogLogin] = useState(false);
   const [dialogRegisterOpen, setDialogRegister] = useState(false);

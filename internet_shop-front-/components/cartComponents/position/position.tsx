@@ -1,12 +1,17 @@
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import { PriceBox } from '../../PriceBox/PriceBox';
 import * as React from 'react';
 import Link from 'next/link';
-import { pickUpFromTheCart } from '../../../redux/slices/cart-reducer';
+import {
+  changeCartItemQuantity,
+  pickUpFromTheCart,
+} from '../../../redux/slices/cart-reducer';
 import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
 
 export interface IPositionProps {
@@ -35,9 +40,29 @@ export const Position: FC<IPositionProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const idUser = useAppSelector((store) => store.user.userData?.id);
+  const [updating, setUpdating] = useState(false);
+  const [quantityError, setQuantityError] = useState<string | null>(null);
 
   const pickUpProduct = () => {
     dispatch(pickUpFromTheCart({ idProduct: id, size, idUser }));
+  };
+
+  const canDecrease = quantity > 1 && !updating;
+  const canIncrease = !updating && (available == null || quantity < available);
+
+  const changeQuantity = async (nextQuantity: number) => {
+    setUpdating(true);
+    setQuantityError(null);
+    const message = await dispatch(
+      changeCartItemQuantity({
+        idProduct: id,
+        size,
+        quantity: nextQuantity,
+        available,
+      }),
+    );
+    setUpdating(false);
+    if (message) setQuantityError(message);
   };
 
   // Залишок зменшився після того, як товар уже лежав у кошику
@@ -97,9 +122,48 @@ export const Position: FC<IPositionProps> = ({
             )}
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography sx={{ fontSize: '0.75rem', color: '#777b7c' }}>
-              Кількість: {quantity}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.75rem', color: '#777b7c' }}>
+                Кількість:
+              </Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  border: '1px solid rgba(175, 179, 179, 0.35)',
+                  borderRadius: 1,
+                }}
+              >
+                <IconButton
+                  aria-label="Зменшити кількість"
+                  size="small"
+                  disabled={!canDecrease}
+                  onClick={() => changeQuantity(quantity - 1)}
+                  sx={{ width: 28, height: 28, borderRadius: 0 }}
+                >
+                  <RemoveIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+                <Typography
+                  sx={{
+                    minWidth: 24,
+                    textAlign: 'center',
+                    fontSize: '0.75rem',
+                    color: 'text.primary',
+                  }}
+                >
+                  {quantity}
+                </Typography>
+                <IconButton
+                  aria-label="Збільшити кількість"
+                  size="small"
+                  disabled={!canIncrease}
+                  onClick={() => changeQuantity(quantity + 1)}
+                  sx={{ width: 28, height: 28, borderRadius: 0 }}
+                >
+                  <AddIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Box>
+            </Box>
             <PriceBox salePrice={salePrice} price={price} />
           </Box>
         </Box>
@@ -122,6 +186,11 @@ export const Position: FC<IPositionProps> = ({
       {stockShortage && (
         <Typography sx={{ fontSize: '0.75rem', color: '#a73b21', mt: 1 }}>
           {available === 0 ? 'Немає в наявності' : `Доступно: ${available}`}
+        </Typography>
+      )}
+      {quantityError && (
+        <Typography sx={{ fontSize: '0.75rem', color: '#a73b21', mt: 1 }}>
+          {quantityError}
         </Typography>
       )}
     </Box>
