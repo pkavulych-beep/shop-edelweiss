@@ -62,6 +62,8 @@ const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 // What OpenCode prints when a free model is down ("Upstream request failed: Model is unavailable.") or was taken off
 // the list ("Model not found: opencode/longcat-2.5-preview-free"). The agent can't do anything on it, retrying included.
 const MODEL_DOWN = /upstream request failed: model is unavailable|model not found: [\w.-]+\/[\w.-]+|ProviderModelNotFoundError/i;
+// What a second reviewer is told (prompts/review.md, {{second}}): it stands in for a person on auth and payment code.
+const SECOND_REVIEW = "\n\nЦе друге, незалежне рев'ю. PR змінює код авторизації чи оплати, і замість людини його мерджать два схвалення, тож твій вердикт — остання перевірка перед `main`. Попереднє рев'ю в коментарях не бери на віру й не повторюй: оціни код сам, особливо доступи, гроші, гонки й обробку помилок. Якщо не певен, що зміна безпечна, постав `changes` і напиши, що саме перевірити.";
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 // Generated files and tests: their lines don't count towards a pull request's size. Tests only make a change safer,
 // so they shouldn't be what sends it to a person; risky code goes to one by merge.protectedPaths instead.
@@ -438,15 +440,14 @@ function ciState(pr) {
   return pending ? 'pending' : 'passed';
 }
 
-/** The last review verdict on a PR. Only comments from our own account count: anyone can comment on a public repo. */
-function latestVerdict(n) {
+/** Every review verdict on a PR, oldest first. Only comments from our own account count: anyone can comment on a public repo. */
+function verdictsOf(n) {
   const { comments } = ghJson('pr', 'view', String(n), '--repo', REPO, '--json', 'comments');
-  for (let i = comments.length - 1; i >= 0; i--) {
-    if (comments[i].author?.login !== me.login) continue;
-    const m = REVIEW_MARK.exec(comments[i].body);
-    if (m) return { sha: m[1], verdict: m[2].toLowerCase() };
-  }
-  return null;
+  return comments
+    .filter((c) => c.author?.login === me.login)
+    .map((c) => REVIEW_MARK.exec(c.body))
+    .filter(Boolean)
+    .map((m) => ({ sha: m[1], verdict: m[2].toLowerCase() }));
 }
 
 const sameCommit = (a, b) => a.startsWith(b) || b.startsWith(a);
@@ -468,18 +469,36 @@ function onlyMainMergedSince(n, from, to) {
   }
 }
 
-function mergeBlockers(pr) {
-  const why = [];
-  const touched = (pr.files ?? [])
-    .map((f) => f.path)
-    .filter((p) => config.merge.protectedPaths.some((x) => p === x || p.startsWith(x)));
-  if (touched.length) why.push(`змінює захищені файли (${touched.join(', ')})`);
+/** The protected files a PR changes. */
+const protectedFilesOf = (pr) =>
+  (pr.files ?? []).map((f) => f.path).filter((p) => config.merge.protectedPaths.some((x) => p === x || p.startsWith(x)));
+
+/** How many lines a PR changes, lock files and tests left out. */
+function changedLines(pr) {
   const files = pr.files ?? [];
-  const size = files.length
+  return files.length
     ? files.filter((f) => !LOCK_FILE.test(f.path) && !TEST_FILE.test(f.path)).reduce((n, f) => n + (f.additions ?? 0) + (f.deletions ?? 0), 0)
     : pr.additions + pr.deletions;
+}
+
+function mergeBlockers(pr) {
+  const why = [];
+  const touched = protectedFilesOf(pr);
+  if (touched.length) why.push(`змінює захищені файли (${touched.join(', ')})`);
+  const size = changedLines(pr);
   if (size > config.merge.maxChangedLines) why.push(`завеликий: ${size} змінених рядків (без lock-файлів і тестів) при ліміті ${config.merge.maxChangedLines}`);
   return why;
+}
+
+/**
+ * Whether two reviews stand in for a person: the PR is small, and every protected file it changes is in
+ * merge.doubleReview.paths (the shop's auth and payment code), not the conveyor's, CI's or the agents' own rules.
+ */
+function doubleReviewable(pr) {
+  const dr = config.merge.doubleReview;
+  const touched = protectedFilesOf(pr);
+  return Boolean(dr) && touched.length > 0 && touched.every((p) => dr.paths.some((x) => p.startsWith(x))) &&
+    changedLines(pr) <= dr.maxChangedLines;
 }
 
 function needsHuman(kind, n, reason, next = 'Щоб повернути це в конвеєр, зніміть мітку `needs-human`.') {
@@ -508,7 +527,7 @@ function needsHuman(kind, n, reason, next = 'Щоб повернути це в �
 }
 
 // What the conveyor counts per PR and per issue to know when to give up.
-const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'reviewRetried', 'fixRounds', 'fixFor', 'fixRetried', 'mergeFailures', 'updatedFor'];
+const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'reviewRetried', 'secondReviewFor', 'secondRetried', 'fixRounds', 'fixFor', 'fixRetried', 'mergeFailures', 'updatedFor'];
 const ISSUE_COUNTS = ['failures'];
 
 /**
@@ -747,6 +766,7 @@ function tick() {
 
   /** Who reviews a pull request: the one `reviewerFor` gives its issue's difficulty, else the reviewer. */
   const reviewerOf = (pr) => {
+    if (doubleReviewable(pr)) return config.reviewer; // its approval counts towards a merge without a person
     const issue = issueOfPr(pr);
     return (issue && config.reviewerFor?.[difficultyOf(issue)]) ?? config.reviewer;
   };
@@ -813,14 +833,17 @@ function tick() {
   };
 
   /** Hires the reviewer for a PR; true if it was hired. */
-  const requestReview = (pr, s, again = false) => {
-    const reviewer = reviewerOf(pr);
+  const requestReview = (pr, s, { again = false, second = false } = {}) => {
+    // A second review stands in for a person, so it is the strongest reviewer's.
+    const reviewer = second ? config.reviewer : reviewerOf(pr);
     if (reviewerBusy || pausedFor(reviewer)) return false;
-    const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid });
-    const title = `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
+    const text = prompt('review', { pr: pr.number, title: pr.title, url: pr.url, sha: pr.headRefOid, second: second ? SECOND_REVIEW : '' });
+    const title = second
+      ? `друге рев'ю PR #${pr.number}: код авторизації чи оплати мерджать два схвалення${again ? ', ще раз: минуле не залишило вердикту' : ''}`
+      : `рев'ю PR #${pr.number}${again ? " ще раз: минулий рев'юер не залишив вердикту" : ''}`;
     const worker = hire(reviewer, "рев'юера", title, text, ['--no-worktree']);
     if (!worker) return false;
-    s.reviewRounds = (s.reviewRounds ?? 0) + 1;
+    if (!second) s.reviewRounds = (s.reviewRounds ?? 0) + 1; // another look at the same commits is not another round
     s.reviewedSha = pr.headRefOid;
     delete s.fixFor; // a new verdict starts a new round of fixes
     s.job = { kind: 'review', provider: reviewer.provider, worker: worker.name, workerId: worker.id, since: now };
@@ -863,7 +886,8 @@ function tick() {
     if (pr.mergeable === 'UNKNOWN') continue; // GitHub is still working it out
     const ci = ciState(pr);
     // A verdict still holds after main was merged into the branch, as long as nothing else was pushed.
-    const v = latestVerdict(n);
+    const verdicts = verdictsOf(n);
+    const v = verdicts.at(-1) ?? null;
     const current = v && onlyMainMergedSince(n, v.sha, pr.headRefOid);
 
     // Requested changes go back straight away, along with anything else that's wrong:
@@ -909,6 +933,18 @@ function tick() {
       setReviewLabel(pr, 'approve');
       if (!config.merge.enabled || mergedNow) continue;
       const blockers = mergeBlockers(pr);
+      // Small auth or payment changes: a second, independent review stands in for the person. Both approvals have to
+      // hold for what the PR is now; a review that ends without a verdict gets one more go before a person is asked.
+      if (blockers.length && !okByPerson && doubleReviewable(pr)) {
+        const approvals = verdicts.filter((x) => x.verdict === 'approve' && onlyMainMergedSince(n, x.sha, pr.headRefOid)).length;
+        if (approvals >= 2) merge(pr, s, ", бо його схвалили два рев'ю");
+        else if (s.secondReviewFor !== pr.headRefOid) {
+          if (requestReview(pr, s, { second: true })) s.secondReviewFor = pr.headRefOid;
+        } else if (s.secondRetried !== pr.headRefOid) {
+          if (requestReview(pr, s, { second: true, again: true })) s.secondRetried = pr.headRefOid;
+        } else needsHuman('pr', n, "друге рев'ю не залишило вердикту");
+        continue;
+      }
       if (blockers.length && !okByPerson) {
         needsHuman('pr', n, `рев'ю пройдено, але автоматично не мерджу: ${blockers.join('; ')}`,
           config.merge.okLabel ? `Якщо PR можна мерджити, поставте мітку \`${config.merge.okLabel}\`: конвеєр сам підтягне main і змерджить, щойно CI позеленіє.` : undefined);
@@ -922,7 +958,7 @@ function tick() {
     if (!current && s.reviewedSha && sameCommit(s.reviewedSha, pr.headRefOid)) {
       if (s.reviewRetried && sameCommit(s.reviewRetried, pr.headRefOid)) {
         needsHuman('pr', n, "рев'юер закінчив, але не залишив вердикту");
-      } else if (requestReview(pr, s, true)) {
+      } else if (requestReview(pr, s, { again: true })) {
         s.reviewRetried = pr.headRefOid;
         s.reviewRounds -= 1;
       }

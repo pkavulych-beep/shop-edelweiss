@@ -7,7 +7,7 @@
   "priorityLabels": ["P0-critical", "P1-high", "P2-medium", "P3-low"],
   "difficultyLabels": ["hard", "medium", "easy"],
   "defaultDifficulty": "medium",
-  "maxOpenPullRequests": 4,
+  "maxOpenPullRequests": 6,
   "maxReviewRounds": 3,
   "escalateTo": "opus",
   "maxFixRounds": 4,
@@ -43,6 +43,18 @@
       "takes": ["easy", "medium"],
       "ports": { "back": 7781, "front": 3005, "db": "Edelweiss_deepseek" }
     },
+    "mimo": {
+      "provider": "opencode",
+      "model": "opencode/mimo-v2.6-flash-free",
+      "takes": ["easy", "medium"],
+      "ports": { "back": 7783, "front": 3007, "db": "Edelweiss_mimo" }
+    },
+    "nemotron": {
+      "provider": "opencode",
+      "model": "opencode/nemotron-3.5-super-vl-free",
+      "takes": ["easy", "medium"],
+      "ports": { "back": 7784, "front": 3008, "db": "Edelweiss_nemotron" }
+    },
     "glm": {
       "provider": "opencode",
       "model": "opencode/glm-5.3-flash-free",
@@ -72,6 +84,10 @@
     "method": "squash",
     "maxChangedLines": 600,
     "okLabel": "merge-ok",
+    "doubleReview": {
+      "paths": ["internet_shop-back-/src/payment/", "internet_shop-back-/src/auth/"],
+      "maxChangedLines": 300
+    },
     "protectedPaths": [
       ".github/",
       ".claude/",
