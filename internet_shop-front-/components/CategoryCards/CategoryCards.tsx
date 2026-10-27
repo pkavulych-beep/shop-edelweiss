@@ -13,19 +13,19 @@ interface CategoryItem {
 const featured: CategoryItem = {
   title: 'Верхній одяг',
   href: `/productsList/${Gender.Man}?category=outerwear`,
-  image: 'https://images.unsplash.com/photo-1608063615781-e2ef8c73d114?w=1200&q=80&fit=crop',
+  image: '/images/category-outerwear.webp',
 };
 
 const secondary: CategoryItem[] = [
   {
     title: 'Штани',
     href: `/productsList/${Gender.Man}?category=pants`,
-    image: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&q=80&fit=crop',
+    image: '/images/category-pants.webp',
   },
   {
     title: 'Худі',
     href: `/productsList/${Gender.Man}?category=hoodies`,
-    image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600&q=80&fit=crop',
+    image: '/images/category-hoodies.webp',
   },
 ];
 
@@ -50,6 +50,8 @@ const CategoryCard: React.FC<{ item: CategoryItem; height: { xs: number; md: num
         component="img"
         src={item.image}
         alt={item.title}
+        loading="lazy"
+        decoding="async"
         sx={{
           position: 'absolute',
           inset: 0,
