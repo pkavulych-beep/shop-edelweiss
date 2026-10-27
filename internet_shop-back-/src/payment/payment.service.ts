@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  forwardRef,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -11,7 +12,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { EntityManager, In, IsNull, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { OrderEntity } from 'src/order/entities/order.entity';
 import { PaymentMethod, PaymentStatus } from 'src/order/paymentEnum';
-import { OrderService } from 'src/order/order.service';
+import { OrderChanges, OrderService } from 'src/order/order.service';
 import { Status } from 'src/order/statusEnum';
 import { PaymentEntity, PaymentLogKind } from './entities/payment.entity';
 import { isCardPaymentAvailable } from './card-payment';
@@ -73,6 +74,7 @@ export class PaymentService {
     private paymentRepository: Repository<PaymentEntity>,
     @InjectRepository(OrderEntity)
     private orderRepository: Repository<OrderEntity>,
+    @Inject(forwardRef(() => OrderService))
     private orderService: OrderService,
     @Inject('PAYMENT_PROVIDER')
     private paymentProvider: PaymentProvider,
@@ -189,6 +191,109 @@ export class PaymentService {
     await this.paymentRepository.save(paymentLog);
 
     return { pageUrl };
+  }
+
+  // Адмін скасовує CARD-замовлення, яке чекає на оплату. Спершу питаємо mono,
+  // чи воно вже не оплачене, і анулюємо рахунок, щоб покупець не міг
+  // заплатити за скасоване замовлення (#285). Лише після цього скасовуємо
+  // замовлення в базі й пишемо причину в журнал payment.
+  async cancelPendingCardOrder(
+    orderId: number,
+    invoiceId: string,
+    changes: OrderChanges = {},
+  ): Promise<OrderEntity> {
+    let status: InvoiceStatusResult;
+    try {
+      status = await this.paymentProvider.getInvoiceStatus(invoiceId);
+    } catch (error) {
+      this.logger.error(
+        `Не вдалося перевірити статус інвойсу ${invoiceId} перед скасуванням ` +
+          `замовлення ${orderId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new BadRequestException(
+        'Не вдалося перевірити статус оплати в mono. Замовлення не скасовано',
+      );
+    }
+
+    // Рахунок уже оплачений: застосовуємо оплату, щоб адмінка показала
+    // «Оплачено», і не скасовуємо — спершу треба повернути кошти.
+    if (status.status === 'success') {
+      const invoiceLog = await this.paymentRepository.findOne({
+        where: { invoiceId, kind: PaymentLogKind.Invoice },
+      });
+      if (invoiceLog) {
+        await this.applyInvoiceStatusPaid(invoiceLog, status);
+      } else {
+        this.logger.error(
+          `Mono вважає інвойс ${invoiceId} оплаченим, але запису в payment немає`,
+        );
+      }
+      throw new BadRequestException(
+        'Замовлення вже оплачене. Спершу поверніть кошти',
+      );
+    }
+
+    // Прострочений чи невдалий рахунок уже не можна оплатити, тож remove
+    // для нього не потрібен (і mono може відповісти помилкою).
+    if (status.status !== 'expired' && status.status !== 'failure') {
+      try {
+        await this.paymentProvider.invalidateInvoice(invoiceId);
+      } catch (error) {
+        this.logger.error(
+          `Не вдалося анулювати інвойс ${invoiceId} замовлення ${orderId}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw new BadRequestException(
+          'Не вдалося анулювати рахунок у mono. Замовлення не скасовано',
+        );
+      }
+    }
+
+    return this.paymentRepository.manager.transaction(async (manager) => {
+      const cancelled = await this.orderService.cancelUnpaidOrder(
+        manager,
+        orderId,
+        invoiceId,
+        changes,
+      );
+
+      if (!cancelled) {
+        // Поки ходили в mono, вебхук міг застосувати оплату, а звірка —
+        // скасувати замовлення. Не перезаписуємо цей стан.
+        const current = await manager.findOne(OrderEntity, {
+          where: { id: orderId },
+        });
+        if (!current) {
+          throw new NotFoundException('Не знайдено такого замовлення');
+        }
+        if (current.paymentStatus === PaymentStatus.Paid) {
+          throw new BadRequestException(
+            'Замовлення вже оплачене. Спершу поверніть кошти',
+          );
+        }
+        return current;
+      }
+
+      await manager.save(
+        PaymentEntity,
+        manager.create(PaymentEntity, {
+          orderId,
+          provider: 'mono',
+          invoiceId,
+          kind: PaymentLogKind.StatusCheck,
+          amount: Math.round(cancelled.total * 100),
+          status: PaymentStatus.Failed,
+          providerModifiedAt: new Date(),
+          rawPayload: {
+            status: 'canceled',
+            reason: 'admin_canceled',
+            monoStatus: status.status,
+          },
+        }),
+      );
+
+      return cancelled;
+    });
   }
 
   async refund(invoiceId: string, amount?: number): Promise<void> {
@@ -717,6 +822,17 @@ export class PaymentService {
         `Вебхук інвойсу ${event.invoiceId}, а замовлення ${order.id} вже на ${order.paymentInvoiceId}`,
       );
       return;
+    }
+
+    // Скасоване замовлення могло бути оплачене, якщо вебхук прийшов уже
+    // після скасування (наприклад, адмін не встиг анулювати рахунок).
+    // Оплату лишаємо, щоб адмінка показала «Оплачено» і було видно, що
+    // покупцеві треба повернути кошти.
+    if (next === PaymentStatus.Paid && order.status === Status.Canceled) {
+      this.logger.error(
+        `Оплата надійшла на скасоване замовлення ${order.id} ` +
+          `(інвойс ${event.invoiceId}): потрібно повернути кошти`,
+      );
     }
 
     order.paymentStatus = next;

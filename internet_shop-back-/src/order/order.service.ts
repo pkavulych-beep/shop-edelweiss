@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,8 +25,9 @@ import {
   isCardPaymentAvailable,
 } from '../payment/card-payment';
 import { applyStockDelta, availableFor } from '../product/stock';
+import { PaymentService } from '../payment/payment.service';
 
-type OrderChanges = Omit<UpdateOrderDto, 'id' | 'status'>;
+export type OrderChanges = Omit<UpdateOrderDto, 'id' | 'status'>;
 type StockItem = { productId: number; size?: string | null; quantity: number };
 
 // Скільки одиниць просять з кожного залишку товару: з розміру, якщо залишок
@@ -51,6 +54,13 @@ const assertInStock = (product: ProductEntity, demand: Map<string, number>) => {
 
 @Injectable()
 export class OrderService {
+  // Оплата карткою: скасування PENDING-замовлення має спершу анулювати
+  // рахунок у mono. PaymentService теж залежить від OrderService, тож
+  // ін'єкція через forwardRef. Необов'язкова — юніт-тести створюють сервіс
+  // без неї, а гілка потрібна лише для CARD-замовлень з інвойсом.
+  @Inject(forwardRef(() => PaymentService))
+  private readonly paymentService?: PaymentService;
+
   constructor(
     @InjectRepository(OrderEntity)
     private repository: Repository<OrderEntity>,
@@ -217,6 +227,25 @@ export class OrderService {
   }
 
   async updateStatus(id: number, status: Status, changes: OrderChanges = {}) {
+    // Скасування CARD-замовлення, яке чекає на оплату, має спершу анулювати
+    // рахунок у mono: інакше покупець може оплатити вже скасоване замовлення
+    // (#285). Це робить PaymentService, бо саме він знає провайдера.
+    if (status === Status.Canceled) {
+      const order = await this.findOneById(id);
+      if (
+        order.status !== Status.Canceled &&
+        order.paymentMethod === PaymentMethod.Card &&
+        order.paymentStatus === PaymentStatus.Pending &&
+        order.paymentInvoiceId
+      ) {
+        return this.paymentService.cancelPendingCardOrder(
+          id,
+          order.paymentInvoiceId,
+          changes,
+        );
+      }
+    }
+
     // Use transaction with pessimistic locking on order row to prevent race conditions
     return this.repository.manager.transaction(async (manager: EntityManager) => {
       // First, lock the order row
@@ -280,6 +309,7 @@ export class OrderService {
     manager: EntityManager,
     id: number,
     invoiceId: string,
+    changes: OrderChanges = {},
   ): Promise<OrderEntity | null> {
     const order = await manager.findOne(OrderEntity, {
       where: { id },
@@ -300,6 +330,13 @@ export class OrderService {
       relations: { items: { product: true } },
       order: { items: { id: 'ASC' } },
     });
+
+    this.assertUkrposhtaIndex(orderWithItems, changes);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value !== undefined) {
+        orderWithItems[key] = value;
+      }
+    }
 
     await this.restoreProductCounts(manager, orderWithItems.items ?? []);
     orderWithItems.status = Status.Canceled;
