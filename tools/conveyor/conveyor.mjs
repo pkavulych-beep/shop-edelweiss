@@ -16,6 +16,8 @@
 // ports and a database of its own; an issue whose difficulty no coder takes waits for one. A usage limit
 // pauses only the agents on that plan, or, for OpenCode's free models, on that model. Coders and QA run the shop on its database in Docker: when Docker
 // Desktop is closed the conveyor opens it, and hires none of them until the database is up.
+// Jules is a coder outside the office: it gets its issue through its API, works in Google's cloud and opens the pull
+// request itself. From there the PR goes on like any other, except that a coder in the office makes its fixes.
 // Whatever it can't move on its own gets the `needs-human` label and a comment saying why;
 // removing the label hands it back to the conveyor, with its counts reset. A macOS notification says
 // when that happens, when a usage limit pauses the work, when Docker won't start, and what QA found.
@@ -25,7 +27,7 @@
 // --dry-run only says what it would do; --once runs a single tick.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,6 +64,13 @@ const LONG_LIMIT = /hit your (?:weekly|opus|sonnet|fable) limit/i;
 // What OpenCode prints when a free model is down ("Upstream request failed: Model is unavailable.") or was taken off
 // the list ("Model not found: opencode/longcat-2.5-preview-free"). The agent can't do anything on it, retrying included.
 const MODEL_DOWN = /upstream request failed: model is unavailable|model not found: [\w.-]+\/[\w.-]+|ProviderModelNotFoundError/i;
+// What OpenCode shows as its agent's activity when a provider turns every request away: no key, a wrong one, no credits
+// left (NVIDIA's trial). It then stops as if waiting for an answer, and nothing typed to it helps.
+const PROVIDER_REFUSED = /payment required|insufficient (?:credits?|balance|funds|quota)|(?:out of|no) credits|credits? (?:exhausted|depleted)|invalid api key|api key (?:is )?(?:missing|invalid|not valid)|authentication failed|ProviderAuthError/i;
+// The GitHub app Jules opens its pull requests as, the way `gh` names it.
+const JULES_APP = /^(?:app\/google-labs-jules|google-labs-jules\[bot\])$/;
+// What Jules hears when it asks something: nobody is there to answer.
+const JULES_ANSWER = 'Відповідати на питання тут нікому: виріши сам, як найкраще за задачею й AGENTS.md, доведи роботу до кінця й відкрий PR.';
 // What a second reviewer is told (prompts/review.md, {{second}}): it stands in for a person on auth and payment code.
 const SECOND_REVIEW = "\n\nЦе друге, незалежне рев'ю. PR змінює код авторизації чи оплати, і замість людини його мерджать два схвалення, тож твій вердикт — остання перевірка перед `main`. Попереднє рев'ю в коментарях не бери на віру й не повторюй: оціни код сам, особливо доступи, гроші, гонки й обробку помилок. Якщо не певен, що зміна безпечна, постав `changes` і напиши, що саме перевірити.";
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -71,11 +80,13 @@ const LOCK_FILE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock
 const TEST_FILE = /\.(?:spec|test|e2e-spec)\.[cm]?[jt]sx?$|(?:^|\/)(?:test|tests|__tests__)\//;
 const FINISHED = new Set(['idle', 'done', 'exited', 'offline']);
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 const state = loadState();
 state.qa ??= {};
 state.paused ??= state.pausedUntil ? { claude: state.pausedUntil } : {}; // until when each provider's usage limit holds
 delete state.pausedUntil;
+state.jules ??= { starts: [], prs: [] }; // when Jules's sessions started, and the pull requests they opened
 // Coder jobs from before there were several coders ran on Claude.
 const CLAUDE_CODER = Object.keys(config.coders).find((k) => config.coders[k].provider === 'claude') ?? Object.keys(config.coders)[0];
 let me; // this shell's GitHub login and office name, filled in on the first tick
@@ -312,8 +323,9 @@ function databaseUp(now) {
 /** An issue's difficulty: its label, or the default when it has none. */
 const difficultyOf = (issue) => config.difficultyLabels.find((l) => labelsOf(issue).includes(l)) ?? config.defaultDifficulty;
 
-/** The first coder that takes issues of `difficulty`, if any does. */
-const coderFor = (difficulty) => Object.keys(config.coders).find((name) => config.coders[name].takes.includes(difficulty));
+/** The first coder that takes issues of `difficulty`, if any does; with `office`, the first of those in the office. */
+const coderFor = (difficulty, office = false) => Object.keys(config.coders).find((name) =>
+  config.coders[name].takes.includes(difficulty) && !(office && remote(config.coders[name])));
 
 /** The ports and database an agent runs the shop on, for its prompt. */
 const portsOf = (agent) => ({ backPort: agent.ports.back, frontPort: agent.ports.front, db: agent.ports.db });
@@ -333,6 +345,15 @@ const modelDownHours = () => config.modelDownHours ?? 6;
 const limitKeyOf = (agent) => (agent.provider === 'opencode' ? agent.model : agent.provider);
 /** The limit a job's agent runs into: its coder's, else its provider's (reviewers and QA). */
 const limitKeyOfJob = (job) => (config.coders[job.coder] ? limitKeyOf(config.coders[job.coder]) : job.provider ?? 'claude');
+
+/** Jules works in Google's cloud and opens its pull requests itself, rather than at a desk in the office. */
+const remote = (agent) => agent?.provider === 'jules';
+/** Where Jules's API key lies. The conveyor only looks whether it is there: jules.mjs reads it. */
+const keyFileOf = (agent) => agent.keyFile.replace(/^~(?=\/)/, homedir());
+/** A Jules API call, through jules.mjs: its reply. Throws on an HTTP error ("HTTP 429 RESOURCE_EXHAUSTED …"). */
+const julesApi = (agent, method, apiPath, body) =>
+  JSON.parse(run(process.execPath, [path.join(HERE, 'jules.mjs'), keyFileOf(agent), method, apiPath],
+    { input: body ? JSON.stringify(body) : '', timeout: 2 * MINUTE }) || '{}');
 
 const when = (time) => new Date(time).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -528,7 +549,7 @@ function needsHuman(kind, n, reason, next = 'Щоб повернути це в �
 
 // What the conveyor counts per PR and per issue to know when to give up.
 const PR_COUNTS = ['reviewRounds', 'reviewedSha', 'reviewRetried', 'secondReviewFor', 'secondRetried', 'fixRounds', 'fixFor', 'fixRetried', 'mergeFailures', 'updatedFor'];
-const ISSUE_COUNTS = ['failures'];
+const ISSUE_COUNTS = ['failures', 'julesFailed'];
 
 /**
  * Whether the item waits for a person (`needs-human`). Taking the label off hands it back with its counts
@@ -566,8 +587,14 @@ function tick() {
   me ??= { login: gh('api', 'user', '--jq', '.login').trim() };
   if (office) me.name = office.workers.find((w) => w.you)?.name;
 
-  // Only our own pull requests: agents push as this account, and a stranger's PR must never be merged by a script.
-  const pulls = openPulls().filter((p) => !p.isDraft && !p.isCrossRepository && p.author?.login === me.login);
+  // Only our own pull requests: agents push as this account, and a stranger's PR must never be merged by a script. Jules
+  // opens its pull requests as its GitHub app: of those, only the ones from sessions the conveyor started.
+  const allPulls = openPulls();
+  const ours = (p) => !p.isDraft && !p.isCrossRepository &&
+    (p.author?.login === me.login || (JULES_APP.test(p.author?.login ?? '') && state.jules.prs.includes(p.number)));
+  const pulls = allPulls.filter(ours);
+  state.jules.prs = state.jules.prs.filter((n) => allPulls.some((p) => p.number === n));
+  state.jules.starts = state.jules.starts.filter((t) => now - t < DAY);
   const open = openIssues();
   const openNumbers = new Set(open.map((i) => i.number));
   const issues = open.filter(inQueue);
@@ -670,10 +697,61 @@ function tick() {
     return false;
   };
 
+  /**
+   * Where Jules is with an issue. It works in Google's cloud, not at a desk, and opens the pull request itself: once it
+   * has, the job is done. A question gets one answer, that the decision is its own. A session that failed, asks again,
+   * ends without a pull request or runs past maxHours gives the issue back, for a coder in the office. True while it works.
+   */
+  const julesBusy = (s, n) => {
+    const job = s.job;
+    const agent = config.coders[job.coder] ?? Object.values(config.coders).find(remote);
+    let session = {};
+    try {
+      session = julesApi(agent, 'GET', `sessions/${job.session}`);
+    } catch (e) {
+      log(`issue #${n}: не вдалося дізнатися, що з сесією Jules: ${firstLine(e)}`);
+    }
+    const pr = Number(/\/pull\/(\d+)/.exec(session.outputs?.find((o) => o.pullRequest)?.pullRequest.url ?? '')?.[1]);
+    if (pr) {
+      if (!state.jules.prs.includes(pr)) state.jules.prs.push(pr);
+      const p = allPulls.find((x) => x.number === pr);
+      if (p && ours(p) && !pulls.includes(p)) pulls.push(p);
+      log(`issue #${n}: Jules відкрив PR #${pr}`);
+      s.lastJob = { ...job, ended: now, pr };
+      delete s.job;
+      return false;
+    }
+    const maxHours = agent?.maxHours ?? 4;
+    const late = now - job.since > maxHours * 60 * MINUTE;
+    if (!late && session.state === 'AWAITING_PLAN_APPROVAL') {
+      act(`issue #${n}: схвалити план Jules`, () => julesApi(agent, 'POST', `sessions/${job.session}:approvePlan`, {}));
+      return true;
+    }
+    if (!late && session.state === 'AWAITING_USER_FEEDBACK' && !job.answered) {
+      const answered = act(`issue #${n}: Jules питає, відповідаємо, що вирішує він сам`, () =>
+        julesApi(agent, 'POST', `sessions/${job.session}:sendMessage`, { prompt: JULES_ANSWER }));
+      if (answered !== undefined) job.answered = now;
+      return true;
+    }
+    // A pull request can show up a little after the session completes, and an answer takes Jules a while to read.
+    if (session.state === 'COMPLETED') job.completedAt ??= now;
+    const why = late ? `не впорався за ${maxHours} год`
+      : session.state === 'FAILED' ? 'не впорався: сесія впала'
+        : session.state === 'AWAITING_USER_FEEDBACK' && now - job.answered > 15 * MINUTE ? 'питає знову'
+          : job.completedAt && now - job.completedAt >= 10 * MINUTE ? 'закінчив' : '';
+    if (!why) return true;
+    log(`issue #${n}: Jules ${why}, а PR не відкрив, тож задачу візьме кодер в офісі`);
+    s.julesFailed = true;
+    s.lastJob = { ...job, ended: now };
+    delete s.job;
+    return false;
+  };
+
   /** Brings a job up to date; true while its worker is still on it (or waiting out a limit). */
   const busy = (s, kind, n) => {
     const job = s.job;
     if (!job) return false;
+    if (remote(job)) return julesBusy(s, n);
     const where = jobState(job, workers);
     if (where === 'unknown' || job.limited) return true;
     // A usage limit can leave the agent stuck at a question (Codex offers a cheaper model) while its status
@@ -692,6 +770,9 @@ function tick() {
     if (where === 'running') return true;
     // Also for an agent that is gone: its terminal stays, and tells why it stopped.
     if (modelDown(job.workerId, job.scrollFrom)) return dropDownModel(s, kind, n, where !== 'gone');
+    // The same when OpenCode stopped on a provider's refusal, which its activity in the office shows.
+    if (where === 'needs_input' && job.provider === 'opencode' &&
+      PROVIDER_REFUSED.test(workers.find((w) => w.name === job.worker)?.activity ?? '')) return dropDownModel(s, kind, n, true);
     if (where === 'needs_input') {
       job.waitingSince ??= now;
       if (now - job.waitingSince > config.needsInputMinutes * MINUTE && !job.escalated) {
@@ -715,12 +796,16 @@ function tick() {
       continue;
     }
     if (s.lastJob && !s.checked) {
+      // Jules's pull request can be in its session a little before GitHub lists it.
+      const julesPr = s.lastJob.pr && pulls.find((p) => p.number === s.lastJob.pr);
+      if (s.lastJob.pr && !julesPr && now - s.lastJob.ended < 10 * MINUTE) continue;
       s.checked = true;
       let opened = pulls.some((p) => [...(p.body ?? '').matchAll(CLOSES)].some((m) => m[1] === n));
       // An agent can leave out the `Closes #N` line (a model wrote it in Ukrainian, say). Its branch tells which pull
-      // request is its, and the line is added: GitHub then closes the issue on merge, and nobody else is hired for it.
-      const branch = !opened && workers ? branchOf(workers.find((w) => w.name === s.lastJob.worker) ?? {}) : undefined;
-      const own = branch && pulls.find((p) => p.headRefName === branch);
+      // request is its (Jules's session names it), and the line is added: GitHub then closes the issue on merge, and
+      // nobody else is hired for it.
+      const branch = !opened && workers && !julesPr ? branchOf(workers.find((w) => w.name === s.lastJob.worker) ?? {}) : undefined;
+      const own = !opened && (julesPr || (branch && pulls.find((p) => p.headRefName === branch)));
       if (own) {
         const body = `${(own.body ?? '').trimEnd()}\n\nCloses #${n}\n`;
         const what = `PR #${own.number}: дописати «Closes #${n}», бо ${s.lastJob.worker} не вказав, яке issue він закриває`;
@@ -754,14 +839,15 @@ function tick() {
 
   /**
    * Whose pull request this is: the coder that did its issue, as the conveyor remembers it (two coders can share a
-   * provider), else the one on its author's provider and model, else the one its issue's difficulty picks.
+   * provider), else the one on its author's provider and model, else the office coder its issue's difficulty picks:
+   * Jules is the author only of the pull requests its sessions opened.
    */
   const coderOfPr = (pr, author) => {
     const byJob = issuesOfPr(pr).map((n) => (state.issues[n]?.lastJob ?? state.issues[n]?.job)?.coder).find((c) => config.coders[c]);
     const byAuthor = author && Object.keys(config.coders).find((k) =>
       config.coders[k].provider === author.provider && (!author.model || config.coders[k].model === author.model));
     const issue = issueOfPr(pr);
-    return byJob ?? byAuthor ?? (issue && coderFor(difficultyOf(issue))) ?? CLAUDE_CODER;
+    return byJob ?? byAuthor ?? (issue && coderFor(difficultyOf(issue), true)) ?? CLAUDE_CODER;
   };
 
   /** Who reviews a pull request: the one `reviewerFor` gives its issue's difficulty, else the reviewer. */
@@ -792,19 +878,21 @@ function tick() {
     let author = again || other ? undefined : workers?.find((w) => w.kind === 'agent' && (w.pr?.number === n || branchOf(w) === pr.headRefName));
     if (!config.coders[s.coder]) s.coder = coderOfPr(pr, author);
     let name = other ?? s.coder;
-    // Its coder's model is paused (a usage limit, or it is down), maybe for hours: a free coder that takes the issue's
-    // difficulty does the fix instead, as a new agent in the PR's branch.
+    // Its coder's model is paused (a usage limit, or it is down), maybe for hours, or its coder is Jules, who only takes
+    // issues: a free coder in the office that takes the issue's difficulty does the fix instead, as a new agent in the
+    // PR's branch.
     let instead = '';
-    if (!other && pausedFor(config.coders[name])) {
+    const away = remote(config.coders[name]);
+    if (!other && (away || pausedFor(config.coders[name]))) {
       const issue = issueOfPr(pr);
       const takes = issue ? [difficultyOf(issue)] : config.coders[name].takes;
-      const sub = Object.keys(config.coders).find((k) =>
+      const sub = Object.keys(config.coders).find((k) => !remote(config.coders[k]) &&
         !busyCoders.has(k) && !pausedFor(config.coders[k]) && config.coders[k].takes.some((d) => takes.includes(d)));
       if (sub) {
-        instead = ` замість ${name}: ${limitKeyOf(config.coders[name])} на паузі`;
+        instead = away ? ` замість ${name}: він не доопрацьовує PR` : ` замість ${name}: ${limitKeyOf(config.coders[name])} на паузі`;
         name = sub;
         author = undefined;
-      }
+      } else if (away) return; // waits for a free coder in the office
     }
     const coder = config.coders[name];
     if (busyCoders.has(name) || pausedFor(coder)) return; // waits for its coder
@@ -1000,15 +1088,63 @@ function tick() {
       return !i.assignees.length || s; // someone else's if assigned and not by us
     })
     .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt));
+  /** Hands an issue to Jules: a session in Google's cloud that opens the pull request itself. True if it started. */
+  const startJules = (name, coder, issue) => {
+    const what = `передати Jules issue #${issue.number} «${issue.title}»`;
+    if (DRY) {
+      log(`[dry-run] ${what}`);
+      return false;
+    }
+    let session;
+    try {
+      session = julesApi(coder, 'POST', 'sessions', {
+        title: `#${issue.number} ${issue.title}`,
+        prompt: prompt('jules', { issue: issue.number, title: issue.title, body: issue.body ?? '' }),
+        sourceContext: { source: `sources/github/${REPO}`, githubRepoContext: { startingBranch: 'main' } },
+        automationMode: 'AUTO_CREATE_PR',
+        requirePlanApproval: false,
+      });
+    } catch (e) {
+      // Its tasks for the day ran out: it sits out until its oldest session today is a day old. A refusal (a wrong key,
+      // the repository not connected to Jules) needs a person: modelDownHours, and they hear why. Anything else, a while.
+      const why = firstLine(e);
+      const daily = /^HTTP 429|RESOURCE_EXHAUSTED/i.test(why);
+      const refused = !daily && /^HTTP 4\d\d/.test(why);
+      const freed = state.jules.starts.length ? Math.min(...state.jules.starts) + DAY : now + 2 * 60 * MINUTE;
+      const until = daily ? Math.max(freed, now + 60 * MINUTE) : now + (refused ? modelDownHours() * 60 : 30) * MINUTE;
+      state.paused[limitKeyOf(coder)] = Math.max(state.paused[limitKeyOf(coder)] ?? 0, until);
+      log(`НЕ ВДАЛОСЯ: ${what} — ${why}. Jules на паузі до ${when(until)}`);
+      if (refused) notify('Jules не бере задачі', `${why}. Пауза до ${when(until)}`);
+      return false;
+    }
+    const id = session.id ?? session.name?.split('/').at(-1);
+    log(`${what}: ${session.url ?? `сесія ${id}`}`);
+    state.jules.starts.push(now);
+    const s = (state.issues[issue.number] ??= {});
+    s.job = { kind: 'code', coder: name, provider: 'jules', worker: 'Jules', session: id, since: now };
+    delete s.checked;
+    return true;
+  };
+
   let started = 0;
   const claimed = new Set();
   for (const [name, coder] of Object.entries(config.coders)) {
     if (busyCoders.has(name) || pausedFor(coder) || inFlight + started >= config.maxOpenPullRequests) continue;
+    // Jules, once its key is in place: up to dailyTasks sessions a day, never on an issue it already failed.
+    if (remote(coder) && (!existsSync(keyFileOf(coder)) || state.jules.starts.length >= coder.dailyTasks)) continue;
     // Several coders can take the same difficulty: each free one takes the most important issue it can.
-    const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number));
+    const next = ready.find((i) => coder.takes.includes(difficultyOf(i)) && !claimed.has(i.number) &&
+      !(remote(coder) && state.issues[i.number]?.julesFailed));
     if (!next) continue;
-    if (!databaseReady()) break; // no coder starts without the shop's database
+    if (!remote(coder) && !databaseReady()) continue; // no coder in the office starts without the shop's database
     claimed.add(next.number);
+    if (remote(coder)) {
+      if (startJules(name, coder, next)) {
+        busyCoders.add(name);
+        started++;
+      }
+      continue;
+    }
     const text = prompt('coder', { issue: next.number, title: next.title, ...portsOf(coder) });
     const worker = hire(coder, `кодера ${name}`, `issue #${next.number} «${next.title}»`, text, ['--issue', String(next.number)]);
     if (!worker) continue;
@@ -1041,6 +1177,7 @@ function tick() {
     `PR у роботі ${inFlight}`,
     `issues у черзі ${issues.length}${noCoder ? ` (без кодера ${noCoder})` : ''}${waiting ? ` (чекають на інші ${waiting})` : ''}`,
     busyCoders.size ? `працюють ${[...busyCoders].join(', ')}` : '',
+    ...Object.values(config.coders).filter((c) => remote(c) && existsSync(keyFileOf(c))).map((c) => `Jules ${state.jules.starts.length}/${c.dailyTasks} за добу`),
     !config.qa?.enabled ? '' : qa.job ? 'QA працює' : `мерджів до QA ${unchecked.length}/${config.qa.everyMerges}`,
     ...Object.entries(state.paused).filter(([, until]) => until > now).map(([p, until]) => `${p} на паузі до ${when(until)}`),
   ];
