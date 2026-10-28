@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const T = mkdtempSync(path.join(tmpdir(), 'conveyor-test-'));
@@ -20,6 +20,9 @@ for (const tool of ['gh', 'office-workers', 'osascript', 'docker', 'open']) {
   writeFileSync(`${T}/bin/${tool}`, `#!/bin/sh\nexec node "${path.join(HERE, 'fake.mjs')}" ${tool} "$@"\n`);
   chmodSync(`${T}/bin/${tool}`, 0o755);
 }
+// jules.mjs talks to Jules's API: in the copy it is fake.mjs, as the tool `jules`. Its key file is ~/.jules-api-key, and
+// HOME is the temporary folder, so a scenario has the key only when it says so (julesKey).
+writeFileSync(`${T}/root/tools/conveyor/jules.mjs`, `process.argv.splice(2, 0, 'jules');\nawait import(${JSON.stringify(pathToFileURL(path.join(HERE, 'fake.mjs')).href)});\n`);
 
 const me = { name: 'Dispatcher 🐚', you: true, kind: 'shell', status: 'working' };
 const st = (o = {}) => ({ prs: {}, issues: {}, paused: {}, qa: { since: '2026-10-05T09:00:00Z' }, ...o });
@@ -54,6 +57,12 @@ const failedReport = { number: 60, state: 'OPEN', createdAt: '2026-10-05T18:51:4
 const busyWorker = (name, id) => ({ name, id, kind: 'agent', provider: 'opencode', status: 'working' });
 const codeJob = (coder, worker, workerId) => ({ job: { kind: 'code', coder, provider: 'opencode', worker, workerId, since: Date.now() } });
 const HIRE = (provider, model) => `^office-workers hire --provider ${provider} --model ${model.replace(/\//g, '\\/')} `;
+// Jules: a session the conveyor started on issue 30, and the pull request it opened, as its GitHub app.
+const julesJob = (job = {}) => ({ issues: { 30: { job: { kind: 'code', coder: 'jules', provider: 'jules', worker: 'Jules', session: 's1', since: Date.now(), ...job } } } });
+const julesPr = (o = {}) => pr({ number: 77, body: 'Jules: що зроблено', author: { login: 'app/google-labs-jules' }, headRefName: 'feature/x-123', ...o });
+const julesDone = { s1: { state: 'COMPLETED', outputs: [{ pullRequest: { url: 'https://github.com/pkavulych-beep/shop-edelweiss/pull/77' } }] } };
+const JULES = '^jules \\S+ ';
+const vega = (activity) => ({ name: 'Vega', id: 'w-v', kind: 'agent', provider: 'opencode', status: 'needs_input', activity, hiredBy: me.name });
 const scenarios = [
   // ── Coders by difficulty ──
   { name: 'easy, усі вільні → Zen: opencode/big-pickle без --effort, порти 7780/3003',
@@ -62,9 +71,13 @@ const scenarios = [
   { name: 'easy, Zen і DeepSeek зайняті → бере MiMo на портах 7783/3007',
     fx: { workers: [me, busyWorker('Z', 'w-1'), busyWorker('N', 'w-2')], issues: [issue(30, ['easy', 'P1-high'])], state: st({ issues: { 81: codeJob('zen', 'Z', 'w-1'), 82: codeJob('deepseek', 'N', 'w-2') } }) },
     want: [`${HIRE('opencode', 'opencode/mimo-v2.6-flash-free')}--json --issue 30 <<.*бек 7783, фронт 3007, база \`Edelweiss_mimo\``] },
-  { name: 'easy, Zen, DeepSeek, MiMo і Nemotron зайняті → бере GLM із запасу на портах 7782/3006',
+  { name: 'easy, Zen, DeepSeek, MiMo і Nemotron зайняті → бере NVIDIA на портах 7785/3009',
     fx: { workers: [me, busyWorker('Z', 'w-1'), busyWorker('N', 'w-2'), busyWorker('M', 'w-3'), busyWorker('T', 'w-4')], issues: [issue(30, ['easy', 'P1-high'])],
       state: st({ issues: { 81: codeJob('zen', 'Z', 'w-1'), 82: codeJob('deepseek', 'N', 'w-2'), 83: codeJob('mimo', 'M', 'w-3'), 84: codeJob('nemotron', 'T', 'w-4') } }) },
+    want: [`${HIRE('opencode', 'nvidia/z-ai/glm-5.3')}--json --issue 30 <<.*бек 7785, фронт 3009, база \`Edelweiss_nvidia\``], not: ['glm-5.3-flash-free'] },
+  { name: 'easy, Zen, DeepSeek, MiMo, Nemotron і NVIDIA зайняті → бере GLM із запасу на портах 7782/3006',
+    fx: { workers: [me, busyWorker('Z', 'w-1'), busyWorker('N', 'w-2'), busyWorker('M', 'w-3'), busyWorker('T', 'w-4'), busyWorker('V', 'w-5')], issues: [issue(30, ['easy', 'P1-high'])],
+      state: st({ issues: { 81: codeJob('zen', 'Z', 'w-1'), 82: codeJob('deepseek', 'N', 'w-2'), 83: codeJob('mimo', 'M', 'w-3'), 84: codeJob('nemotron', 'T', 'w-4'), 85: codeJob('nvidia', 'V', 'w-5') } }) },
     want: [`${HIRE('opencode', 'opencode/glm-5.3-flash-free')}--json --issue 30 <<.*бек 7782, фронт 3006, база \`Edelweiss_glm\``] },
   { name: 'medium P0 і easy → Codex бере medium, Zen бере easy',
     fx: { workers: [me], issues: [issue(31, ['medium', 'P0-critical']), issue(30, ['easy', 'P1-high'])], state: st() },
@@ -78,10 +91,11 @@ const scenarios = [
   { name: 'три easy → Zen бере найважливіше, DeepSeek друге (на портах 7781/3005), MiMo третє',
     fx: { workers: [me], issues: [issue(30, ['easy', 'P2-medium']), issue(34, ['easy', 'P1-high']), issue(37, ['easy', 'P3-low'])], state: st() },
     want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 34`, `${HIRE('opencode', 'opencode/deepseek-v4.1-flash-free')}--json --issue 30 <<.*бек 7781, фронт 3005, база \`Edelweiss_deepseek\``, `${HIRE('opencode', 'opencode/mimo-v2.6-flash-free')}--json --issue 37`], not: ['glm-5.3'] },
-  { name: 'п\'ять easy → Zen, DeepSeek, MiMo, Nemotron (на портах 7784/3008), а GLM із запасу останнім',
-    fx: { workers: [me], issues: [30, 31, 32, 33, 34].map((n) => issue(n, ['easy'])), state: st() },
+  { name: 'шість easy → Zen, DeepSeek, MiMo, Nemotron (на портах 7784/3008), NVIDIA, а GLM із запасу останнім',
+    fx: { workers: [me], issues: [30, 31, 32, 33, 34, 35].map((n) => issue(n, ['easy'])), state: st() },
     want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`, `${HIRE('opencode', 'opencode/deepseek-v4.1-flash-free')}--json --issue 31`, `${HIRE('opencode', 'opencode/mimo-v2.6-flash-free')}--json --issue 32`,
-      `${HIRE('opencode', 'opencode/nemotron-3.5-super-vl-free')}--json --issue 33 <<.*бек 7784, фронт 3008, база \`Edelweiss_nemotron\``, `${HIRE('opencode', 'opencode/glm-5.3-flash-free')}--json --issue 34`] },
+      `${HIRE('opencode', 'opencode/nemotron-3.5-super-vl-free')}--json --issue 33 <<.*бек 7784, фронт 3008, база \`Edelweiss_nemotron\``, `${HIRE('opencode', 'nvidia/z-ai/glm-5.3')}--json --issue 34`,
+      `${HIRE('opencode', 'opencode/glm-5.3-flash-free')}--json --issue 35`] },
   { name: 'P0 «Залежить від #90», а #90 відкрите → Zen бере P2, яке ні від чого не залежить',
     fx: { workers: [me], issues: [{ ...issue(91, ['easy', 'P0-critical']), body: 'Що зробити…\n\nЗалежить від #90.' }, issue(92, ['easy', 'P2-medium']), { ...issue(90, ['hard', 'P1-high']), labels: [{ name: 'manual' }] }], state: st() },
     want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 92`], not: ['--issue 91'] },
@@ -363,6 +377,68 @@ const scenarios = [
     want: ['^open -g -a Docker'], not: ['^office-workers hire'] },
   { name: 'наймати нікого → Docker не перевіряємо',
     fx: { workers: [me], issues: [], state: st() }, not: ['^docker ', '^open '] },
+
+  // ── Jules and NVIDIA ──
+  { name: 'ключа Jules немає → easy бере Zen, до Jules не звертаємось',
+    fx: { workers: [me], issues: [issue(30, ['easy'])], state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['^jules '] },
+  { name: 'ключ Jules є → easy P1 іде Jules (сесія з текстом issue і AUTO_CREATE_PR), easy P2 бере Zen',
+    fx: { julesKey: true, workers: [me], issues: [{ ...issue(30, ['easy', 'P1-high']), body: 'Опис задачі 30' }, issue(31, ['easy', 'P2-medium'])], state: st() },
+    want: [`${JULES}POST sessions <<.*"automationMode":"AUTO_CREATE_PR"`, `${JULES}POST sessions <<.*"source":"sources/github/pkavulych-beep/shop-edelweiss"`,
+      `${JULES}POST sessions <<.*Опис задачі 30.*Closes #30`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 31`],
+    not: ['--issue 30'], state: (s) => s.issues[30]?.job?.session === 's1' && s.jules.starts.length === 1 },
+  { name: 'Jules уже почав 15 сесій за добу → easy бере Zen',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], state: st({ jules: { starts: Array(15).fill(NOW - 3600_000), prs: [] } }) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['POST sessions'] },
+  { name: 'Jules працює над #30 → нової сесії не просимо, наступне easy бере Zen',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy']), issue(31, ['easy'])], state: st(julesJob()) },
+    want: [`${JULES}GET sessions/s1`, `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 31`], not: ['POST sessions', '--issue 30'] },
+  { name: 'Jules відкрив PR без «Closes» → дописати рядок і віддати PR на рев\'ю',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], pulls: [julesPr()], julesSessions: julesDone, state: st(julesJob()) },
+    want: ['^gh pr edit 77 .*--body-file - <<Jules: що зроблено\\s+Closes #30', `${HIRE('claude', 'sonnet')}--effort medium --json --no-worktree <<.*#77`],
+    state: (s) => s.jules.prs.includes(77) && s.issues[30]?.lastJob?.pr === 77 && !s.issues[30].failures },
+  { name: 'PR від застосунку Jules, але не з нашої сесії → не чіпаємо',
+    fx: { workers: [me], pulls: [julesPr({ body: 'Closes #30' })], issues: [], state: st() },
+    not: ['--no-worktree', '^gh pr (edit|merge|update-branch)', '^office-workers (hire|tell)'] },
+  { name: 'PR від Jules із червоним CI → доопрацьовує Zen як новий агент у гілці PR',
+    fx: { julesKey: true, workers: [me], pulls: [julesPr({ body: 'Closes #30', statusCheckRollup: red })], issues: [issue(30, ['easy'])],
+      state: st({ jules: { starts: [], prs: [77] }, issues: { 30: { lastJob: { kind: 'code', coder: 'jules', provider: 'jules', worker: 'Jules', session: 's1', since: 0, ended: 1, pr: 77 }, checked: true } } }) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json <<Доопрацюй PR #77.*гілка \`feature/x-123\``], not: ['^office-workers tell', ':sendMessage', 'POST sessions'] },
+  { name: 'конвеєр не знає автора PR easy з червоним CI → автором вважається Zen, а не Jules, і доопрацьовує Zen',
+    fx: { workers: [me], pulls: [pr({ statusCheckRollup: red })], issues: [issue(70, ['easy'])], state: st() },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json <<Доопрацюй PR #50`], state: (s) => s.prs[50]?.coder === 'zen' },
+  { name: 'сесія Jules впала → задачу в тому ж кроці бере Zen, спроба рахується, а Jules її більше не бере',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesSessions: { s1: { state: 'FAILED' } }, state: st(julesJob()) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['POST sessions'],
+    state: (s) => s.issues[30]?.failures === 1 && s.issues[30].julesFailed && s.issues[30].job?.coder === 'zen' },
+  { name: 'Jules питає → один раз відповідаємо, що вирішує він сам',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesSessions: { s1: { state: 'AWAITING_USER_FEEDBACK' } }, state: st(julesJob()) },
+    want: [`${JULES}POST sessions/s1:sendMessage <<.*виріши сам`], not: ['--issue 30'], state: (s) => s.issues[30]?.job?.answered > 0 },
+  { name: 'Jules питає знову через 20 хв після відповіді → задачу бере Zen',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesSessions: { s1: { state: 'AWAITING_USER_FEEDBACK' } }, state: st(julesJob({ answered: NOW - 20 * MIN })) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: [':sendMessage'] },
+  { name: 'Jules закінчив без PR лише щойно → ще чекаємо, бо PR може з\'явитися трохи пізніше',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesSessions: { s1: { state: 'COMPLETED' } }, state: st(julesJob()) },
+    not: ['--issue 30'], state: (s) => s.issues[30]?.job?.completedAt > 0 },
+  { name: 'Jules працює довше maxHours → задачу бере Zen',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], state: st(julesJob({ since: NOW - 5 * 3600_000 })) },
+    want: [`${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`] },
+  { name: 'Jules: задачі на добу скінчилися (429) → пауза, доки найстаршій сесії не мине доба, без сповіщення',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesError: 'HTTP 429 RESOURCE_EXHAUSTED Quota exceeded', state: st({ jules: { starts: [NOW - 20 * 3600_000], prs: [] } }) },
+    want: [`${JULES}POST sessions`], not: ['^osascript'],
+    state: (s) => s.paused.jules > NOW + 3.5 * 3600_000 && s.paused.jules < NOW + 4.5 * 3600_000 && !s.issues[30]?.job },
+  { name: 'Jules відмовляє (403: ключ чи репозиторій) → пауза на modelDownHours і сповіщення',
+    fx: { julesKey: true, workers: [me], issues: [issue(30, ['easy'])], julesError: 'HTTP 403 PERMISSION_DENIED The caller does not have permission', state: st() },
+    want: ['^osascript .*Jules не бере задачі'], state: (s) => s.paused.jules > NOW + 5 * 3600_000 },
+  { name: 'NVIDIA відмовляє (OpenCode стоїть на «Payment Required») → модель на паузу, задачу без штрафу бере Zen, людину не кличемо',
+    fx: { workers: [me, vega('Payment Required')], issues: [issue(30, ['easy'])],
+      state: st({ issues: { 30: { job: { kind: 'code', coder: 'nvidia', provider: 'opencode', worker: 'Vega', workerId: 'w-v', since: 0 } } } }) },
+    want: ['^office-workers home Vega', `${HIRE('opencode', 'opencode/big-pickle')}--json --issue 30`], not: ['needs-human'],
+    state: (s) => s.paused['nvidia/z-ai/glm-5.3'] > NOW + 5 * 3600_000 && !s.issues[30].failures },
+  { name: 'агент OpenCode питає про API-ключ → це питання, а не відмова провайдера: needs-human, як і раніше',
+    fx: { workers: [me, vega('Where do I get the API key for Nova Poshta?')], issues: [issue(30, ['easy'])],
+      state: st({ issues: { 30: { job: { kind: 'code', coder: 'zen', provider: 'opencode', worker: 'Vega', workerId: 'w-v', since: 0, waitingSince: NOW - 30 * MIN } } } }) },
+    want: ['--add-label needs-human'], not: ['^office-workers home'] },
 ];
 
 let failed = 0;
@@ -371,9 +447,11 @@ for (const sc of scenarios) {
   for (const [id, text] of Object.entries(sc.fx.scrollback ?? {})) writeFileSync(`${SB}/${id}.ansi`, text);
   writeFileSync(`${T}/fixture.json`, JSON.stringify({ pulls: [], ...sc.fx }));
   writeFileSync(`${T}/calls.jsonl`, '');
+  if (sc.fx.julesKey) writeFileSync(`${T}/.jules-api-key`, 'test-key\n');
+  else rmSync(`${T}/.jules-api-key`, { force: true });
   let crash = '';
   try {
-    execFileSync('node', [`${T}/root/tools/conveyor/conveyor.mjs`, '--once'], { env: { ...process.env, PATH: `${T}/bin:${process.env.PATH}`, AGENT_OFFICE_WORKER_ID: 'me', AGENT_OFFICE_HOOK_URL: 'x', FIXTURE: `${T}/fixture.json`, CALLS: `${T}/calls.jsonl` }, encoding: 'utf8' });
+    execFileSync('node', [`${T}/root/tools/conveyor/conveyor.mjs`, '--once'], { env: { ...process.env, HOME: T, PATH: `${T}/bin:${process.env.PATH}`, AGENT_OFFICE_WORKER_ID: 'me', AGENT_OFFICE_HOOK_URL: 'x', FIXTURE: `${T}/fixture.json`, CALLS: `${T}/calls.jsonl` }, encoding: 'utf8' });
   } catch (e) { crash = String(e.stderr || e.message).split('\n')[0]; }
   for (const id of Object.keys(sc.fx.scrollback ?? {})) rmSync(`${SB}/${id}.ansi`);
   const lines = readFileSync(`${T}/calls.jsonl`, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))

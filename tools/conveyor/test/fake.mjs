@@ -1,4 +1,5 @@
-// Fake gh / office-workers / osascript / docker / open for test/run.mjs: answers from $FIXTURE, logs every call as JSON to $CALLS.
+// Fake gh / office-workers / osascript / docker / open, and jules.mjs as `jules`, for test/run.mjs: answers from $FIXTURE,
+// logs every call as JSON to $CALLS.
 import { appendFileSync, readFileSync } from 'node:fs';
 const tool = process.argv[2];
 const args = process.argv.slice(3);
@@ -29,4 +30,12 @@ if (tool === 'gh') {
   if (fx.docker === 'down') fail('failed to connect to the docker API at unix:///Users/me/.docker/run/docker.sock; check if the path is correct and if the daemon is running\n');
   if (fx.docker === 'taken') fail(' Container shop-edelweiss-db-1 Starting \nError response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint shop-edelweiss-db-1 (ef9a): Bind for 0.0.0.0:5432 failed: port is already allocated\n');
   if (fx.docker === 'broken') fail(' Container shop-edelweiss-db-1 Waiting \ncontainer shop-edelweiss-db-1 is unhealthy\n');
+} else if (tool === 'jules') {
+  // jules.mjs <key file> <method> <path>. fx.julesError: Jules's answer to a new session; fx.julesSessions: sessions by id.
+  const [, method, apiPath] = args;
+  if (method === 'POST' && apiPath === 'sessions') {
+    if (fx.julesError) { process.stderr.write(`${fx.julesError}\n`); process.exit(1); }
+    out({ name: 'sessions/s1', id: 's1', state: 'QUEUED', url: 'https://jules.google.com/session/s1' });
+  } else if (method === 'GET') out((fx.julesSessions ?? {})[apiPath.split('/')[1]] ?? { state: 'IN_PROGRESS' });
+  else out({});
 } else out('');

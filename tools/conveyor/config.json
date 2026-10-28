@@ -31,6 +31,13 @@
       "takes": ["medium"],
       "ports": { "back": 7778, "front": 3001, "db": "Edelweiss_codex" }
     },
+    "jules": {
+      "provider": "jules",
+      "takes": ["easy", "medium"],
+      "keyFile": "~/.jules-api-key",
+      "dailyTasks": 15,
+      "maxHours": 4
+    },
     "zen": {
       "provider": "opencode",
       "model": "opencode/big-pickle",
@@ -54,6 +61,12 @@
       "model": "opencode/nemotron-3.5-super-vl-free",
       "takes": ["easy", "medium"],
       "ports": { "back": 7784, "front": 3008, "db": "Edelweiss_nemotron" }
+    },
+    "nvidia": {
+      "provider": "opencode",
+      "model": "nvidia/z-ai/glm-5.3",
+      "takes": ["easy", "medium"],
+      "ports": { "back": 7785, "front": 3009, "db": "Edelweiss_nvidia" }
     },
     "glm": {
       "provider": "opencode",
