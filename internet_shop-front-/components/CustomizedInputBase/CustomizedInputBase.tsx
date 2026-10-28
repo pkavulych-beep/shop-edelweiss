@@ -15,6 +15,7 @@ interface Props {
   multiline?: boolean;
   autoComplete?: string;
   phoneMask?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }
 
 const CustomizedInputBase: FC<Props> = ({
@@ -24,6 +25,7 @@ const CustomizedInputBase: FC<Props> = ({
   multiline = false,
   autoComplete,
   phoneMask = false,
+  inputMode,
 }) => {
   const [field, meta, helpers] = useField(name);
   const hasError = meta.touched && !!meta.error;
@@ -49,7 +51,7 @@ const CustomizedInputBase: FC<Props> = ({
       <TextField
         error={hasError}
         placeholder={placeholder}
-        inputProps={{ ...inputProps, autoComplete }}
+        inputProps={{ ...inputProps, autoComplete, ...(inputMode ? { inputMode } : {}) }}
         margin="dense"
         label={placeholder}
         type={isPassword && showPassword ? 'text' : type}
