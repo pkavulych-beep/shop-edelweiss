@@ -26,7 +26,7 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
   };
 
   return (
-    <Form autoComplete="off" style={{ width: 600, padding: 14 }}>
+    <Form autoComplete="off" style={{ width: '100%', maxWidth: 600, padding: 14, boxSizing: 'border-box' }}>
       <CustomizedInputBase type="text" name="name" placeholder="Назва" />
       {setPhotos && (
         <>
@@ -45,7 +45,7 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
       {/* Категорія */}
       <div style={{ marginBottom: 8 }}>
         <p style={{ margin: '8px 0 4px' }}>Категорія</p>
-        <Field as="select" name="category" style={{ width: '100%', padding: 8, fontSize: 14 }}>
+        <Field as="select" name="category" style={{ width: '100%', padding: 8, fontSize: 16 }}>
           <option value="">Оберіть категорію</option>
           {Object.entries(categoryLabels).map(([value, label]) => (
             <option key={value} value={value}>
@@ -74,7 +74,7 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
       {/* Сезон */}
       <div style={{ marginBottom: 8 }}>
         <p style={{ margin: '8px 0 4px' }}>Сезон</p>
-        <Field as="select" name="season" style={{ width: '100%', padding: 8, fontSize: 14 }}>
+        <Field as="select" name="season" style={{ width: '100%', padding: 8, fontSize: 16 }}>
           {Object.entries(seasonLabels).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -98,7 +98,7 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
                   <CustomizedInputBase type="text" name={`sizeStock.${index}.size`} placeholder="Розмір" />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <CustomizedInputBase type="number" name={`sizeStock.${index}.count`} placeholder="Кількість" />
+                  <CustomizedInputBase type="number" inputMode="numeric" name={`sizeStock.${index}.count`} placeholder="Кількість" />
                 </Box>
                 <IconButton aria-label="Видалити розмір" onClick={() => remove(index)} sx={{ mt: 1 }}>
                   <DeleteOutlineIcon />
@@ -112,9 +112,9 @@ const DishForm = ({ handleClose, nameRightBtn, setPhotos, errorMessage }: IDishF
           </>
         )}
       </FieldArray>
-      {rows.length === 0 && <CustomizedInputBase type="number" name="count" placeholder="Кількість" />}
-      <CustomizedInputBase type="number" name="price" placeholder="Ціна" />
-      <CustomizedInputBase type="number" name="salePrice" placeholder="Ціна зі знижкою" />
+      {rows.length === 0 && <CustomizedInputBase type="number" inputMode="numeric" name="count" placeholder="Кількість" />}
+      <CustomizedInputBase type="number" inputMode="numeric" name="price" placeholder="Ціна" />
+      <CustomizedInputBase type="number" inputMode="numeric" name="salePrice" placeholder="Ціна зі знижкою" />
 
       {errorMessage && (
         <Alert severity="error" sx={{ mt: 2 }}>
